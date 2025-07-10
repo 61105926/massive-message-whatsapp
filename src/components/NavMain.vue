@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { RouterLink, useRoute } from 'vue-router'
+
 import { ChevronRight, type LucideIcon } from 'lucide-vue-next'
 import {
   Collapsible,
@@ -29,11 +31,13 @@ defineProps<{
     }[]
   }[]
 }>()
+const route = useRoute()
+
 </script>
 
 <template>
   <SidebarGroup>
-    <SidebarGroupLabel>Platform</SidebarGroupLabel>
+    <SidebarGroupLabel>Plataforma</SidebarGroupLabel>
     <SidebarMenu>
       <Collapsible v-for="item in items" :key="item.title" as-child :default-open="item.isActive">
         <SidebarMenuItem>
