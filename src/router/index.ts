@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 // Importamos nuestras vistas
 import HomeView from '@/views/screens/mensajes/MessageMassive.vue'
+import WorkClimate from '@/views/screens/clima/WorkClimate.vue'
 
 // Lista de rutas
 const routes = [
@@ -10,6 +11,12 @@ const routes = [
     name: 'message',
     component: HomeView,
   },
+   {
+    path: '/clima', // URL raíz
+    name: 'clima',
+    component: WorkClimate,
+  },
+
 //   {
 //     path: '/vacaciones',
 //     name: 'vacaciones',

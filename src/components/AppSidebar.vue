@@ -57,6 +57,27 @@
                     //     url: '#',
                     // },
                 ],
+                
+            },
+            {
+                title: 'Clima Laboral Minoil',
+                url: '#',
+                icon: SquareTerminal,
+                isActive: true,
+                items: [{
+                        title: 'Clima ',
+                        url: '/clima',
+                    },
+                    // {
+                    //     title: 'Starred',
+                    //     url: '#',
+                    // },
+                    // {
+                    //     title: 'Settings',
+                    //     url: '#',
+                    // },
+                ],
+                
             },
             // {
             //   title: 'Models',
