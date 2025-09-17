@@ -1,11 +1,11 @@
 <template>
   <!-- Header Ejecutivo Profesional -->
-  <header class="bg-white border-b border-slate-200">
+  <header class="bg-white border-b border-blue-200">
     <div class="max-w-7xl mx-auto px-4 py-2">
       <div class="flex items-center justify-between">
         <div class="flex items-center space-x-2">
           <div
-            class="w-6 h-6 bg-slate-600 rounded flex items-center justify-center">
+            class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center">
             <svg
               class="w-4 h-4 text-white"
               fill="none"
@@ -19,17 +19,17 @@
             </svg>
           </div>
           <div>
-            <h1 class="text-sm font-medium text-slate-800">
+            <h1 class="text-sm font-medium text-blue-900">
               MINOIL - Análisis de Clima Laboral
             </h1>
-            <p class="text-xs text-slate-500">
+            <p class="text-xs text-blue-600">
               Reporte Ejecutivo {{ new Date().getFullYear() }}
             </p>
           </div>
         </div>
         <div class="flex items-center space-x-3">
           <div class="text-right">
-            <div class="text-xs text-slate-600">
+            <div class="text-xs text-blue-700">
               {{
                 new Date().toLocaleDateString("es-ES", {
                   year: "numeric",
@@ -38,7 +38,7 @@
                 })
               }}
             </div>
-            <div class="text-xs text-slate-500">
+            <div class="text-xs text-blue-600">
               {{
                 new Date().toLocaleTimeString("es-ES", {
                   hour: "2-digit",
@@ -48,9 +48,9 @@
             </div>
           </div>
           <div
-            class="w-5 h-5 bg-slate-100 rounded flex items-center justify-center">
+            class="w-5 h-5 bg-blue-100 rounded flex items-center justify-center">
             <svg
-              class="w-3 h-3 text-slate-500"
+              class="w-3 h-3 text-blue-600">
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24">
@@ -70,9 +70,9 @@
   <div v-if="cargando" class="flex items-center justify-center py-16">
     <div class="text-center">
       <div
-        class="animate-spin rounded-full h-8 w-8 border-2 border-slate-200 border-t-slate-600 mx-auto mb-3"></div>
-      <h3 class="text-sm font-medium text-slate-700 mb-1">Cargando Datos</h3>
-      <p class="text-xs text-slate-500">
+        class="animate-spin rounded-full h-8 w-8 border-2 border-blue-200 border-t-blue-600 mx-auto mb-3"></div>
+      <h3 class="text-sm font-medium text-blue-700 mb-1">Cargando Datos</h3>
+      <p class="text-xs text-blue-600">
         Obteniendo información del clima laboral...
       </p>
     </div>
@@ -112,24 +112,25 @@
   </div>
 
   <!-- Contenido principal ejecutivo -->
+  <main v-else class="max-w-7xl mx-auto px-6 py-8 space-y-8">
 
   <!-- Panel de Filtros Ejecutivo -->
 
   <!-- Header compacto -->
-  <div class="border-b border-slate-200 px-4 py-2">
+  <div class="border-b border-blue-200 px-4 py-2">
     <div class="flex items-center justify-between">
       <div class="flex items-center space-x-2">
-        <h2 class="text-xs font-medium text-slate-700">
+        <h2 class="text-xs font-medium text-blue-700">
           Parámetros de Análisis
         </h2>
       </div>
       <div v-if="filtrosActivos" class="flex items-center space-x-2">
-        <span class="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded">
+        <span class="px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded">
           {{ contadorFiltros }} filtro{{ contadorFiltros !== 1 ? "s" : "" }}
         </span>
         <button
           @click="limpiarFiltros"
-          class="px-2 py-1 text-xs bg-slate-100 text-slate-600 rounded hover:bg-slate-200">
+          class="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded hover:bg-blue-200">
           Limpiar
         </button>
       </div>
@@ -161,7 +162,7 @@
                 d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
             </svg>
           </div>
-          <label class="block text-xs font-medium text-slate-600"
+          <label class="block text-xs font-medium text-blue-600"
             >Regional</label
           >
         </div>
@@ -169,7 +170,7 @@
           <select
             v-model="filtroRegional"
             @change="actualizarDatos"
-            class="w-full px-2 py-1 text-xs bg-white border border-slate-300 rounded focus:border-slate-500 focus:outline-none">
+            class="w-full px-2 py-1 text-xs bg-white border border-blue-300 rounded focus:border-blue-500 focus:outline-none">
             <option value="">Todas las regionales</option>
             <option
               v-for="regional in regionalesDisponibles"
@@ -181,7 +182,7 @@
           <div
             class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
             <svg
-              class="w-5 h-5 text-gray-400"
+              class="w-5 h-5 text-blue-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24">
@@ -193,7 +194,7 @@
             </svg>
           </div>
         </div>
-        <p class="text-xs text-gray-500 flex items-center space-x-1">
+        <p class="text-xs text-blue-500 flex items-center space-x-1">
           <svg
             class="w-3 h-3"
             fill="none"
@@ -226,7 +227,7 @@
                 d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
             </svg>
           </div>
-          <label class="block text-xs font-medium text-slate-600"
+          <label class="block text-xs font-medium text-blue-600"
             >Área de Trabajo</label
           >
         </div>
@@ -234,7 +235,7 @@
           <select
             v-model="filtroArea"
             @change="actualizarDatos"
-            class="w-full px-2 py-1 text-xs bg-white border border-slate-300 rounded focus:border-slate-500 focus:outline-none">
+            class="w-full px-2 py-1 text-xs bg-white border border-blue-300 rounded focus:border-blue-500 focus:outline-none">
             <option value="">Todas las áreas</option>
             <option v-for="area in areasDisponibles" :key="area" :value="area">
               {{ area }}
@@ -243,7 +244,7 @@
           <div
             class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
             <svg
-              class="w-5 h-5 text-gray-400"
+              class="w-5 h-5 text-blue-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24">
@@ -255,7 +256,7 @@
             </svg>
           </div>
         </div>
-        <p class="text-xs text-gray-500 flex items-center space-x-1">
+        <p class="text-xs text-blue-500 flex items-center space-x-1">
           <svg
             class="w-3 h-3"
             fill="none"
@@ -275,7 +276,7 @@
       <div class="space-y-3">
         <div class="flex items-center space-x-2">
           <div
-            class="w-6 h-6 bg-purple-100 rounded-lg flex items-center justify-center">
+            class="w-6 h-6 bg-blue-100 rounded-lg flex items-center justify-center">
             <svg
               class="w-4 h-4 text-purple-600"
               fill="none"
@@ -288,7 +289,7 @@
                 d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
             </svg>
           </div>
-          <label class="block text-sm font-semibold text-gray-800">
+          <label class="block text-sm font-semibold text-blue-800">
             Pregunta a Analizar
             <span class="text-red-500 ml-1">*</span>
           </label>
@@ -297,7 +298,7 @@
           <select
             v-model="preguntaSeleccionada"
             @change="actualizarDatos"
-            class="w-full px-2 py-1 text-xs bg-white border border-slate-300 rounded focus:border-slate-500 focus:outline-none">
+            class="w-full px-2 py-1 text-xs bg-white border border-blue-300 rounded focus:border-blue-500 focus:outline-none">
             <option value="">Seleccionar pregunta</option>
             <option
               v-for="pregunta in preguntasOrdenadas"
@@ -310,7 +311,7 @@
           <div
             class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
             <svg
-              class="w-5 h-5 text-gray-400"
+              class="w-5 h-5 text-blue-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24">
@@ -322,38 +323,38 @@
             </svg>
           </div>
         </div>
-        <p class="text-xs text-gray-500">39 preguntas ordenadas del 1 al 39</p>
+        <p class="text-xs text-blue-500">39 preguntas ordenadas del 1 al 39</p>
       </div>
     </div>
 
     <!-- Resumen de filtros -->
     <div
       v-if="filtrosActivos"
-      class="mt-3 p-3 bg-slate-50 rounded border border-slate-200">
+      class="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
       <div class="flex items-center justify-between">
         <div class="flex items-center space-x-4">
-          <span class="text-xs font-medium text-slate-700"
+          <span class="text-xs font-medium text-blue-700"
             >Filtros Activos:</span
           >
           <div class="flex flex-wrap gap-2">
             <span
               v-if="filtroRegional"
-              class="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded">
+              class="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
               {{ filtroRegional }}
             </span>
             <span
               v-if="filtroArea"
-              class="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded">
+              class="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
               {{ filtroArea }}
             </span>
             <span
               v-if="preguntaSeleccionada"
-              class="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded">
+              class="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
               Pregunta {{ preguntaSeleccionada }}
             </span>
           </div>
         </div>
-        <span class="text-xs text-slate-600"
+        <span class="text-xs text-blue-600"
           >{{ totalRespuestas }} respuestas</span
         >
       </div>
@@ -363,13 +364,13 @@
   <!-- Reporte Visual Principal -->
   <div
     v-if="preguntaSeleccionada && datosVista.length > 0"
-    class="bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
+    class="bg-white rounded-3xl shadow-2xl border border-blue-100 overflow-hidden">
     <!-- Header del reporte con gradiente -->
-    <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
+    <div class="bg-blue-50 px-6 py-4 border-b border-blue-200">
       <div class="flex items-start space-x-4">
         <!-- Icono / Número de pregunta -->
         <div
-          class="w-12 h-12 flex-shrink-0 rounded-xl bg-gradient-to-br from-purple-500 via-purple-600 to-indigo-700 flex items-center justify-center shadow-md">
+          class="w-12 h-12 flex-shrink-0 rounded-xl bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 flex items-center justify-center shadow-md">
           <span class="text-white font-semibold text-lg">{{
             preguntaSeleccionada
           }}</span>
@@ -380,14 +381,14 @@
           <!-- Categoría y estadísticas -->
           <div
             class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2">
-            <h2
-              class="text-xl sm:text-2xl font-bold text-gray-800 mb-1 sm:mb-0">
+            <h3
+              class="text-lg sm:text-xl font-bold text-blue-800 mb-1 sm:mb-0">
               {{ preguntaActual?.categoria }}
-            </h2>
+            </h3>
             <div class="flex space-x-2 text-sm">
               <!-- Total respuestas -->
               <span
-                class="flex items-center px-2 py-1 bg-purple-100 text-purple-800 rounded-full border border-purple-200">
+                class="flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-full border border-blue-200">
                 <svg
                   class="w-4 h-4 mr-1 text-purple-600"
                   fill="none"
@@ -415,15 +416,15 @@
                     stroke-width="2"
                     d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                 </svg>
-                {{ datosVista.length }} regionales
+                {{ regionalesUnicas }} regionales
               </span>
             </div>
           </div>
 
           <!-- Texto de la pregunta -->
           <div
-            class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
-            <p class="text-gray-700 text-base sm:text-lg leading-relaxed">
+            class="bg-white p-4 rounded-xl border border-blue-200 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <p class="text-blue-700 text-base sm:text-lg leading-relaxed">
               {{ preguntaActual?.texto }}
             </p>
           </div>
@@ -435,28 +436,15 @@
     <div class="p-8">
       <!-- Resumen Ejecutivo Nacional - Tabla Mejorada -->
       <div
-        class="bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden mb-8">
+        class="bg-white rounded-3xl shadow-2xl border border-blue-100 overflow-hidden mb-8">
         <div
-          class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-8 text-white">
+          class="bg-gradient-to-r from-blue-900 via-blue-800 to-blue-900 p-8 text-white">
           <div class="text-center mb-8">
-            <div
-              class="inline-flex items-center justify-center w-16 h-16 bg-white bg-opacity-20 rounded-2xl mb-4 backdrop-blur">
-              <svg
-                class="w-8 h-8 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-              </svg>
-            </div>
-            <h3 class="text-3xl font-bold mb-2">
+         
+            <h4 class="text-2xl font-bold mb-2">
               🇧🇴 Resumen Ejecutivo Nacional
-            </h3>
-            <p class="text-slate-300 text-lg">
+            </h4>
+            <p class="text-blue-300 text-lg">
               Análisis de Resultados por Indicadores Clave
             </p>
           </div>
@@ -487,7 +475,7 @@
                       datosVista.reduce((sum, r) => sum + (r[opcion] || 0), 0)
                     }}
                   </div>
-                  <div class="text-sm text-slate-300 font-medium">
+                  <div class="text-sm text-blue-300 font-medium">
                     respuestas
                   </div>
                   <div class="text-xl font-bold text-yellow-300 mt-2">
@@ -563,7 +551,7 @@
                         Positivo
                       </div>
                     </div>
-                    <div class="w-16 h-px bg-gray-400 my-4 mx-auto"></div>
+                    <div class="w-16 h-px bg-blue-400 my-4 mx-auto"></div>
                     <div class="space-y-3">
                       <div class="text-4xl font-black text-red-400">
                         {{ porcentajeNegativoTotal }}%
@@ -583,11 +571,11 @@
               <div
                 class="bg-white bg-opacity-10 rounded-2xl p-6 backdrop-blur border border-white border-opacity-20">
                 <div class="text-center">
-                  <div class="text-6xl font-black text-white mb-2">
+                  <div class="text-6xl font-black text-blue-800 mb-2">
                     {{ totalRespuestas }}
                   </div>
                   <div
-                    class="text-lg text-slate-300 font-semibold tracking-wide uppercase">
+                    class="text-lg text-blue-800 font-semibold tracking-wide uppercase">
                     Total Respuestas
                   </div>
                 </div>
@@ -595,11 +583,11 @@
               <div
                 class="bg-white bg-opacity-10 rounded-2xl p-6 backdrop-blur border border-white border-opacity-20">
                 <div class="text-center">
-                  <div class="text-4xl font-black text-blue-300 mb-2">
+                  <div class="text-4xl font-black text-blue-800 mb-2">
                     {{ datosVista.length }}
                   </div>
                   <div
-                    class="text-lg text-slate-300 font-semibold tracking-wide uppercase">
+                    class="text-lg text-blue-800 font-semibold tracking-wide uppercase">
                     Regionales
                   </div>
                 </div>
@@ -608,8 +596,71 @@
           </div>
         </div>
 
+        <!-- Sección de Gráficos Visuales -->
+        <div v-if="datosVista.length > 0" class="bg-white border-t border-blue-100">
+          <div class="px-8 py-6">
+            <div class="flex items-center space-x-3 mb-6">
+              <div class="w-5 h-5 bg-blue-600 rounded flex items-center justify-center">
+                <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+              </div>
+              <h4 class="text-lg font-semibold text-blue-900">
+                Análisis Visual de Datos
+              </h4>
+              <span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full font-medium">
+                {{ datosVista.length }} respuestas
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <!-- Gráfico de Distribución por Regional -->
+              <div class="bg-white border border-blue-100 rounded-xl p-6 shadow-sm">
+                <h4 class="text-sm font-medium text-blue-900 mb-4 flex items-center">
+                  <div class="w-2 h-2 bg-blue-600 rounded-full mr-2"></div>
+                  Distribución por Regional
+                </h4>
+                <div class="h-64">
+                  <Bar v-if="chartDataRegional" :data="chartDataRegional" :options="barChartOptions" />
+                </div>
+              </div>
+
+              <!-- Gráfico de Distribución de Respuestas -->
+              <div class="bg-white border border-blue-100 rounded-xl p-6 shadow-sm">
+                <h4 class="text-sm font-medium text-blue-900 mb-4 flex items-center">
+                  <div class="w-2 h-2 bg-blue-600 rounded-full mr-2"></div>
+                  Distribución de Respuestas
+                </h4>
+                <div class="h-64">
+                  <Doughnut v-if="chartDataRespuestas" :data="chartDataRespuestas" :options="chartOptions" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Resumen Estadístico Mejorado -->
+            <div class="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="bg-blue-50 border border-blue-100 rounded-lg p-4 text-center">
+                <div class="text-2xl font-bold text-blue-900">{{ totalRespuestas }}</div>
+                <div class="text-sm text-blue-700">Total Respuestas</div>
+              </div>
+              <div class="bg-blue-50 border border-blue-100 rounded-lg p-4 text-center">
+                <div class="text-2xl font-bold text-blue-900">{{ porcentajePositivoTotal }}%</div>
+                <div class="text-sm text-blue-700">Evaluación Positiva</div>
+              </div>
+              <div class="bg-blue-50 border border-blue-100 rounded-lg p-4 text-center">
+                <div class="text-2xl font-bold text-blue-900">{{ regionalesUnicas }}</div>
+                <div class="text-sm text-blue-700">Regionales</div>
+              </div>
+              <div class="bg-blue-50 border border-blue-100 rounded-lg p-4 text-center">
+                <div class="text-2xl font-bold text-blue-900">{{ categoriasUnicas.length }}</div>
+                <div class="text-sm text-blue-700">Categorías</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Análisis por Regional - Tabla Ejecutiva Profesional -->
-        <div class="bg-slate-50 border-t border-slate-200">
+        <div class="bg-blue-50 border-t border-blue-200">
           <div class="px-8 py-6">
             <div class="flex items-center justify-between mb-6">
               <div class="flex items-center space-x-3">
@@ -627,28 +678,28 @@
                       d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                   </svg>
                 </div>
-                <h3 class="text-xl font-semibold text-slate-800">
+                <h4 class="text-lg font-semibold text-blue-800">
                   Análisis por Regional
-                </h3>
+                </h4>
               </div>
-              <div class="text-sm text-slate-600">
-                {{ datosVista.length }} regionales analizadas
+              <div class="text-sm text-blue-600">
+                {{ regionalesUnicas }} regionales analizadas
               </div>
             </div>
 
             <!-- Tabla Ejecutiva Moderna -->
             <div
-              class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+              class="bg-white border border-blue-200 rounded-lg overflow-hidden">
               <div class="overflow-x-auto">
                 <table class="w-full">
-                  <thead class="bg-slate-100 border-b border-slate-200">
+                  <thead class="bg-blue-100 border-b border-blue-200">
                     <tr>
                       <th
-                        class="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">
+                        class="px-4 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
                         Regional
                       </th>
                       <th
-                        class="px-4 py-3 text-center text-xs font-medium text-slate-700 uppercase tracking-wider">
+                        class="px-4 py-3 text-center text-xs font-medium text-blue-700 uppercase tracking-wider">
                         Total
                       </th>
                       <!-- Headers dinámicos según tipo de pregunta -->
@@ -702,7 +753,7 @@
                         "
                         v-for="opcion in opcionesDinamicas"
                         :key="opcion"
-                        class="px-4 py-3 text-center text-xs font-medium text-slate-700 uppercase tracking-wider">
+                        class="px-4 py-3 text-center text-xs font-medium text-blue-700 uppercase tracking-wider">
                         {{
                           opcion.length > 10
                             ? opcion.substring(0, 10) + "..."
@@ -720,7 +771,7 @@
                     <tr
                       v-for="(dato, index) in datosVista"
                       :key="dato.regional"
-                      class="hover:bg-slate-50 transition-colors">
+                      class="hover:bg-blue-50 transition-colors">
                       <!-- Regional -->
                       <td class="px-4 py-4">
                         <div class="flex items-center space-x-2">
@@ -754,7 +805,7 @@
                                 Math.round((dato.muy_bueno / dato.total) * 100)
                               }}%
                             </div>
-                            <div class="text-xs text-slate-500">
+                            <div class="text-xs text-blue-600">
                               ({{ dato.muy_bueno }})
                             </div>
                           </div>
@@ -764,7 +815,7 @@
                             <div class="text-2xl font-black text-green-600">
                               {{ Math.round((dato.bueno / dato.total) * 100) }}%
                             </div>
-                            <div class="text-xs text-slate-500">
+                            <div class="text-xs text-blue-600">
                               ({{ dato.bueno }})
                             </div>
                           </div>
@@ -776,7 +827,7 @@
                                 Math.round((dato.regular / dato.total) * 100)
                               }}%
                             </div>
-                            <div class="text-xs text-slate-500">
+                            <div class="text-xs text-blue-600">
                               ({{ dato.regular }})
                             </div>
                           </div>
@@ -786,7 +837,7 @@
                             <div class="text-2xl font-black text-orange-600">
                               {{ Math.round((dato.malo / dato.total) * 100) }}%
                             </div>
-                            <div class="text-xs text-slate-500">
+                            <div class="text-xs text-blue-600">
                               ({{ dato.malo }})
                             </div>
                           </div>
@@ -798,7 +849,7 @@
                                 Math.round((dato.muy_malo / dato.total) * 100)
                               }}%
                             </div>
-                            <div class="text-xs text-slate-500">
+                            <div class="text-xs text-blue-600">
                               ({{ dato.muy_malo }})
                             </div>
                           </div>
@@ -819,7 +870,7 @@
                                 Math.round((dato.positivos / dato.total) * 100)
                               }}%
                             </div>
-                            <div class="text-xs text-slate-500">
+                            <div class="text-xs text-blue-600">
                               ({{ dato.positivos }})
                             </div>
                           </div>
@@ -831,7 +882,7 @@
                                 Math.round((dato.negativos / dato.total) * 100)
                               }}%
                             </div>
-                            <div class="text-xs text-slate-500">
+                            <div class="text-xs text-blue-600">
                               ({{ dato.negativos }})
                             </div>
                           </div>
@@ -848,14 +899,14 @@
                           :key="opcion"
                           class="px-4 py-4 text-center">
                           <div class="flex flex-col items-center space-y-1">
-                            <div class="text-2xl font-black text-slate-700">
+                            <div class="text-2xl font-black text-blue-700">
                               {{
                                 Math.round(
                                   ((dato[opcion] || 0) / dato.total) * 100
                                 )
                               }}%
                             </div>
-                            <div class="text-xs text-slate-500">
+                            <div class="text-xs text-blue-600">
                               ({{ dato[opcion] || 0 }})
                             </div>
                           </div>
@@ -871,7 +922,7 @@
                                 Math.round((dato.positivos / dato.total) * 100)
                               }}%
                             </div>
-                            <div class="text-xs text-slate-500">
+                            <div class="text-xs text-blue-600">
                               ({{ dato.positivos }})
                             </div>
                           </div>
@@ -883,7 +934,7 @@
                                 Math.round((dato.neutros / dato.total) * 100)
                               }}%
                             </div>
-                            <div class="text-xs text-slate-500">
+                            <div class="text-xs text-blue-600">
                               ({{ dato.neutros }})
                             </div>
                           </div>
@@ -895,7 +946,7 @@
                                 Math.round((dato.negativos / dato.total) * 100)
                               }}%
                             </div>
-                            <div class="text-xs text-slate-500">
+                            <div class="text-xs text-blue-600">
                               ({{ dato.negativos }})
                             </div>
                           </div>
@@ -919,9 +970,9 @@
           (reporteAdditionalInfo.totalRespuestasNo > 0 ||
             opcionesDinamicas.length > 0)
         "
-        class="bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden mb-8">
+        class="bg-white rounded-3xl shadow-2xl border border-blue-100 overflow-hidden mb-8">
         <div
-          class="bg-gradient-to-r from-purple-600 to-purple-700 p-8 text-white">
+          style="background: var(--color-blue-800);" class="p-8 text-white">
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-4">
               <div
@@ -939,10 +990,10 @@
                 </svg>
               </div>
               <div>
-                <h3 class="text-3xl font-bold mb-2">
+                <h4 class="text-2xl font-bold mb-2">
                   Análisis de Opciones Detalladas
-                </h3>
-                <p class="text-purple-200">
+                </h4>
+                <p class="text-blue-200">
                   Desglose completo de respuestas específicas
                 </p>
               </div>
@@ -952,7 +1003,7 @@
                 {{ datosFiltrados.length }}
               </div>
               <div
-                class="text-sm text-purple-200 font-semibold uppercase tracking-wide">
+                class="text-sm text-blue-200 font-semibold uppercase tracking-wide">
                 Total Respuestas
               </div>
             </div>
@@ -960,8 +1011,8 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div class="p-8 bg-gray-50">
-            <h4 class="text-2xl font-bold text-gray-900 mb-6 text-center">
+          <div class="p-8 bg-blue-50">
+            <h4 class="text-2xl font-bold text-blue-900 mb-6 text-center">
               Frecuencia de Opciones Específicas
             </h4>
             <div class="space-y-4 max-h-96 overflow-y-auto">
@@ -974,19 +1025,19 @@
                 <div class="flex items-center justify-between">
                   <div class="flex-1 mr-6">
                     <div
-                      class="text-lg font-semibold text-gray-900 mb-2 leading-relaxed">
+                      class="text-lg font-semibold text-blue-900 mb-2 leading-relaxed">
                       {{ info.texto }}
                     </div>
                     <div class="flex items-center space-x-4">
                       <div class="flex items-center space-x-2">
                         <div
-                          class="w-20 bg-gray-200 rounded-full h-3 overflow-hidden">
+                          class="w-20 bg-blue-200 rounded-full h-3 overflow-hidden">
                           <div
                             class="h-3 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full transition-all duration-500"
                             :style="{ width: info.porcentaje + '%' }"></div>
                         </div>
                         <span
-                          class="text-sm font-semibold text-gray-600 min-w-[3rem]"
+                          class="text-sm font-semibold text-blue-600 min-w-[3rem]"
                           >{{ info.porcentaje }}%</span
                         >
                       </div>
@@ -997,7 +1048,7 @@
                       {{ info.total }}
                     </div>
                     <div
-                      class="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                      class="text-sm font-semibold text-blue-500 uppercase tracking-wide">
                       Respuestas
                     </div>
                   </div>
@@ -1010,17 +1061,17 @@
 
       <!-- Sección de Sugerencias Mejorada con Paginación -->
       <div v-if="todasLasSugerencias.length > 0" class="mt-4">
-        <div class="bg-white border border-slate-200 rounded">
+        <div class="bg-white border border-blue-200 rounded-xl shadow-sm">
           <!-- Header de la sección -->
-          <div class="border-b border-slate-200 px-4 py-2">
+          <div class="bg-blue-50 border-b border-blue-200 px-4 py-3 rounded-t-xl">
             <div class="flex items-center justify-between">
               <div>
-                <h3 class="text-sm font-medium text-slate-700">
+                <h4 class="text-sm font-medium" style="color: var(--color-blue-800);">
                   Sugerencias del Personal
-                </h3>
+                </h4>
               </div>
               <div class="text-right">
-                <div class="text-sm text-slate-600">
+                <div class="text-sm" style="color: var(--color-blue-800);">
                   {{ todasLasSugerencias.length }} sugerencias
                 </div>
               </div>
@@ -1032,7 +1083,7 @@
             <!-- Información de paginación -->
             <div class="flex items-center justify-between mb-6">
               <div class="flex items-center space-x-4">
-                <span class="text-gray-700 font-medium">
+                <span class="font-medium" style="color: var(--color-blue-800);">
                   Mostrando
                   {{ (sugerenciasPagina - 1) * sugerenciasPorPagina + 1 }} -
                   {{
@@ -1045,9 +1096,9 @@
                 </span>
               </div>
               <div class="flex items-center space-x-2">
-                <span class="text-sm text-gray-600">Página:</span>
+                <span class="text-sm" style="color: var(--color-blue-800);">Página:</span>
                 <span
-                  class="px-3 py-1 bg-green-100 text-green-800 rounded-lg font-semibold">
+                  class="px-3 py-1 bg-blue-100 text-blue-800 rounded-lg font-semibold">
                   {{ sugerenciasPagina }} de {{ totalPaginasSugerencias }}
                 </span>
               </div>
@@ -1059,24 +1110,24 @@
               <div
                 v-for="(sugerencia, index) in sugerencias"
                 :key="index"
-                class="bg-white rounded-2xl p-6 shadow-md border border-green-100 hover:shadow-lg hover:scale-105 transition-all duration-300 group">
+                class="bg-white rounded-2xl p-6 shadow-md border border-blue-100 hover:shadow-lg hover:scale-105 transition-all duration-300 group">
                 <div class="flex items-start space-x-4">
                   <div
-                    class="w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-600 rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300">
+                    class="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300" style="background: var(--color-blue-800);">
                     <span class="text-white font-bold text-lg">{{
                       (sugerenciasPagina - 1) * sugerenciasPorPagina + index + 1
                     }}</span>
                   </div>
                   <div class="flex-1 min-w-0">
-                    <p class="text-gray-800 leading-relaxed font-medium mb-3">
+                    <p class="text-blue-800 leading-relaxed font-medium mb-3">
                       {{ sugerencia.texto }}
                     </p>
                     <div class="flex items-center justify-between">
                       <span
-                        class="px-3 py-1 bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 text-sm font-semibold rounded-xl border border-green-200">
+                        class="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-semibold rounded-xl border border-blue-200">
                         📍 {{ sugerencia.regional }}
                       </span>
-                      <div class="flex items-center space-x-1 text-gray-500">
+                      <div class="flex items-center space-x-1 text-blue-500">
                         <svg
                           class="w-4 h-4"
                           fill="none"
@@ -1096,14 +1147,15 @@
               </div>
             </div>
 
-            <!-- Controles de paginación modernos -->
+            <!-- Controles de paginación simplificados -->
             <div
               v-if="totalPaginasSugerencias > 1"
-              class="flex items-center justify-center space-x-4">
+              class="flex items-center justify-center space-x-6">
               <button
                 @click="sugerenciasPagina = Math.max(1, sugerenciasPagina - 1)"
                 :disabled="sugerenciasPagina === 1"
-                class="flex items-center space-x-2 px-6 py-3 bg-white border-2 border-green-200 text-green-700 rounded-2xl hover:bg-green-50 hover:border-green-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold">
+                class="flex items-center space-x-2 px-6 py-3 bg-white border-2 border-blue-200 text-blue-700 rounded-2xl hover:bg-blue-50 hover:border-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold"
+                style="border-color: var(--color-blue-800); color: var(--color-blue-800);">
                 <svg
                   class="w-5 h-5"
                   fill="none"
@@ -1118,19 +1170,11 @@
                 <span>Anterior</span>
               </button>
 
-              <div class="flex space-x-2">
-                <button
-                  v-for="pagina in Math.min(5, totalPaginasSugerencias)"
-                  :key="pagina"
-                  @click="sugerenciasPagina = pagina"
-                  :class="
-                    pagina === sugerenciasPagina
-                      ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg'
-                      : 'bg-white text-green-700 border-2 border-green-200 hover:bg-green-50'
-                  "
-                  class="w-12 h-12 rounded-2xl font-bold transition-all duration-200 flex items-center justify-center">
-                  {{ pagina }}
-                </button>
+              <!-- Indicador de página actual -->
+              <div class="flex items-center space-x-3">
+                <span class="text-sm font-medium" style="color: var(--color-blue-800);">
+                  Página {{ sugerenciasPagina }} de {{ totalPaginasSugerencias }}
+                </span>
               </div>
 
               <button
@@ -1141,7 +1185,8 @@
                   )
                 "
                 :disabled="sugerenciasPagina === totalPaginasSugerencias"
-                class="flex items-center space-x-2 px-6 py-3 bg-white border-2 border-green-200 text-green-700 rounded-2xl hover:bg-green-50 hover:border-green-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold">
+                class="flex items-center space-x-2 px-6 py-3 bg-white border-2 border-blue-200 text-blue-700 rounded-2xl hover:bg-blue-50 hover:border-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold"
+                style="border-color: var(--color-blue-800); color: var(--color-blue-800);">
                 <span>Siguiente</span>
                 <svg
                   class="w-5 h-5"
@@ -1163,7 +1208,7 @@
       <!-- Estado sin pregunta seleccionada -->
       <div
         v-else-if="!preguntaSeleccionada"
-        class="bg-white rounded-2xl shadow-xl p-12 text-center border border-gray-200">
+        class="bg-white rounded-2xl shadow-xl p-12 text-center border border-blue-200">
         <div
           class="w-24 h-24 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mx-auto mb-6">
           <svg
@@ -1178,16 +1223,16 @@
               d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
           </svg>
         </div>
-        <h3 class="text-2xl font-bold text-gray-900 mb-4">
+        <h4 class="text-xl font-bold text-blue-900 mb-4">
           Selecciona una Pregunta para Analizar
-        </h3>
-        <p class="text-gray-600 mb-8 max-w-md mx-auto">
+        </h4>
+        <p class="text-blue-600 mb-8 max-w-md mx-auto">
           Utiliza el filtro "Pregunta a Analizar" para seleccionar una pregunta
           especifica y ver el reporte comparativo por regional con graficos
           interactivos.
         </p>
         <div
-          class="flex items-center justify-center space-x-2 text-sm text-gray-500">
+          class="flex items-center justify-center space-x-2 text-sm text-blue-500">
           <svg
             class="w-4 h-4"
             fill="none"
@@ -1206,11 +1251,11 @@
       <!-- Estado sin datos -->
       <div
         v-else-if="preguntaSeleccionada && datosVista.length === 0"
-        class="bg-white rounded-2xl shadow-xl p-12 text-center border border-gray-200">
+        class="bg-white rounded-2xl shadow-xl p-12 text-center border border-blue-200">
         <div
           class="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
           <svg
-            class="w-12 h-12 text-gray-500"
+            class="w-12 h-12 text-blue-500"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24">
@@ -1221,10 +1266,10 @@
               d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
           </svg>
         </div>
-        <h3 class="text-2xl font-bold text-gray-900 mb-4">
+        <h4 class="text-xl font-bold text-blue-900 mb-4">
           No Hay Datos Disponibles
-        </h3>
-        <p class="text-gray-600 mb-6">
+        </h4>
+        <p class="text-blue-600 mb-6">
           No se encontraron respuestas para la pregunta
           {{ preguntaSeleccionada }} con los filtros seleccionados.
         </p>
@@ -1236,6 +1281,7 @@
       </div>
     </div>
   </div>
+  </main>
 </template>
 
 <script setup>
@@ -1244,12 +1290,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+} from 'chart.js';
+import { Bar, Doughnut, Pie } from 'vue-chartjs';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement
+);
 
 // Estados reactivos principales
 const cargando = ref(false);
@@ -2064,6 +2124,131 @@ const totalPaginasSugerencias = computed(() => {
   return Math.ceil(
     todasLasSugerencias.value.length / sugerenciasPorPagina.value
   );
+});
+
+// Configuración de color único para toda la aplicación
+const primaryColor = '#1e40af'; // Azul corporativo
+const primaryColorLight = '#3b82f6';
+const primaryColorDark = '#1d4ed8';
+const backgroundColor = 'rgba(30, 64, 175, 0.1)';
+
+// Datos para gráfico de barras - Distribución por Regional
+const chartDataRegional = computed(() => {
+  if (!datosFiltrados.value.length) return null;
+  
+  const regionalesData = {};
+  datosFiltrados.value.forEach(item => {
+    const regional = item.regional || 'Sin Regional';
+    regionalesData[regional] = (regionalesData[regional] || 0) + 1;
+  });
+
+  return {
+    labels: Object.keys(regionalesData),
+    datasets: [{
+      label: 'Respuestas por Regional',
+      data: Object.values(regionalesData),
+      backgroundColor: primaryColor,
+      borderColor: primaryColorDark,
+      borderWidth: 1
+    }]
+  };
+});
+
+// Datos para gráfico circular - Distribución de Respuestas
+const chartDataRespuestas = computed(() => {
+  const preguntaIdNum = parseInt(preguntaSeleccionada.value);
+  
+  if (preguntaIdNum >= 1 && preguntaIdNum <= 9) {
+    return {
+      labels: ['Muy Bueno', 'Bueno', 'Regular', 'Malo', 'Muy Malo'],
+      datasets: [{
+        data: [
+          totalMuyBueno.value,
+          totalBueno.value,
+          totalRegular.value,
+          totalMalo.value,
+          totalMuyMalo.value
+        ],
+        backgroundColor: [
+          '#1e40af',
+          '#3b82f6',
+          '#60a5fa',
+          '#93c5fd',
+          '#dbeafe'
+        ],
+        borderColor: '#ffffff',
+        borderWidth: 2
+      }]
+    };
+  } else {
+    return {
+      labels: ['Positivos', 'Negativos'],
+      datasets: [{
+        data: [totalPositivosSiNo.value, totalNegativosSiNo.value],
+        backgroundColor: [primaryColor, '#ef4444'],
+        borderColor: '#ffffff',
+        borderWidth: 2
+      }]
+    };
+  }
+});
+
+// Opciones para los gráficos
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'bottom',
+      labels: {
+        padding: 20,
+        usePointStyle: true,
+        color: '#374151'
+      }
+    },
+    tooltip: {
+      backgroundColor: primaryColorDark,
+      titleColor: '#ffffff',
+      bodyColor: '#ffffff',
+      borderColor: primaryColor,
+      borderWidth: 1
+    }
+  }
+};
+
+const barChartOptions = {
+  ...chartOptions,
+  scales: {
+    y: {
+      beginAtZero: true,
+      grid: {
+        color: 'rgba(30, 64, 175, 0.1)'
+      },
+      ticks: {
+        color: '#6b7280'
+      }
+    },
+    x: {
+      grid: {
+        display: false
+      },
+      ticks: {
+        color: '#6b7280'
+      }
+    }
+  }
+};
+
+// Computed para regionales únicas
+const regionalesUnicas = computed(() => {
+  if (!datosFiltrados.value.length) return 0;
+  const regionales = new Set();
+  datosFiltrados.value.forEach(item => {
+    if (item.regional) {
+      regionales.add(item.regional);
+    }
+  });
+  return regionales.size;
 });
 
 // Reporte de additional_info para preguntas Si/No
