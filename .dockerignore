@@ -2,9 +2,9 @@
 node_modules
 npm-debug.log*
 
-# Build output
-dist
-build
+# Build output (comentado para debugging - uncomment si quieres excluir dist)
+# dist
+# build
 
 # Environment files
 .env
