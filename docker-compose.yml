@@ -1,35 +1,7 @@
 version: '3.8'
-
 services:
-  # Servicio de desarrollo
-  rrhh-dev:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    ports:
-      - "5173:5173"
-    volumes:
-      - .:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-    command: npm run dev
-    profiles:
-      - dev
-
-  # Servicio de producción
-  rrhh-prod:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  rrhh:
+    build: .
     ports:
       - "82:82"
-    environment:
-      - NODE_ENV=production
-    restart: unless-stopped
-    profiles:
-      - prod
-
-networks:
-  default:
-    driver: bridge
+    container_name: rrhh-app
