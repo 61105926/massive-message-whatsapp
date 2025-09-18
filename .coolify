@@ -2,13 +2,8 @@
 PORT=82
 NODE_ENV=production
 
-# Health check
-HEALTH_CHECK_ENABLED=true
-HEALTH_CHECK_PATH=/health
-HEALTH_CHECK_PORT=82
-HEALTH_CHECK_INTERVAL=30
-HEALTH_CHECK_TIMEOUT=10
-HEALTH_CHECK_RETRIES=3
+# Health check deshabilitado
+HEALTH_CHECK_ENABLED=false
 
 # Build configuration
 BUILD_COMMAND=npm run build

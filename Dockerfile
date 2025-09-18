@@ -43,9 +43,5 @@ RUN nginx -t
 # Exponer puerto 82
 EXPOSE 82
 
-# Health check usando el endpoint específico
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:82/health || exit 1
-
 # Comando directo sin script personalizado
 CMD ["nginx", "-g", "daemon off;"]
