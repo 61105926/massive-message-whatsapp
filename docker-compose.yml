@@ -3,5 +3,5 @@ services:
   rrhh:
     build: .
     ports:
-      - "82:82"
+      - "3001:3001"
     container_name: rrhh-app
