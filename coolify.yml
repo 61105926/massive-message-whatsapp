@@ -1,0 +1,23 @@
+# Configuración para Coolify
+version: "3.8"
+
+services:
+  rrhh:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    labels:
+      - "coolify.managed=true"
+      - "coolify.name=rrhh-app"
+      - "coolify.type=application"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

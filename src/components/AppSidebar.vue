@@ -1,37 +1,38 @@
 <script setup lang="ts">
-    import {
-        BookOpen,
-        Bot,
-        Command,
-        Frame,
-        LifeBuoy,
-        Map,
-        PieChart,
-        Send,
-        Settings2,
-        SquareTerminal,
-    } from 'lucide-vue-next'
+import {
+    Frame,
+    LifeBuoy,
+    Map,
+    PieChart,
+    Send,
+    SquareTerminal,
+} from 'lucide-vue-next'
 
-    import NavMain from './NavMain.vue'
-    import NavProjects from './NavProjects.vue'
-    import NavSecondary from './NavSecondary.vue'
-    import NavUser from './NavUser.vue'
-    import avatarImg from '@/assets/img/boot.png'
+// @ts-ignore
+import NavMain from './NavMain.vue'
+// @ts-ignore
+import NavProjects from './NavProjects.vue'
+// @ts-ignore
+import NavSecondary from './NavSecondary.vue'
+// @ts-ignore
+import NavUser from './NavUser.vue'
+// @ts-ignore
+import avatarImg from '@/assets/img/boot.png'
 
-    import {
-        Sidebar,
-        SidebarContent,
-        SidebarFooter,
-        SidebarHeader,
-        SidebarMenu,
-        SidebarMenuButton,
-        SidebarMenuItem,
-        type SidebarProps,
-    } from '@/components/ui/sidebar'
+import {
+    Sidebar,
+    SidebarContent,
+    SidebarFooter,
+    SidebarHeader,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+    type SidebarProps,
+} from '@/components/ui/sidebar'
 
-    const props = withDefaults(defineProps < SidebarProps > (), {
-        variant: 'inset',
-    })
+const props = withDefaults(defineProps<SidebarProps>(), {
+    variant: 'inset',
+})
 
     const data = {
         user: {

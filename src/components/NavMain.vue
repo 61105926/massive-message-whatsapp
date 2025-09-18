@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { RouterLink, useRoute } from 'vue-router'
-
 import { ChevronRight, type LucideIcon } from 'lucide-vue-next'
 import {
   Collapsible,
@@ -31,7 +29,6 @@ defineProps<{
     }[]
   }[]
 }>()
-const route = useRoute()
 
 </script>
 
