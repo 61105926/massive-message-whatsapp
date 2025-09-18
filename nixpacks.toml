@@ -1,0 +1,12 @@
+[variables]
+NODE_ENV = "production"
+PORT = "81"
+
+[phases.build]
+cmds = ["npm ci", "npm run build"]
+
+[phases.start]
+cmd = "nginx -g 'daemon off;'"
+
+[start]
+cmd = "nginx -g 'daemon off;'"

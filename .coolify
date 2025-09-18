@@ -1,15 +1,15 @@
 # Configuración para Coolify
-# Especifica que la aplicación corre en puerto 81
-COOLIFY_APPLICATION_PORT=81
-COOLIFY_APPLICATION_URL_PORT=81
-
-# Variables de entorno
+PORT=81
 NODE_ENV=production
 
-# Configuración del build
-DOCKERFILE_PATH=./Dockerfile
-BUILD_CONTEXT=./
-
-# Health check endpoint
+# Health check
+HEALTH_CHECK_ENABLED=true
 HEALTH_CHECK_PATH=/
 HEALTH_CHECK_PORT=81
+HEALTH_CHECK_INTERVAL=30
+HEALTH_CHECK_TIMEOUT=10
+HEALTH_CHECK_RETRIES=3
+
+# Build configuration
+BUILD_COMMAND=npm run build
+START_COMMAND=nginx -g 'daemon off;'
