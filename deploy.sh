@@ -64,7 +64,7 @@ log "Construyendo imagen Docker..."
 docker build -t rrhh-app:latest .
 
 # Opcional: probar localmente en puerto 81
-log "Para probar localmente: docker run -p 81:81 rrhh-app:latest"
+log "Para probar localmente: docker run -p 81:82 rrhh-app:latest"
 
 log "Imagen Docker construida exitosamente"
 

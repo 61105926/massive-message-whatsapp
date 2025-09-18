@@ -39,7 +39,7 @@ fi
 
 # Probar el contenedor
 log "Iniciando contenedor en puerto 81..."
-docker run -d --name rrhh-test -p 81:81 rrhh-debug
+docker run -d --name rrhh-test -p 81:82 rrhh-debug
 
 # Esperar que inicie
 log "Esperando que el servicio inicie..."
@@ -48,13 +48,13 @@ sleep 5
 # Probar endpoints
 log "Probando endpoints..."
 
-if curl -f http://localhost:81/health; then
+if curl -f http://localhost:82/health; then
     log "✅ Health check OK"
 else
     warning "❌ Health check falló"
 fi
 
-if curl -f http://localhost:81/ >/dev/null; then
+if curl -f http://localhost:82/ >/dev/null; then
     log "✅ Página principal OK"
 else
     warning "❌ Página principal falló"

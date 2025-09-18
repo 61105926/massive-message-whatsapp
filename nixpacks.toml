@@ -1,6 +1,6 @@
 [variables]
 NODE_ENV = "production"
-PORT = "81"
+PORT = "82"
 
 [phases.build]
 cmds = ["npm ci", "npm run build"]
