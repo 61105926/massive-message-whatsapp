@@ -455,7 +455,7 @@
             <div
               v-for="(opcion, index) in opcionesDinamicas"
               :key="opcion"
-              class="bg-white bg-opacity-10 rounded-2xl p-6 backdrop-blur border border-white border-opacity-20 hover:bg-opacity-20 transition-all duration-300">
+              class="bg-blue-900 bg-opacity-10 rounded-2xl p-6 backdrop-blur border border-white border-opacity-20 hover:bg-opacity-20 transition-all duration-300">
               <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-4">
                   <div
