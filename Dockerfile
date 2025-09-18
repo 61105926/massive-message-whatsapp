@@ -2,7 +2,7 @@
 # Multi-stage build para optimizar el tamaño final
 
 # Etapa 1: Build de la aplicación
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 # Establecer directorio de trabajo
 WORKDIR /app
@@ -10,8 +10,8 @@ WORKDIR /app
 # Copiar archivos de dependencias
 COPY package*.json ./
 
-# Instalar dependencias
-RUN npm ci --only=production
+# Instalar todas las dependencias (necesarias para el build)
+RUN npm ci
 
 # Copiar código fuente
 COPY . .
@@ -28,8 +28,8 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copiar configuración personalizada de Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Exponer puerto 80
-EXPOSE 80
+# Exponer puerto 81
+EXPOSE 81
 
 # Comando por defecto
 CMD ["nginx", "-g", "daemon off;"]

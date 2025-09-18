@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "80:80"
+      - "81:81"
     environment:
       - NODE_ENV=production
     restart: unless-stopped
@@ -16,7 +16,7 @@ services:
       - "coolify.name=rrhh-app"
       - "coolify.type=application"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:81/"]
       interval: 30s
       timeout: 10s
       retries: 3
