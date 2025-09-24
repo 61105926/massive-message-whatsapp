@@ -41,44 +41,88 @@ const props = withDefaults(defineProps<SidebarProps>(), {
             avatar: avatarImg,
         },
         navMain: [{
-                title: 'Mensajes',
-                url: '#',
-                icon: SquareTerminal,
+                title: 'Dashboard Principal',
+                url: '/admin/dashboard',
+                icon: PieChart,
                 isActive: true,
                 items: [{
-                        title: 'Mensajes Massivos',
-                        url: '/message',
+                        title: 'Tablero Ejecutivo',
+                        url: '/admin/dashboard',
                     },
-                    // {
-                    //     title: 'Starred',
-                    //     url: '#',
-                    // },
-                    // {
-                    //     title: 'Settings',
-                    //     url: '#',
-                    // },
+                    {
+                        title: 'Métricas y KPIs',
+                        url: '/admin/dashboard',
+                    },
                 ],
-                
+
             },
             {
-                title: 'Clima Laboral Minoil',
+                title: 'Gestión de Personal',
                 url: '#',
                 icon: SquareTerminal,
-                isActive: true,
+                isActive: false,
                 items: [{
-                        title: 'Clima ',
+                        title: 'Lista de Empleados',
+                        url: '/admin/employees',
+                    },
+                    {
+                        title: 'Boletas de Pago',
+                        url: '/admin/payslips',
+                    },
+                    {
+                        title: 'Envío de Boletas',
+                        url: '/admin/mass-payslips',
+                    },
+                ],
+
+            },
+            {
+                title: 'Comunicaciones',
+                url: '#',
+                icon: Send,
+                isActive: false,
+                items: [{
+                        title: 'Mensajes Masivos',
+                        url: '/message',
+                    },
+                    {
+                        title: 'Notificaciones',
+                        url: '/admin/bulk-messages',
+                    },
+                ],
+
+            },
+            {
+                title: 'Clima Laboral',
+                url: '#',
+                icon: LifeBuoy,
+                isActive: false,
+                items: [{
+                        title: 'Encuestas de Clima',
                         url: '/clima',
                     },
-                    // {
-                    //     title: 'Starred',
-                    //     url: '#',
-                    // },
-                    // {
-                    //     title: 'Settings',
-                    //     url: '#',
-                    // },
+                    {
+                        title: 'Análisis y Reportes',
+                        url: '/clima',
+                    },
                 ],
-                
+
+            },
+            {
+                title: 'Reportes y Análisis',
+                url: '#',
+                icon: Map,
+                isActive: false,
+                items: [{
+                        title: 'Logs del Sistema',
+                        url: '/admin/logs',
+                    },
+                    {
+                        title: 'Auditoría',
+                        url: '/admin/logs',
+                    },
+                ],
+
             },
             // {
             //   title: 'Models',
@@ -147,28 +191,28 @@ const props = withDefaults(defineProps<SidebarProps>(), {
             // },
         ],
         navSecondary: [{
-                title: 'Support',
+                title: 'Soporte Técnico',
                 url: '#',
                 icon: LifeBuoy,
             },
             {
-                title: 'Feedback',
+                title: 'Configuración',
                 url: '#',
                 icon: Send,
             },
         ],
         projects: [{
-                name: 'Design Engineering',
+                name: 'Administración',
                 url: '#',
                 icon: Frame,
             },
             {
-                name: 'Sales & Marketing',
+                name: 'Control de Acceso',
                 url: '#',
                 icon: PieChart,
             },
             {
-                name: 'Travel',
+                name: 'Estado del Sistema',
                 url: '#',
                 icon: Map,
             },
@@ -188,8 +232,8 @@ const props = withDefaults(defineProps<SidebarProps>(), {
                                 <img :src="avatarImg"  alt="Logo Minoil" class="w-full h-full object-cover" />
                             </div>
                             <div class="grid flex-1 text-left text-sm leading-tight">
-                                <span class="truncate font-medium">Minoil</span>
-                                <span class="truncate text-xs">Recursos Humanos</span>
+                                <span class="truncate font-bold text-blue-900">MINOIL S.A.</span>
+                                <span class="truncate text-xs text-yellow-600 font-medium">ERP Recursos Humanos</span>
                             </div>
                         </a>
                     </SidebarMenuButton>
