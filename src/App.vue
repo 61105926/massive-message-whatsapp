@@ -4,6 +4,8 @@
 </script>
 
 <script setup lang="ts">
+    import { computed } from 'vue'
+    import { useRoute } from 'vue-router'
     import AppSidebar from '@/components/AppSidebar.vue'
     import {
         Breadcrumb,
@@ -21,13 +23,16 @@
         SidebarProvider,
         SidebarTrigger,
     } from '@/components/ui//sidebar'
+
+    const route = useRoute()
+    const isVacationPage = computed(() => route.name === 'vacaciones')
 </script>
 
 <template>
     <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-            <header class="flex h-16 shrink-0 items-center gap-2 bg-blue-900 text-white shadow-lg border-b-4 border-yellow-400">
+            <header v-if="!isVacationPage" class="flex h-16 shrink-0 items-center gap-2 bg-blue-900 text-white shadow-lg border-b-4 border-yellow-400">
                 <div class="flex items-center gap-2 px-4">
                     <SidebarTrigger class="-ml-1 text-white hover:bg-blue-800" />
                     <Separator orientation="vertical" class="mr-2 h-4 bg-blue-700" />
@@ -45,14 +50,10 @@
                         </BreadcrumbList>
                     </Breadcrumb>
                 </div>
-                <div class="ml-auto mr-4">
-                    <div class="bg-yellow-400 text-blue-900 px-3 py-1 rounded-full text-sm font-semibold">
-                        Sistema Activo
-                    </div>
-                </div>
+
             </header>
 
-            <div class="p-6 flex-1 bg-gray-50 min-h-screen">
+            <div >
                 <RouterView />
             </div>
         </SidebarInset>
