@@ -239,7 +239,6 @@ const loading = ref(false)
 const actionLoading = ref(false)
 const isProcessing = ref(false)
 const lastResult = ref<any>(null)
-const recentActivity = ref<any[]>([])
 
 // Datos de progreso
 const progressData = ref({
