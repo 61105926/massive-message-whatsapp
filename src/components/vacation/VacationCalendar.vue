@@ -229,7 +229,6 @@ const isClickable = (date: Date) => {
 const getDateClasses = (date: Date) => {
   const status = getDateStatus(date)
   const isSelected = isDateSelected(date)
-  const isClickable = status !== 'past' && status !== 'occupied'
 
   return [
     {

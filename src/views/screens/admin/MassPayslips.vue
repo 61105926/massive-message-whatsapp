@@ -309,23 +309,6 @@ const generateFallbackMonths = () => {
   availableMonths.value = monthsList
 }
 
-
-const addActivity = (type: 'success' | 'error' | 'info', message: string) => {
-  const activity = {
-    id: Date.now(),
-    type,
-    message,
-    time: new Date().toLocaleTimeString()
-  }
-
-  recentActivity.value.unshift(activity)
-
-  // Mantener solo los últimos 10 elementos
-  if (recentActivity.value.length > 10) {
-    recentActivity.value = recentActivity.value.slice(0, 10)
-  }
-}
-
 // Métodos
 const sendMassPayslips = async () => {
   if (!selectedMonth.value || !/^\d{6}$/.test(selectedMonth.value)) {
@@ -505,16 +488,6 @@ const clearState = async () => {
     isProcessing.value = false
     lastResult.value = null
   }
-}
-
-const formatDate = (date: Date) => {
-  return new Intl.DateTimeFormat('es-ES', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(date)
 }
 
 // Lifecycle

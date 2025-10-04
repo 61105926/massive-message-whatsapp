@@ -92,9 +92,14 @@
 
     async function verificarProgreso() {
         try {
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 5000) // Timeout de 5 segundos
+
             const response = await fetch('http://localhost:3002/progress', {
-                timeout: 5000 // Timeout de 5 segundos
+                signal: controller.signal
             })
+
+            clearTimeout(timeoutId)
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`)
@@ -149,7 +154,8 @@
             }
         } catch (error) {
             errorCount++
-            console.error(`❌ Error verificando progreso (${errorCount}/${MAX_ERRORS}):`, error.message || error)
+            const errorMessage = error instanceof Error ? error.message : String(error)
+            console.error(`❌ Error verificando progreso (${errorCount}/${MAX_ERRORS}):`, errorMessage)
 
             // Si hay demasiados errores consecutivos, detener el monitoreo
             if (errorCount >= MAX_ERRORS) {
