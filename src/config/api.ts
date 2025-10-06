@@ -1,7 +1,7 @@
 // Configuración de la API
 export const API_CONFIG = {
   // URL base del backend (bot de WhatsApp)
-  BASE_URL: 'http://localhost:3005',
+  BASE_URL: import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005',
 
   // URL base para APIs externas
   EXTERNAL_API_URL: 'http://localhost',

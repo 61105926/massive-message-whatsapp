@@ -170,6 +170,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { API_CONFIG } from '@/config/api'
 
 // Estado reactivo para la conexión del backend
 const backendStatus = ref({
@@ -187,7 +188,7 @@ const checkBackendStatus = async () => {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
 
-    const response = await fetch('http://localhost:3005/status', {
+    const response = await fetch(`${API_CONFIG.BASE_URL}/status`, {
       method: 'GET',
       signal: controller.signal
     })
