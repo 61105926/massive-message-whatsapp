@@ -4,7 +4,7 @@ export const API_CONFIG = {
   BASE_URL: import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005',
 
   // URL base para APIs externas
-  EXTERNAL_API_URL: 'http://localhost',
+  EXTERNAL_API_URL: import.meta.env.VITE_EXTERNAL_API_URL || 'http://localhost',
 
   // Endpoints principales
   ENDPOINTS: {

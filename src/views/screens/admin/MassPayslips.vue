@@ -232,6 +232,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { buildApiUrl, buildExternalApiUrl, API_CONFIG } from '@/config/api'
 
 // Estados reactivos
 const selectedMonth = ref('')
@@ -261,7 +262,7 @@ const availableMonths = ref<{value: string, label: string}[]>([])
 const generateAvailableMonths = async () => {
   try {
     // Obtener meses desde la API usando un número de ejemplo
-    const response = await fetch('http://190.171.225.68/api/dateConsult?numero=77711124')
+    const response = await fetch(buildExternalApiUrl('/api/dateConsult?numero=77711124'))
     const data = await response.json()
 
     if (data.availableMonths && Array.isArray(data.availableMonths)) {
@@ -317,7 +318,7 @@ const sendMassPayslips = async () => {
 
   loading.value = true
   try {
-    const response = await fetch('http://localhost:3002/sendPayslipLinks', {
+    const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.BULK_PAYSLIPS), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -369,7 +370,7 @@ const startProgressMonitoring = () => {
 
 const checkProgress = async () => {
   try {
-    const response = await fetch('http://localhost:3002/progress')
+    const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.PROGRESS))
     const data = await response.json()
 
     progressData.value = {
@@ -402,7 +403,7 @@ const checkProgress = async () => {
 const pauseProcess = async () => {
   actionLoading.value = true
   try {
-    const response = await fetch('http://localhost:3002/pause', { method: 'POST' })
+    const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.PAUSE), { method: 'POST' })
     if (response.ok) {
       await checkProgress()
     }
@@ -416,7 +417,7 @@ const pauseProcess = async () => {
 const resumeProcess = async () => {
   actionLoading.value = true
   try {
-    const response = await fetch('http://localhost:3002/resume', { method: 'POST' })
+    const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.RESUME), { method: 'POST' })
     if (response.ok) {
       await checkProgress()
     }
@@ -434,7 +435,7 @@ const cancelProcess = async () => {
 
   actionLoading.value = true
   try {
-    const response = await fetch('http://localhost:3002/cancel', { method: 'POST' })
+    const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.CANCEL), { method: 'POST' })
     if (response.ok) {
       await checkProgress()
       isProcessing.value = false
@@ -449,7 +450,7 @@ const cancelProcess = async () => {
 const clearState = async () => {
   try {
     // Limpiar backend
-    await fetch('http://localhost:3002/reset', {
+    await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.RESET), {
       method: 'POST'
     })
 

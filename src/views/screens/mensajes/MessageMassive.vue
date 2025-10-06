@@ -33,6 +33,7 @@
         Play,
         X
     } from 'lucide-vue-next'
+    import { buildApiUrl, API_CONFIG } from '@/config/api'
 
     const regiones = ref<string[]>([])
     const seleccionados = ref < string[] > ([])
@@ -74,7 +75,7 @@
     async function cargarRegiones() {
         try {
             cargandoRegiones.value = true
-            const response = await fetch('http://localhost:3002/regionales')
+            const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.REGIONALES))
             const data = await response.json()
             regiones.value = data.regionales || []
             console.log('✅ Regionales cargadas:', regiones.value)
@@ -95,7 +96,7 @@
             const controller = new AbortController()
             const timeoutId = setTimeout(() => controller.abort(), 5000) // Timeout de 5 segundos
 
-            const response = await fetch('http://localhost:3002/progress', {
+            const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.PROGRESS), {
                 signal: controller.signal
             })
 
@@ -211,7 +212,7 @@
 
     async function pausarEnvio() {
         try {
-            const response = await fetch('http://localhost:3002/pause', {
+            const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.PAUSE), {
                 method: 'POST'
             })
             const result = await response.json()
@@ -224,7 +225,7 @@
 
     async function reanudarEnvio() {
         try {
-            const response = await fetch('http://localhost:3002/resume', {
+            const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.RESUME), {
                 method: 'POST'
             })
             const result = await response.json()
@@ -240,7 +241,7 @@
             return
         }
         try {
-            const response = await fetch('http://localhost:3002/cancel', {
+            const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.CANCEL), {
                 method: 'POST'
             })
             const result = await response.json()
@@ -255,7 +256,7 @@
     async function limpiarEstado() {
         try {
             // Limpiar backend
-            await fetch('http://localhost:3002/reset', {
+            await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.RESET), {
                 method: 'POST'
             })
 
@@ -326,7 +327,7 @@
             console.log('📝 Mensaje:', mensaje.value)
             console.log('🖼️ Imagen:', imagen.value?.name || 'Sin imagen')
 
-            const response = await fetch('http://localhost:3002/sendRegionalMessages', {
+            const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.BULK_MESSAGES), {
                 method: 'POST',
                 body: formData
             })
@@ -367,7 +368,7 @@
 
         // Verificar si hay algún proceso activo al cargar la página
         try {
-            const response = await fetch('http://localhost:3002/progress')
+            const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.PROGRESS))
             const data = await response.json()
 
             if (data.isActive) {
