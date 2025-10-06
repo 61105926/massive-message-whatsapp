@@ -187,7 +187,7 @@ const checkBackendStatus = async () => {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
 
-    const response = await fetch('http://localhost:3002/status', {
+    const response = await fetch('http://localhost:3005/status', {
       method: 'GET',
       signal: controller.signal
     })
