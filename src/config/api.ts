@@ -16,10 +16,20 @@ export const API_CONFIG = {
     DISABLE_MONTH: '/admin/disable-current-month',
 
     // Boletas masivas
-    BULK_PAYSLIPS: '/sendBulkPayslips',
+    BULK_PAYSLIPS: '/sendPayslipLinks',  // ✅ Corregido
 
     // Mensajes masivos
-    BULK_MESSAGES: '/sendMessages',
+    BULK_MESSAGES: '/sendRegionalMessages',  // ✅ Corregido
+
+    // Regionales
+    REGIONALES: '/regionales',
+
+    // Control de cola
+    PROGRESS: '/progress',
+    PAUSE: '/pause',
+    RESUME: '/resume',
+    CANCEL: '/cancel',
+    RESET: '/reset',
 
     // Logs
     PAYSLIP_LOGS: '/logs/payslips',
