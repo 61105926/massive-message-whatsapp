@@ -48,6 +48,10 @@
         <div class="w-3 h-3 bg-blue-500 rounded"></div>
         <span>Seleccionado</span>
       </div>
+      <div class="flex items-center gap-1">
+        <div class="w-3 h-3 bg-orange-500 rounded"></div>
+        <span>Feriado</span>
+      </div>
     </div>
 
     <div class="grid grid-cols-7 gap-1 md:gap-2 mb-2">
@@ -145,7 +149,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ChevronLeft, ChevronRight, Sun, Sunset, Clock } from 'lucide-vue-next'
 
 interface CalendarProps {
@@ -158,6 +162,12 @@ interface DaySelection {
   type: 'morning' | 'afternoon' | 'full'
 }
 
+interface PublicHoliday {
+  date: string
+  localName: string
+  name: string
+}
+
 const props = defineProps<CalendarProps>()
 const emit = defineEmits<{
   dateSelect: [dates: Date[]]
@@ -168,6 +178,24 @@ const showDayTypeModal = ref(false)
 const selectedDateForType = ref<Date | null>(null)
 const daySelections = ref<DaySelection[]>([])
 const autoFullDay = ref(true)
+const publicHolidays = ref<PublicHoliday[]>([])
+
+// Fetch public holidays from API
+const fetchPublicHolidays = async () => {
+  try {
+    const currentYear = new Date().getFullYear()
+    const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${currentYear}/BO`)
+    if (response.ok) {
+      publicHolidays.value = await response.json()
+    }
+  } catch (error) {
+    console.error('Error fetching public holidays:', error)
+  }
+}
+
+onMounted(() => {
+  fetchPublicHolidays()
+})
 
 const monthNames = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -201,7 +229,21 @@ const getDateStatus = (date: Date) => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  if (date < today) return 'past'
+  const tomorrow = new Date(today)
+  tomorrow.setDate(today.getDate() + 1)
+
+  const dayOfWeek = date.getDay()
+
+  // Domingo no es seleccionable
+  if (dayOfWeek === 0) return 'sunday'
+
+  // Solo se puede seleccionar con 24 hrs de antelación (a partir de mañana)
+  if (date < tomorrow) return 'past'
+
+  // Verificar si es feriado
+  const dateString = date.toISOString().split('T')[0]
+  const isHoliday = publicHolidays.value.some(holiday => holiday.date === dateString)
+  if (isHoliday) return 'holiday'
 
   const hasRequest = props.existingRequests.some((request) => {
     const startDate = new Date(request.startDate)
@@ -211,9 +253,7 @@ const getDateStatus = (date: Date) => {
 
   if (hasRequest) return 'occupied'
 
-  const dayOfWeek = date.getDay()
-  if (dayOfWeek === 0 || dayOfWeek === 6) return 'weekend'
-
+  // Todos los demás días (incluyendo sábados) son disponibles
   return 'available'
 }
 
@@ -223,7 +263,7 @@ const isDateSelected = (date: Date) => {
 
 const isClickable = (date: Date) => {
   const status = getDateStatus(date)
-  return status !== 'past' && status !== 'occupied'
+  return status !== 'past' && status !== 'occupied' && status !== 'sunday' && status !== 'holiday'
 }
 
 const getDateClasses = (date: Date) => {
@@ -236,6 +276,8 @@ const getDateClasses = (date: Date) => {
       'bg-blue-500 text-white': isSelected,
       'bg-red-100 text-red-800 cursor-not-allowed': status === 'occupied',
       'bg-gray-100 text-gray-400 cursor-not-allowed': status === 'past',
+      'bg-gray-200 text-gray-500 cursor-not-allowed': status === 'sunday',
+      'bg-orange-100 text-orange-800 cursor-not-allowed': status === 'holiday',
     }
   ]
 }
@@ -254,7 +296,7 @@ const getDayTypeEmoji = (type: string | undefined) => {
 
 const handleDateClick = (date: Date) => {
   const status = getDateStatus(date)
-  if (status === 'past' || status === 'occupied') return
+  if (status === 'past' || status === 'occupied' || status === 'sunday' || status === 'holiday') return
 
   const existingSelection = daySelections.value.find((sel) => sel.date.toDateString() === date.toDateString())
 

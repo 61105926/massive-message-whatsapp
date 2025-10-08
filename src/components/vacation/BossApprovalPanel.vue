@@ -49,12 +49,6 @@
               </div>
             </div>
 
-            <!-- Reason -->
-            <div v-if="request.reason">
-              <p class="text-muted-foreground text-sm mb-1">Motivo</p>
-              <p class="text-sm bg-gray-50 p-2 rounded">{{ request.reason }}</p>
-            </div>
-
             <!-- Request Date -->
             <div class="text-xs text-muted-foreground">
               Solicitado el {{ formatDate(request.createdAt) }}
@@ -195,14 +189,6 @@ const getVacationType = (type: string) => {
       return 'Vacaciones Programadas'
     case 'unplanned':
       return 'Vacaciones a Cuenta'
-    case 'personal':
-      return 'Día Personal'
-    case 'sick':
-      return 'Enfermedad'
-    case 'emergency':
-      return 'Emergencia Familiar'
-    case 'compensatory':
-      return 'Compensatorio'
     default:
       return type
   }

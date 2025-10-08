@@ -39,9 +39,6 @@
                 <p class="text-sm">
                   <strong>Tipo:</strong> {{ getVacationType(request.type) }}
                 </p>
-                <p v-if="request.reason" class="text-sm text-muted-foreground">
-                  {{ request.reason }}
-                </p>
               </div>
 
               <div class="text-xs text-muted-foreground">
@@ -158,14 +155,6 @@ const getVacationType = (type: string) => {
       return 'Vacaciones Programadas'
     case 'unplanned':
       return 'Vacaciones a Cuenta'
-    case 'personal':
-      return 'Día Personal'
-    case 'sick':
-      return 'Enfermedad'
-    case 'emergency':
-      return 'Emergencia Familiar'
-    case 'compensatory':
-      return 'Compensatorio'
     default:
       return type
   }

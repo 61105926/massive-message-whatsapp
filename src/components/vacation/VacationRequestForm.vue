@@ -29,10 +29,6 @@
               <option value="">Selecciona el tipo</option>
               <option value="programmed">Vacaciones Programadas</option>
               <option value="unplanned">Vacaciones a Cuenta</option>
-              <option value="personal">Día Personal</option>
-              <option value="sick">Enfermedad</option>
-              <option value="emergency">Emergencia Familiar</option>
-              <option value="compensatory">Compensatorio</option>
             </select>
             <div v-if="formData.type === 'unplanned'" class="flex items-center gap-2">
               <span
@@ -67,18 +63,6 @@
               </option>
             </select>
           </div>
-        </div>
-
-        <div class="space-y-2">
-          <label for="reason" class="text-sm font-medium">
-            Motivo/Justificación *
-          </label>
-          <textarea
-            id="reason"
-            v-model="formData.reason"
-            placeholder="Describe el motivo de tu solicitud de vacaciones..."
-            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px] focus:outline-none focus:ring-2 focus:ring-ring"
-          ></textarea>
         </div>
 
         <div v-if="selectedDates.length > 0" class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border">
@@ -157,7 +141,7 @@ const handleSubmit = () => {
     return
   }
 
-  if (!formData.value.type || !formData.value.reason || !formData.value.replacement) {
+  if (!formData.value.type || !formData.value.replacement) {
     alert('Por favor completa todos los campos obligatorios')
     return
   }
