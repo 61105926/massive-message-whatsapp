@@ -103,23 +103,68 @@
         </router-link>
 
         <!-- Solicitar Vacaciones -->
-        <router-link
-          to="/vacaciones"
-          class="bg-white/80 backdrop-blur-sm border-0 shadow-xl rounded-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-300"
-        >
-          <div class="p-8 text-center">
-            <div class="w-20 h-20 bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-6">
-              <span class="text-yellow-400 text-3xl font-bold">📅</span>
+        <div class="bg-white/80 backdrop-blur-sm border-0 shadow-xl rounded-lg">
+          <div class="p-8">
+            <div class="text-center mb-6">
+              <div class="w-20 h-20 bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span class="text-yellow-400 text-3xl font-bold">📅</span>
+              </div>
+              <h3 class="text-2xl font-bold text-blue-900 mb-2">Solicitar Vacaciones</h3>
+              <p class="text-gray-600 text-sm">
+                Sistema de solicitud de vacaciones con aprobación automática
+              </p>
             </div>
-            <h3 class="text-2xl font-bold text-blue-900 mb-4">Solicitar Vacaciones</h3>
-            <p class="text-gray-600 mb-6">
-              Sistema de solicitud de vacaciones, permisos y días personales con aprobación automática
-            </p>
-            <div class="bg-purple-600 hover:bg-purple-700 text-white font-medium px-8 py-3 rounded-xl transition-all shadow-lg">
-              📅 Solicitar Vacaciones
+
+            <!-- Configuración de tipos de vacaciones -->
+            <div class="space-y-4 mb-6">
+              <!-- Vacaciones Programadas (Toggle) -->
+              <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div class="flex-1">
+                  <p class="text-sm font-semibold text-blue-900">Vacaciones Programadas</p>
+                  <p class="text-xs text-blue-700">Solicitudes anticipadas con planificación</p>
+                </div>
+                <button
+                  @click="toggleProgrammedVacations"
+                  :class="[
+                    'relative inline-flex h-7 w-12 items-center rounded-full transition-colors',
+                    programmedVacationsEnabled ? 'bg-green-600' : 'bg-gray-300'
+                  ]"
+                >
+                  <span
+                    :class="[
+                      'inline-block h-5 w-5 transform rounded-full bg-white transition-transform',
+                      programmedVacationsEnabled ? 'translate-x-6' : 'translate-x-1'
+                    ]"
+                  />
+                </button>
+              </div>
+
+              <!-- Vacaciones a Cuenta (Siempre habilitadas) -->
+              <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                <div class="flex-1">
+                  <p class="text-sm font-semibold text-green-900">Vacaciones a Cuenta</p>
+                  <p class="text-xs text-green-700">Siempre disponibles - Descuento inmediato</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold text-green-700">✓ SIEMPRE ACTIVO</span>
+                  <div class="relative inline-flex h-7 w-12 items-center rounded-full bg-green-600">
+                    <span class="inline-block h-5 w-5 transform rounded-full bg-white translate-x-6" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botón de acceso -->
+            <div class="text-center">
+              <router-link
+                to="/vacaciones"
+                class="block bg-purple-600 hover:bg-purple-700 text-white font-medium px-8 py-3 rounded-xl transition-all shadow-lg"
+              >
+                📅 Acceder al Sistema
+              </router-link>
             </div>
           </div>
-        </router-link>
+        </div>
 
         <!-- Bot WhatsApp Status -->
         <div class="bg-white/80 backdrop-blur-sm border-0 shadow-xl rounded-lg col-span-1 md:col-span-3">
@@ -179,7 +224,60 @@ const backendStatus = ref({
   error: null as string | null
 })
 
+// Estado del sistema de vacaciones
+const programmedVacationsEnabled = ref(false)
+const isLoadingConfig = ref(false)
+
 let statusInterval: number | null = null
+
+// Cargar configuración desde el backend
+const loadVacationConfig = async () => {
+  try {
+    isLoadingConfig.value = true
+    const response = await fetch(`${API_CONFIG.BASE_URL}/vacation-config`)
+    const result = await response.json()
+
+    if (result.success && result.data) {
+      programmedVacationsEnabled.value = result.data.programmedVacationsEnabled
+      console.log('✅ Configuración cargada desde backend:', result.data)
+    }
+  } catch (error) {
+    console.error('❌ Error al cargar configuración:', error)
+  } finally {
+    isLoadingConfig.value = false
+  }
+}
+
+// Toggle de vacaciones programadas
+const toggleProgrammedVacations = async () => {
+  try {
+    isLoadingConfig.value = true
+
+    const response = await fetch(`${API_CONFIG.BASE_URL}/vacation-config/toggle`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        updatedBy: 'Admin Dashboard'
+      })
+    })
+
+    const result = await response.json()
+
+    if (result.success && result.data) {
+      programmedVacationsEnabled.value = result.data.programmedVacationsEnabled
+      console.log('✅ Configuración actualizada:', result.data)
+      console.log('📡 Vacaciones programadas:', result.data.programmedVacationsEnabled ? 'Habilitadas' : 'Deshabilitadas')
+    } else {
+      console.error('❌ Error en la respuesta:', result)
+    }
+  } catch (error) {
+    console.error('❌ Error al actualizar configuración:', error)
+  } finally {
+    isLoadingConfig.value = false
+  }
+}
 
 // Función para verificar el estado del backend
 const checkBackendStatus = async () => {
@@ -230,6 +328,9 @@ onMounted(() => {
 
   // Verificar cada 10 segundos
   statusInterval = setInterval(checkBackendStatus, 10000)
+
+  // Cargar configuración de vacaciones desde el backend
+  loadVacationConfig()
 })
 
 onUnmounted(() => {

@@ -170,7 +170,7 @@ interface PublicHoliday {
 
 const props = defineProps<CalendarProps>()
 const emit = defineEmits<{
-  dateSelect: [dates: Date[]]
+  dateSelect: [dates: Date[], daySelections: DaySelection[]]
 }>()
 
 const currentDate = ref(new Date())
@@ -303,7 +303,8 @@ const handleDateClick = (date: Date) => {
   if (existingSelection) {
     // Remove existing selection
     daySelections.value = daySelections.value.filter((sel) => sel.date.toDateString() !== date.toDateString())
-    emit('dateSelect', props.selectedDates.filter((d) => d.toDateString() !== date.toDateString()))
+    const newDates = props.selectedDates.filter((d) => d.toDateString() !== date.toDateString())
+    emit('dateSelect', newDates, daySelections.value)
   } else {
     if (autoFullDay.value) {
       // Automatically select as full day
@@ -312,7 +313,8 @@ const handleDateClick = (date: Date) => {
         type: 'full',
       }
       daySelections.value = [...daySelections.value, newSelection]
-      emit('dateSelect', [...props.selectedDates, date].sort((a, b) => a.getTime() - b.getTime()))
+      const newDates = [...props.selectedDates, date].sort((a, b) => a.getTime() - b.getTime())
+      emit('dateSelect', newDates, daySelections.value)
     } else {
       // Show modal to select day type
       selectedDateForType.value = date
@@ -330,7 +332,8 @@ const handleDayTypeSelect = (type: 'morning' | 'afternoon' | 'full') => {
   }
 
   daySelections.value = [...daySelections.value, newSelection]
-  emit('dateSelect', [...props.selectedDates, selectedDateForType.value].sort((a, b) => a.getTime() - b.getTime()))
+  const newDates = [...props.selectedDates, selectedDateForType.value].sort((a, b) => a.getTime() - b.getTime())
+  emit('dateSelect', newDates, daySelections.value)
   closeDayTypeModal()
 }
 
