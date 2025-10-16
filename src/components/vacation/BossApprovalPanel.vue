@@ -429,9 +429,9 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-const emit = defineEmits<{
-  requestUpdate: [requests: any[]]
-}>()
+// const emit = defineEmits<{
+//   requestUpdate: [requests: any[]]
+// }>()
 
 const requests = ref<VacationRequest[]>([])
 const isLoading = ref(false)
@@ -531,12 +531,12 @@ const fetchManagerRequests = async () => {
 
     if (data.success && Array.isArray(data.data)) {
       // 2. Obtener IDs únicos de empleados
-      const uniqueEmpIds = [...new Set(data.data.map((req: VacationRequest) => req.emp_id))]
+      const uniqueEmpIds = [...new Set(data.data.map((req: VacationRequest) => req.emp_id))] as string[]
       console.log('📋 Empleados únicos a cargar:', uniqueEmpIds)
 
       // 3. Cargar información de todos los empleados en paralelo
       await Promise.all(
-        uniqueEmpIds.map(empId => fetchEmployeeInfo(empId))
+        uniqueEmpIds.map((empId) => fetchEmployeeInfo(empId))
       )
 
       // 4. Agregar la info del empleado a cada solicitud desde el cache
