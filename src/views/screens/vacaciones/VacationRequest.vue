@@ -849,12 +849,43 @@ onMounted(async () => {
 
   // Si viene desde el bot, cargar datos del empleado
   const dataParam = route.query.data as string
+  const tabParam = route.query.tab as string
+  
   if (dataParam) {
     console.log('✅ Viene del bot')
     console.log('📱 Parámetro data recibido:', dataParam)
+    console.log('📋 Parámetro tab recibido:', tabParam)
     console.log('⚙️ programmedVacationsEnabled:', programmedVacationsEnabled.value)
     // Llamar a la nueva función que consulta la API
     await fetchEmployeeData(dataParam)
+    
+    // Después de cargar los datos, verificar si hay un tab específico solicitado
+    if (tabParam) {
+      console.log('🎯 Cambiando al tab solicitado:', tabParam)
+      switch (tabParam.toLowerCase()) {
+        case 'aprobar':
+        case 'boss':
+          if (currentUser.value.role === 'boss') {
+            activeView.value = 'boss'
+            console.log('✅ Cambiado al tab de aprobación')
+          } else {
+            console.log('⚠️ Usuario no es jefe, manteniendo tab por defecto')
+          }
+          break
+        case 'historial':
+        case 'requests':
+          activeView.value = 'requests'
+          console.log('✅ Cambiado al tab de historial')
+          break
+        case 'solicitar':
+        case 'calendar':
+          activeView.value = 'calendar'
+          console.log('✅ Cambiado al tab de solicitar')
+          break
+        default:
+          console.log('⚠️ Tab no reconocido:', tabParam)
+      }
+    }
   }
 
   // Cargar solicitudes guardadas
