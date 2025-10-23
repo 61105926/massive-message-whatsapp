@@ -398,6 +398,7 @@ import { CheckCircle, User, X, AlertCircle } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import CardHeader from '@/components/ui/CardHeader.vue'
 import CardContent from '@/components/ui/CardContent.vue'
+import { saveVacationToExternalAPI, type SaveVacationPayload } from '@/services/vacationAPI'
 
 interface VacationRequest {
   id_solicitud: string
@@ -698,9 +699,42 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
         return req
       })
 
+      // 🚀 GUARDAR EN API EXTERNA
+      // Después de actualizar el estado, guardar en la API externa
+      const requestData = requests.value.find(req => req.id_solicitud === requestId)
+      if (requestData) {
+        try {
+          console.log('📤 Guardando vacación en API externa...')
+          
+          const vacationPayload: SaveVacationPayload = {
+            emp_id: requestData.emp_id,
+            emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
+            manager_id: props.managerId, // ID del manager que está aprobando
+            manager_nombre: 'Manager', // TODO: Obtener nombre real del manager
+            tipo: requestData.tipo,
+            estado: estado,
+            comentario: comentario,
+            fechas: requestData.fechas.map(f => ({
+              fecha: f.fecha,
+              tipo_dia: f.turno || 'COMPLETO'
+            })),
+            branch: 1, // TODO: Obtener branch real
+            dept: 10    // TODO: Obtener departamento real
+          }
+
+          const apiResult = await saveVacationToExternalAPI(vacationPayload)
+          console.log('✅ Vacación guardada exitosamente en API externa:', apiResult)
+          
+        } catch (apiError: any) {
+          console.error('❌ Error al guardar en API externa:', apiError)
+          // No fallar la operación principal si falla la API externa
+          showNotification('warning', 'Advertencia', 
+            'La solicitud fue procesada pero hubo un problema al guardar en el sistema externo. Contacta al administrador.')
+        }
+      }
+
       // 🔔 ENVIAR NOTIFICACIONES DE WHATSAPP
       // Enviar notificaciones a los reemplazantes (si es aprobado) o al empleado (si es rechazado)
-      const requestData = requests.value.find(req => req.id_solicitud === requestId)
 
       if (requestData) {
         try {

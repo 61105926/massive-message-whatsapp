@@ -97,14 +97,14 @@
             <span v-else class="inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80">
               {{ currentUser.vacationBalance }} días
             </span>
-            <select
+            <!-- <select
               v-model="currentUser.role"
               @change="handleRoleChange"
               class="text-sm border border-input bg-background px-2 py-1 rounded-md"
             >
               <option value="employee">Empleado</option>
               <option value="boss">Jefe</option>
-            </select>
+            </select> -->
           </div>
         </div>
       </div>
