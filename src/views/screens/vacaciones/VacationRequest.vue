@@ -393,7 +393,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { CalendarDays, Clock, CheckCircle, User } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
@@ -851,6 +851,13 @@ onMounted(async () => {
   const dataParam = route.query.data as string
   const tabParam = route.query.tab as string
   
+  console.log('🔍 DEBUG - Parámetros de URL:', {
+    dataParam,
+    tabParam,
+    fullQuery: route.query,
+    fullPath: route.fullPath
+  })
+  
   if (dataParam) {
     console.log('✅ Viene del bot')
     console.log('📱 Parámetro data recibido:', dataParam)
@@ -862,28 +869,41 @@ onMounted(async () => {
     // Después de cargar los datos, verificar si hay un tab específico solicitado
     if (tabParam) {
       console.log('🎯 Cambiando al tab solicitado:', tabParam)
-      switch (tabParam.toLowerCase()) {
-        case 'aprobar':
-        case 'boss':
-          if (currentUser.value.role === 'boss') {
-            activeView.value = 'boss'
-            console.log('✅ Cambiado al tab de aprobación')
-          } else {
-            console.log('⚠️ Usuario no es jefe, manteniendo tab por defecto')
-          }
-          break
-        case 'historial':
-        case 'requests':
-          activeView.value = 'requests'
-          console.log('✅ Cambiado al tab de historial')
-          break
-        case 'solicitar':
-        case 'calendar':
-          activeView.value = 'calendar'
-          console.log('✅ Cambiado al tab de solicitar')
-          break
-        default:
-          console.log('⚠️ Tab no reconocido:', tabParam)
+      // Usar setTimeout para asegurar que se ejecute después de que el componente esté completamente montado
+      setTimeout(() => {
+        switch (tabParam.toLowerCase()) {
+          case 'aprobar':
+          case 'boss':
+            if (currentUser.value.role === 'boss') {
+              activeView.value = 'boss'
+              console.log('✅ Cambiado al tab de aprobación')
+            } else {
+              console.log('⚠️ Usuario no es jefe, manteniendo tab por defecto')
+            }
+            break
+          case 'historial':
+          case 'requests':
+            activeView.value = 'requests'
+            console.log('✅ Cambiado al tab de historial')
+            break
+          case 'solicitar':
+          case 'calendar':
+            activeView.value = 'calendar'
+            console.log('✅ Cambiado al tab de solicitar')
+            break
+          default:
+            console.log('⚠️ Tab no reconocido:', tabParam)
+        }
+      }, 100) // Pequeño delay para asegurar que el componente esté montado
+    } else {
+      console.log('⚠️ No hay parámetro tab, usando vista por defecto')
+      // Si no hay tab específico, usar la vista por defecto basada en el rol
+      if (currentUser.value.role === 'boss') {
+        activeView.value = 'boss'
+        console.log('✅ Usuario es jefe, cambiando a vista de aprobación por defecto')
+      } else {
+        activeView.value = 'calendar'
+        console.log('✅ Usuario es empleado, cambiando a vista de solicitar por defecto')
       }
     }
   }
@@ -896,32 +916,50 @@ onMounted(async () => {
 })
 
 // Watch para el parámetro tab de la URL
-watch(() => route.query.tab, (newTab) => {
+watch(() => route.query.tab, async (newTab) => {
+  console.log('🔍 DEBUG - Watch detectó cambio en tab:', newTab)
   if (newTab && typeof newTab === 'string') {
-    console.log('🎯 Parámetro tab detectado:', newTab)
-    switch (newTab.toLowerCase()) {
-      case 'aprobar':
-      case 'boss':
-        if (currentUser.value.role === 'boss') {
-          activeView.value = 'boss'
-          console.log('✅ Cambiado al tab de aprobación desde watch')
-        } else {
-          console.log('⚠️ Usuario no es jefe, manteniendo tab por defecto')
-        }
-        break
-      case 'historial':
-      case 'requests':
-        activeView.value = 'requests'
-        console.log('✅ Cambiado al tab de historial desde watch')
-        break
-      case 'solicitar':
-      case 'calendar':
+    console.log('🎯 Parámetro tab detectado desde watch:', newTab)
+    // Usar nextTick para asegurar que el DOM esté actualizado
+    await nextTick()
+    setTimeout(() => {
+      switch (newTab.toLowerCase()) {
+        case 'aprobar':
+        case 'boss':
+          if (currentUser.value.role === 'boss') {
+            activeView.value = 'boss'
+            console.log('✅ Cambiado al tab de aprobación desde watch')
+          } else {
+            console.log('⚠️ Usuario no es jefe, manteniendo tab por defecto')
+          }
+          break
+        case 'historial':
+        case 'requests':
+          activeView.value = 'requests'
+          console.log('✅ Cambiado al tab de historial desde watch')
+          break
+        case 'solicitar':
+        case 'calendar':
+          activeView.value = 'calendar'
+          console.log('✅ Cambiado al tab de solicitar desde watch')
+          break
+        default:
+          console.log('⚠️ Tab no reconocido desde watch:', newTab)
+      }
+    }, 50) // Pequeño delay adicional
+  } else {
+    console.log('⚠️ No hay parámetro tab en watch, usando vista por defecto')
+    // Si no hay tab específico, usar la vista por defecto basada en el rol
+    await nextTick()
+    setTimeout(() => {
+      if (currentUser.value.role === 'boss') {
+        activeView.value = 'boss'
+        console.log('✅ Usuario es jefe, cambiando a vista de aprobación por defecto desde watch')
+      } else {
         activeView.value = 'calendar'
-        console.log('✅ Cambiado al tab de solicitar desde watch')
-        break
-      default:
-        console.log('⚠️ Tab no reconocido desde watch:', newTab)
-    }
+        console.log('✅ Usuario es empleado, cambiando a vista de solicitar por defecto desde watch')
+      }
+    }, 50)
   }
 }, { immediate: true })
 </script>
