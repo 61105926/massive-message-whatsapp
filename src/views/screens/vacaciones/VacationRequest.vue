@@ -393,7 +393,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { CalendarDays, Clock, CheckCircle, User } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
@@ -894,6 +894,36 @@ onMounted(async () => {
     requests.value = JSON.parse(savedRequests)
   }
 })
+
+// Watch para el parámetro tab de la URL
+watch(() => route.query.tab, (newTab) => {
+  if (newTab && typeof newTab === 'string') {
+    console.log('🎯 Parámetro tab detectado:', newTab)
+    switch (newTab.toLowerCase()) {
+      case 'aprobar':
+      case 'boss':
+        if (currentUser.value.role === 'boss') {
+          activeView.value = 'boss'
+          console.log('✅ Cambiado al tab de aprobación desde watch')
+        } else {
+          console.log('⚠️ Usuario no es jefe, manteniendo tab por defecto')
+        }
+        break
+      case 'historial':
+      case 'requests':
+        activeView.value = 'requests'
+        console.log('✅ Cambiado al tab de historial desde watch')
+        break
+      case 'solicitar':
+      case 'calendar':
+        activeView.value = 'calendar'
+        console.log('✅ Cambiado al tab de solicitar desde watch')
+        break
+      default:
+        console.log('⚠️ Tab no reconocido desde watch:', newTab)
+    }
+  }
+}, { immediate: true })
 </script>
 
 <style>

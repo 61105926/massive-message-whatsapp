@@ -416,7 +416,7 @@ interface VacationRequest {
     nombre: string
     cargo: string
   }
-  reemplazantes?: Array<{
+  reemplazante?: Array<{ // Changed from reemplazantes to reemplazante (singular)
     emp_id: string;
     nombre: string;
     telefono?: string;
@@ -743,27 +743,56 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
 
       if (requestData) {
         try {
-          // Usar los reemplazantes que ya tenemos en la solicitud local
+          // Usar los datos de reemplazantes que ya vienen en requestData
           let reemplazantesCompletos = []
           
-          // Si la solicitud tiene reemplazantes, usarlos directamente
-          if (requestData.reemplazantes && requestData.reemplazantes.length > 0) {
-            reemplazantesCompletos = requestData.reemplazantes.map(rep => ({
+          console.log('🔍 DEBUG - requestData completo:', JSON.stringify(requestData, null, 2))
+          console.log('🔍 DEBUG - requestData.reemplazante:', requestData.reemplazante)
+          console.log('🔍 DEBUG - requestData.reemplazante length:', requestData.reemplazante?.length)
+          
+          if (requestData.reemplazante && requestData.reemplazante.length > 0) {
+            console.log('✅ Hay reemplazantes en la solicitud, usando datos existentes...')
+            // Usar directamente los datos que ya vienen en requestData.reemplazante
+            reemplazantesCompletos = requestData.reemplazante.map((rep: any) => ({
               emp_id: rep.emp_id,
               nombre: rep.nombre,
               telefono: rep.telefono || '77711124' // Fallback si no hay teléfono
             }))
-            console.log('✅ Usando reemplazantes de la solicitud local:', reemplazantesCompletos)
+            console.log('✅ Reemplazantes obtenidos de requestData:', reemplazantesCompletos)
           } else {
-            // Fallback: usar Sebastian Sorich como default
-            reemplazantesCompletos = [
-              {
-                emp_id: '1140',
-                nombre: 'Sebastian Sorich',
-                telefono: '76688450'
+            console.log('⚠️ No hay reemplazantes en requestData, obteniendo desde API específica...')
+            // Como la API vacacion-data-manager no incluye reemplazantes,
+            // obtener los reemplazantes específicos de esta solicitud desde la API
+            try {
+              const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}`)
+              if (reemplazanteResponse.ok) {
+                const reemplazanteData = await reemplazanteResponse.json()
+                if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
+                  // Usar los reemplazantes específicos de esta solicitud
+                  reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
+                    emp_id: rep.EMP_ID,
+                    nombre: rep.NOMBRE,
+                    telefono: rep.TELEFONO
+                  }))
+                  console.log('✅ Reemplazantes específicos obtenidos de API:', reemplazantesCompletos)
+                } else {
+                  throw new Error('No se encontraron reemplazantes específicos en la API')
+                }
+              } else {
+                throw new Error('Error al obtener reemplazantes específicos')
               }
-            ]
-            console.log('✅ Usando reemplazantes de fallback:', reemplazantesCompletos)
+            } catch (apiError) {
+              console.warn('⚠️ Error al obtener reemplazantes específicos, usando fallback:', apiError)
+              // Fallback: usar Charvel Santiago como default
+              reemplazantesCompletos = [
+                {
+                  emp_id: '493',
+                  nombre: 'Charvel Santiago',
+                  telefono: '78003551'
+                }
+              ]
+              console.log('✅ Usando reemplazantes de fallback:', reemplazantesCompletos)
+            }
           }
 
           // Preparar payload para notificaciones
