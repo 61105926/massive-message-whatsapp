@@ -58,28 +58,74 @@
           </div>
 
           <div class="space-y-2">
-            <label class="text-sm font-medium">
-              Reemplazantes * (puedes seleccionar varios)
-            </label>
+            <div class="flex items-center justify-between">
+              <label class="text-sm font-medium">
+                Reemplazantes * (puedes seleccionar varios)
+              </label>
+              <div v-if="isLoadingRecommendations" class="flex items-center gap-1 text-xs text-blue-600">
+                <Loader2 class="h-3 w-3 animate-spin" />
+                Cargando recomendaciones...
+              </div>
+              <div v-else-if="hasLoadedRecommendations" class="flex items-center gap-1 text-xs text-green-600">
+                <Sparkles class="h-3 w-3" />
+                Recomendados cargados
+              </div>
+            </div>
             <div class="rounded-md border border-input bg-background p-3 max-h-48 overflow-y-auto space-y-2">
-              <div
-                v-for="person in availableReplacements"
-                :key="person.id"
-                class="flex items-center space-x-2 hover:bg-accent p-2 rounded"
-              >
-                <input
-                  type="checkbox"
-                  :id="`replacement-${person.id}`"
-                  :value="person.id"
-                  v-model="formData.replacements"
-                  class="rounded border-gray-300 text-primary focus:ring-primary"
-                />
-                <label
-                  :for="`replacement-${person.id}`"
-                  class="flex-1 text-sm cursor-pointer"
+              <!-- Sección de recomendaciones -->
+              <div v-if="recommendedReplacements.length > 0" class="space-y-2">
+                <div class="text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded">
+                  ✨ Recomendados por el sistema
+                </div>
+                <div
+                  v-for="person in availableReplacements.filter(p => p.isRecommended)"
+                  :key="person.id"
+                  class="flex items-center space-x-2 hover:bg-accent p-2 rounded bg-green-50 border border-green-200"
                 >
-                  {{ person.name }} - {{ person.department }}
-                </label>
+                  <input
+                    type="checkbox"
+                    :id="`replacement-${person.id}`"
+                    :value="person.id"
+                    v-model="formData.replacements"
+                    class="rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <label
+                    :for="`replacement-${person.id}`"
+                    class="flex-1 text-sm cursor-pointer flex items-center gap-2"
+                  >
+                    <span>{{ person.name }} - {{ person.department }}</span>
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded">
+                      <Sparkles class="h-2.5 w-2.5" />
+                      Recomendado
+                    </span>
+                  </label>
+                </div>
+              </div>
+              
+              <!-- Sección de otros reemplazantes -->
+              <div v-if="availableReplacements.filter(p => !p.isRecommended).length > 0" class="space-y-2">
+                <div v-if="recommendedReplacements.length > 0" class="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                  Otros reemplazantes disponibles
+                </div>
+                <div
+                  v-for="person in availableReplacements.filter(p => !p.isRecommended)"
+                  :key="person.id"
+                  class="flex items-center space-x-2 hover:bg-accent p-2 rounded"
+                >
+                  <input
+                    type="checkbox"
+                    :id="`replacement-${person.id}`"
+                    :value="person.id"
+                    v-model="formData.replacements"
+                    class="rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <label
+                    :for="`replacement-${person.id}`"
+                    class="flex-1 text-sm cursor-pointer"
+                  >
+                    {{ person.name }} - {{ person.department }}
+                  </label>
+                </div>
               </div>
               <div v-if="availableReplacements.length === 0" class="text-sm text-muted-foreground text-center py-2">
                 No hay reemplazantes disponibles
@@ -172,10 +218,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
-import { Calendar, AlertCircle, Send } from "lucide-vue-next";
+import { Calendar, AlertCircle, Send, Sparkles, Loader2 } from "lucide-vue-next";
 import Card from "@/components/ui/Card.vue";
 import CardHeader from "@/components/ui/CardHeader.vue";
 import CardContent from "@/components/ui/CardContent.vue";
+import { getReemplazantesRecomendados, type ReemplazanteRecomendado } from "@/services/recommendationAPI";
 
 interface Props {
   selectedDates: Date[];
@@ -185,6 +232,7 @@ interface Props {
   vacationTotal?: number;
   vacationTaken?: number;
   isSubmitting?: boolean;
+  empId?: string; // ID del empleado para obtener recomendaciones
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -215,44 +263,118 @@ const formData = ref({
   isUnplanned: false,
 });
 
-// Usar reemplazantes reales del empleado o valores por defecto
-const availableReplacements = computed(() => {
-  if (props.employeeReplacements && props.employeeReplacements.length > 0) {
-    return props.employeeReplacements.map((rep: any) => ({
-      id: rep.id || String(rep.empID || ''),  // Usar ID real del API
-      name: rep.name,
-      department: rep.cargo,
-      phone: rep.phone,
-      type: rep.type,
-      empID: rep.id || rep.empID, // Guardar empID original
-    }));
+// Estado para recomendaciones
+const isLoadingRecommendations = ref(false);
+const recommendedReplacements = ref<ReemplazanteRecomendado[]>([]);
+const hasLoadedRecommendations = ref(false);
+
+// Función para cargar recomendaciones automáticas
+const loadRecommendations = async () => {
+  if (!props.empId || isLoadingRecommendations.value) return;
+  
+  isLoadingRecommendations.value = true;
+  
+  try {
+    console.log('🔍 Cargando recomendaciones para empId:', props.empId);
+    
+    const response = await getReemplazantesRecomendados(props.empId);
+    recommendedReplacements.value = response.reemplazantes || [];
+    
+    // Pre-seleccionar automáticamente los reemplazantes recomendados
+    if (recommendedReplacements.value.length > 0) {
+      const recommendedIds = recommendedReplacements.value.map(rec => rec.REEMPLAZANTE_EMP_ID);
+      // Solo agregar las recomendaciones, no sobrescribir las selecciones existentes
+      formData.value.replacements = [...new Set([...formData.value.replacements, ...recommendedIds])];
+      
+      console.log('✅ Recomendaciones cargadas y pre-seleccionadas:', {
+        total: recommendedReplacements.value.length,
+        recommendedIds: recommendedIds,
+        currentSelections: formData.value.replacements
+      });
+    }
+    
+    hasLoadedRecommendations.value = true;
+    
+  } catch (error: any) {
+    console.error('❌ Error al cargar recomendaciones:', error);
+    emit('validationError', 'No se pudieron cargar las recomendaciones de reemplazantes');
+  } finally {
+    isLoadingRecommendations.value = false;
   }
-  return [
-    {
-      id: "1",
-      name: "María González",
-      department: "Ventas",
-      phone: "",
-      type: "",
-      empID: "1",
-    },
-    {
-      id: "2",
-      name: "Carlos Rodríguez",
-      department: "Marketing",
-      phone: "",
-      type: "",
-      empID: "2",
-    },
-    {
-      id: "3",
-      name: "Ana López",
-      department: "Administración",
-      phone: "",
-      type: "",
-      empID: "3",
-    },
-  ];
+};
+
+// Combinar recomendaciones con reemplazantes regulares del empleado
+const availableReplacements = computed(() => {
+  const replacements: any[] = [];
+  
+  // 1. Agregar recomendaciones primero (si las hay)
+  if (recommendedReplacements.value.length > 0) {
+    const recommended = recommendedReplacements.value.map((rec) => ({
+      id: rec.REEMPLAZANTE_EMP_ID,
+      name: rec.REEMPLAZANTE_NOMBRE,
+      department: rec.CARGO,
+      phone: rec.TELEFONO,
+      type: rec.TIPO,
+      empID: rec.REEMPLAZANTE_EMP_ID,
+      isRecommended: true,
+    }));
+    replacements.push(...recommended);
+  }
+  
+  // 2. Agregar reemplazantes regulares del empleado (evitando duplicados)
+  if (props.employeeReplacements && props.employeeReplacements.length > 0) {
+    const regularReplacements = props.employeeReplacements
+      .filter((rep: any) => {
+        // Evitar duplicados con las recomendaciones
+        const repId = rep.id || String(rep.empID || '');
+        return !recommendedReplacements.value.some(rec => rec.REEMPLAZANTE_EMP_ID === repId);
+      })
+      .map((rep: any) => ({
+        id: rep.id || String(rep.empID || ''),
+        name: rep.name,
+        department: rep.cargo,
+        phone: rep.phone,
+        type: rep.type,
+        empID: rep.id || rep.empID,
+        isRecommended: false,
+      }));
+    replacements.push(...regularReplacements);
+  }
+  
+  // 3. Si no hay ninguno, usar valores por defecto
+  if (replacements.length === 0) {
+    return [
+      {
+        id: "1",
+        name: "María González",
+        department: "Ventas",
+        phone: "",
+        type: "",
+        empID: "1",
+        isRecommended: false,
+      },
+      {
+        id: "2",
+        name: "Carlos Rodríguez",
+        department: "Marketing",
+        phone: "",
+        type: "",
+        empID: "2",
+        isRecommended: false,
+      },
+      {
+        id: "3",
+        name: "Ana López",
+        department: "Administración",
+        phone: "",
+        type: "",
+        empID: "3",
+        isRecommended: false,
+      },
+    ];
+  }
+  
+  return replacements;
 });
 
 const unplannedCount = ref(0);
@@ -273,6 +395,11 @@ onMounted(() => {
       req.isUnplanned && new Date(req.createdAt).getFullYear() === currentYear
   ).length;
   unplannedCount.value = unplannedThisYear;
+  
+  // Cargar recomendaciones automáticamente si hay empId
+  if (props.empId) {
+    loadRecommendations();
+  }
 });
 
 const handleSubmit = () => {

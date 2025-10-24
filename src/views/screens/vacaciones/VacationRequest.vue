@@ -198,6 +198,7 @@
             :employee-replacements="employeeData?.replacements || []"
             :programmed-enabled="programmedVacationsEnabled"
             :is-submitting="isSubmittingRequest"
+            :emp-id="employeeData?.empID || currentUser.id"
             @submit="handleRequestSubmit"
             @validation-error="handleValidationError"
             @cancel="() => { showForm = false; selectedDates = []; daySelections = [] }"
