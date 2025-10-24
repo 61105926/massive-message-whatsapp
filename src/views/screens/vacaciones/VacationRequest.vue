@@ -10,8 +10,7 @@
       leave-to-class="opacity-0 translate-y-2"
     >
 
-    
-
+  
 
       <div
         v-if="notification.show"
@@ -798,10 +797,6 @@ const handleRequestSubmit = async (request: any) => {
   }
 }
 
-const handleRoleChange = () => {
-  // Handle role change logic if needed
-  console.log('Role changed to:', currentUser.value.role)
-}
 
 const handleTakeVacation = async (requestId: string) => {
   try {

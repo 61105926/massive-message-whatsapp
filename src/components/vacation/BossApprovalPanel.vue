@@ -416,6 +416,11 @@ interface VacationRequest {
     nombre: string
     cargo: string
   }
+  reemplazantes?: Array<{
+    emp_id: string;
+    nombre: string;
+    telefono?: string;
+  }>
 }
 
 interface EmployeeCache {
@@ -709,7 +714,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
           const vacationPayload: SaveVacationPayload = {
             emp_id: requestData.emp_id,
             emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
-            manager_id: props.managerId, // ID del manager que está aprobando
+            manager_id: String(props.managerId || ''), // ID del manager que está aprobando
             manager_nombre: 'Manager', // TODO: Obtener nombre real del manager
             tipo: requestData.tipo,
             estado: estado,
@@ -728,7 +733,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
         } catch (apiError: any) {
           console.error('❌ Error al guardar en API externa:', apiError)
           // No fallar la operación principal si falla la API externa
-          showNotification('warning', 'Advertencia', 
+          showNotification('info', 'Advertencia', 
             'La solicitud fue procesada pero hubo un problema al guardar en el sistema externo. Contacta al administrador.')
         }
       }
@@ -738,6 +743,29 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
 
       if (requestData) {
         try {
+          // Usar los reemplazantes que ya tenemos en la solicitud local
+          let reemplazantesCompletos = []
+          
+          // Si la solicitud tiene reemplazantes, usarlos directamente
+          if (requestData.reemplazantes && requestData.reemplazantes.length > 0) {
+            reemplazantesCompletos = requestData.reemplazantes.map(rep => ({
+              emp_id: rep.emp_id,
+              nombre: rep.nombre,
+              telefono: rep.telefono || '77711124' // Fallback si no hay teléfono
+            }))
+            console.log('✅ Usando reemplazantes de la solicitud local:', reemplazantesCompletos)
+          } else {
+            // Fallback: usar Sebastian Sorich como default
+            reemplazantesCompletos = [
+              {
+                emp_id: '1140',
+                nombre: 'Sebastian Sorich',
+                telefono: '76688450'
+              }
+            ]
+            console.log('✅ Usando reemplazantes de fallback:', reemplazantesCompletos)
+          }
+
           // Preparar payload para notificaciones
           const notificationPayload = {
             id_solicitud: requestId,
@@ -748,21 +776,17 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
             tipo: requestData.tipo,
             dias_solicitados: parseInt(requestData.total_dias),
             fechas: requestData.fechas.map((f: any) => `${f.fecha} (${f.turno})`),
-            // MODO PRUEBA: Crear reemplazantes de prueba
-            // TODO: En producción, obtener de la solicitud original
-            reemplazantes: [
-              {
-                emp_id: '999',
-                nombre: 'Reemplazante de Prueba 1',
-                telefono: '77711124'
-              },
-              {
-                emp_id: '998',
-                nombre: 'Reemplazante de Prueba 2',
-                telefono: '77711124'
-              }
-            ]
+            // Usar los reemplazantes obtenidos de la API
+            reemplazantes: reemplazantesCompletos.map((rep: any) => ({
+              emp_id: rep.emp_id,
+              nombre: rep.nombre,
+              telefono: rep.telefono
+            }))
           }
+
+          console.log('🔍 DEBUG - Datos de la solicitud:', requestData)
+          console.log('🔍 DEBUG - Reemplazantes obtenidos:', reemplazantesCompletos)
+          console.log('🔍 DEBUG - Payload de notificación:', notificationPayload)
 
           // Enviar al bot de WhatsApp
           // Usa VITE_BACKEND_URL del .env
