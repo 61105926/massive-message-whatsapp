@@ -30,7 +30,7 @@
 
 <template>
     <SidebarProvider>
-        <AppSidebar />
+        <AppSidebar v-if="!isVacationPage" />
         <SidebarInset>
             <header v-if="!isVacationPage" class="flex h-16 shrink-0 items-center gap-2 bg-blue-900 text-white shadow-lg border-b-4 border-yellow-400">
                 <div class="flex items-center gap-2 px-4">
@@ -53,7 +53,7 @@
 
             </header>
 
-            <div >
+            <div>
                 <RouterView />
             </div>
         </SidebarInset>
