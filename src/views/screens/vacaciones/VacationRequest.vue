@@ -112,7 +112,7 @@
       </div>
     </div>
 
-    <div class="px-4 md:px-6 py-6 space-y-6 max-w-4xl mx-auto">
+    <div class="px-4 md:px-6 py-6 space-y-6 w-full">
       <!-- Navigation Buttons -->
       <div :class="`grid ${currentUser.role === 'boss' ? 'grid-cols-3' : 'grid-cols-2'} gap-3`">
         <button
@@ -156,53 +156,137 @@
 
       <!-- Calendar View -->
       <div v-if="activeView === 'calendar'" class="space-y-4">
-        <!-- Loading State -->
-        <Card v-if="isLoadingData">
-          <CardContent class="py-12">
-            <div class="flex flex-col items-center justify-center text-center space-y-4">
-              <svg class="animate-spin h-12 w-12 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <div>
-                <h3 class="text-lg font-semibold">Cargando tus datos...</h3>
-                <p class="text-sm text-muted-foreground">Por favor espera un momento</p>
+        <!-- Toggle entre Solicitar y Programadas -->
+        <div class="flex gap-2 border-b">
+          <button
+            @click="showScheduledVacations = false"
+            :class="[
+              'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
+              !showScheduledVacations ? 'border-primary text-primary' : 'border-transparent text-gray-600 hover:text-gray-900'
+            ]"
+          >
+            Solicitar Vacaciones
+          </button>
+          <button
+            @click="showScheduledVacations = true"
+            :class="[
+              'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
+              showScheduledVacations ? 'border-primary text-primary' : 'border-transparent text-gray-600 hover:text-gray-900'
+            ]"
+          >
+            Vacaciones Programadas
+          </button>
+        </div>
+
+        <!-- Vista: Solicitar (o Programadas según configuración) -->
+        <div v-if="!showScheduledVacations" class="space-y-4">
+          <!-- Loading State -->
+          <Card v-if="isLoadingData">
+            <CardContent class="py-12">
+              <div class="flex flex-col items-center justify-center text-center space-y-4">
+                <svg class="animate-spin h-12 w-12 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <div>
+                  <h3 class="text-lg font-semibold">Cargando tus datos...</h3>
+                  <p class="text-sm text-muted-foreground">Por favor espera un momento</p>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <!-- Calendar Content -->
-        <Card v-else>
-          <CardHeader class="pb-3">
-            <h3 class="text-lg font-semibold leading-none tracking-tight">Selecciona tus fechas</h3>
-            <p class="text-sm text-muted-foreground">
-              Toca las fechas que quieres solicitar. Se enviarán como vacaciones programadas para aprobación del jefe.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <VacationCalendar
+          <!-- Calendar Content -->
+          <Card v-else>
+            <CardHeader class="pb-3">
+              <h3 class="text-lg font-semibold leading-none tracking-tight">
+                {{ programmedVacationsEnabled ? 'Vacaciones Programadas 2026' : 'Selecciona tus fechas' }}
+              </h3>
+              <p class="text-sm text-muted-foreground">
+                <span v-if="programmedVacationsEnabled">
+                  Debes seleccionar exactamente {{ currentUser.vacationBalance }} días dentro del año 2026.
+                </span>
+                <span v-else>
+                  Toca las fechas que quieres solicitar. Se enviarán como vacaciones programadas para aprobación del jefe.
+                </span>
+              </p>
+            </CardHeader>
+            <CardContent>
+              <VacationCalendar
+                :selected-dates="selectedDates"
+                @date-select="handleDateSelect"
+                :existing-requests="requests"
+                :fixed-year="programmedVacationsEnabled ? 2026 : undefined"
+              />
+              <div v-if="programmedVacationsEnabled" class="mt-4 flex items-center justify-between text-sm border-t pt-4">
+                <div>
+                  <span class="font-medium">Seleccionados:</span>
+                  <span :class="selectedDates.length === currentUser.vacationBalance ? 'text-green-600 font-semibold ml-2' : 'text-gray-700 ml-2'">
+                    {{ selectedDates.length }} / {{ currentUser.vacationBalance }}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <!-- Mostrar formulario solo si NO está en modo programadas -->
+          <div v-if="showForm && !programmedVacationsEnabled" class="animate-slide-up">
+            <VacationRequestForm
               :selected-dates="selectedDates"
-              @date-select="handleDateSelect"
-              :existing-requests="requests"
+              :available-vacation-days="currentUser.vacationBalance"
+              :vacation-total="currentUser.vacationTotal"
+              :vacation-taken="currentUser.usedDays"
+              :employee-replacements="employeeData?.replacements || []"
+              :programmed-enabled="programmedVacationsEnabled"
+              :is-submitting="isSubmittingRequest"
+              :emp-id="employeeData?.empID || currentUser.id"
+              @submit="handleRequestSubmit"
+              @validation-error="handleValidationError"
+              @cancel="() => { showForm = false; selectedDates = []; daySelections = [] }"
             />
-          </CardContent>
-        </Card>
+          </div>
 
-        <div v-if="showForm" class="animate-slide-up">
-          <VacationRequestForm
-            :selected-dates="selectedDates"
-            :available-vacation-days="currentUser.vacationBalance"
-            :vacation-total="currentUser.vacationTotal"
-            :vacation-taken="currentUser.usedDays"
-            :employee-replacements="employeeData?.replacements || []"
-            :programmed-enabled="programmedVacationsEnabled"
-            :is-submitting="isSubmittingRequest"
-            :emp-id="employeeData?.empID || currentUser.id"
-            @submit="handleRequestSubmit"
-            @validation-error="handleValidationError"
-            @cancel="() => { showForm = false; selectedDates = []; daySelections = [] }"
-          />
+          <!-- Si está en modo programadas, mostrar solo botón de envío -->
+          <div v-if="programmedVacationsEnabled && selectedDates.length > 0" class="mt-4">
+            <Card>
+              <CardContent class="pt-6">
+                <div class="flex items-center justify-between">
+                  <div class="text-sm">
+                    <span class="font-medium">Seleccionados:</span>
+                    <span :class="selectedDates.length === currentUser.vacationBalance ? 'text-green-600 font-semibold ml-2' : 'text-orange-600 ml-2'">
+                      {{ selectedDates.length }} / {{ currentUser.vacationBalance }}
+                    </span>
+                    <p v-if="selectedDates.length !== currentUser.vacationBalance" class="text-xs text-orange-600 mt-1">
+                      Debes seleccionar exactamente {{ currentUser.vacationBalance }} días
+                    </p>
+                  </div>
+                  <button
+                    @click="handleRequestSubmit({ type: 'programmed' })"
+                    :disabled="selectedDates.length !== currentUser.vacationBalance || isSubmittingRequest"
+                    class="px-6 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Enviar Programación
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+        </div>
+
+        <!-- Vista: Programadas -->
+        <div v-else class="space-y-4">
+          <Card>
+            <CardHeader class="pb-3">
+              <h3 class="text-lg font-semibold leading-none tracking-tight">Vacaciones Programadas</h3>
+              <p class="text-sm text-muted-foreground">
+                Consulta quién ya está de vacaciones en el equipo.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <VacationCalendarView :manager-id="employeeData?.empID || currentUser.id" />
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -216,6 +300,19 @@
 
       <!-- Boss View -->
       <div v-if="activeView === 'boss' && currentUser.role === 'boss'" class="space-y-4">
+        <!-- Vista de Calendario con Timeline -->
+        <Card>
+          <CardHeader>
+            <h3 class="text-lg font-semibold leading-none tracking-tight">Calendario de Vacaciones</h3>
+            <p class="text-sm text-muted-foreground">
+              Visualiza y gestiona las vacaciones de tu equipo en un calendario mensual o diario.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <BossCalendarView :manager-id="employeeData?.empID || currentUser.id" />
+          </CardContent>
+        </Card>
+
         <!-- Panel de Aprobación -->
         <BossApprovalPanel
           :manager-id="employeeData?.empID || currentUser.id"
@@ -402,6 +499,8 @@ import VacationCalendar from '@/components/vacation/VacationCalendar.vue'
 import VacationRequestForm from '@/components/vacation/VacationRequestForm.vue'
 import RequestsList from '@/components/vacation/RequestsList.vue'
 import BossApprovalPanel from '@/components/vacation/BossApprovalPanel.vue'
+import VacationCalendarView from '@/components/vacation/VacationCalendarView.vue'
+import BossCalendarView from '@/components/vacation/BossCalendarView.vue'
 
 // Router
 const route = useRoute()
@@ -412,6 +511,7 @@ const daySelections = ref<any[]>([])
 const requests = ref<any[]>([])
 const showForm = ref(false)
 const activeView = ref<'calendar' | 'requests' | 'profile' | 'boss'>('calendar')
+const showScheduledVacations = ref(false) // Toggle entre solicitar y programadas
 const employeeData = ref<any>(null)
 const programmedVacationsEnabled = ref(true)
 const isLoadingData = ref(false)
@@ -621,14 +721,14 @@ const handleRequestSubmit = async (request: any) => {
     return
   }
 
-  // Validar tipo de vacación
-  if (!request.type) {
+  // Validar tipo de vacación (solo si no es programadas)
+  if (request.type !== 'programmed' && !request.type) {
     showNotification('error', 'Debes seleccionar el tipo de vacación.', 3000)
     return
   }
 
-  // Validar reemplazantes (ahora es un array)
-  if (!request.replacements || request.replacements.length === 0) {
+  // Validar reemplazantes SOLO si NO es programadas
+  if (request.type !== 'programmed' && (!request.replacements || request.replacements.length === 0)) {
     showNotification('error', 'Debes seleccionar al menos un reemplazante.', 3000)
     return
   }
@@ -637,19 +737,87 @@ const handleRequestSubmit = async (request: any) => {
 
   try {
     // 1. Preparar datos según el formato de la API
-    // Encontrar los reemplazantes seleccionados
-    const selectedReplacements = employeeData.value?.replacements?.filter(
-      (r: any) => request.replacements.includes(r.id)
-    ) || []
+    // Encontrar los reemplazantes seleccionados (solo si no es programadas)
+    let selectedReplacements: any[] = []
+    
+    if (request.type !== 'programmed') {
+      selectedReplacements = employeeData.value?.replacements?.filter(
+        (r: any) => request.replacements.includes(r.id)
+      ) || []
 
-    if (selectedReplacements.length === 0) {
-      throw new Error('Los reemplazantes seleccionados no son válidos.')
+      if (selectedReplacements.length === 0) {
+        throw new Error('Los reemplazantes seleccionados no son válidos.')
+      }
     }
 
-    // Preparar payload para la API
+    console.log('📤 Preparando solicitud de vacaciones...')
+
+    // Si es vacaciones programadas, enviar UNA solicitud por fecha
+    if (request.type === 'programmed') {
+      console.log('📅 Enviando vacaciones programadas - una solicitud por fecha')
+      
+      // Enviar cada fecha como una solicitud separada
+      for (const selection of daySelections.value) {
+        let turno = 'COMPLETO'
+        if (selection.type === 'morning') turno = 'MAÑANA'
+        else if (selection.type === 'afternoon') turno = 'TARDE'
+
+        const fechaStr = selection.date.toISOString().split('T')[0]
+        
+        const payload = {
+          emp_id: employeeData.value?.empID || currentUser.value.id,
+          tipo: 'PROGRAMADA',
+          comentario: request.reason || `Vacación programada para ${fechaStr}`,
+          manager_id: employeeData.value?.manager?.id_manager,
+          antiguedad: employeeData.value?.vacation?.years || '1',
+          detalle: [{
+            fecha: fechaStr,
+            turno: turno,
+            observacion: null
+          }],
+          reemplazantes: []
+        }
+
+        console.log(`📅 Enviando solicitud para ${fechaStr}:`, payload)
+
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 30000)
+
+        const response = await fetch('http://190.171.225.68/api/store-vacation', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        })
+
+        clearTimeout(timeoutId)
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.message || `Error al enviar solicitud para ${fechaStr}`)
+        }
+
+        console.log(`✅ Solicitud enviada para ${fechaStr}`)
+      }
+
+      // Todas las solicitudes fueron enviadas, mostrar notificación de éxito
+      showNotification('success', `${daySelections.value.length} solicitudes de vacaciones programadas enviadas exitosamente`, 5000)
+      
+      // Resetear formulario
+      showForm.value = false
+      selectedDates.value = []
+      daySelections.value = []
+      
+      isSubmittingRequest.value = false
+      return
+    }
+
+    // Si NO es programadas, enviar todo junto (comportamiento anterior)
     const payload = {
       emp_id: employeeData.value?.empID || currentUser.value.id,
-      tipo: request.type === 'programmed' ? 'PROGRAMADA' : 'A_CUENTA',
+      tipo: 'A_CUENTA',
       comentario: request.reason || 'Solicitud de vacaciones',
       manager_id: employeeData.value?.manager?.id_manager,
       antiguedad: employeeData.value?.vacation?.years || '1',
@@ -667,7 +835,7 @@ const handleRequestSubmit = async (request: any) => {
         }
       }),
 
-      // Reemplazantes - ahora soporta múltiples
+      // Reemplazantes
       reemplazantes: selectedReplacements.map((rep: any) => ({
         emp_id: rep.id,
         nombre: rep.name,
@@ -797,25 +965,31 @@ const handleRequestSubmit = async (request: any) => {
 }
 
 
-const handleTakeVacation = async (requestId: string) => {
+const handleTakeVacation = async (data: string | { requestId: string, replacements: string[] }) => {
   try {
-    // Update local state
-    const updatedRequests = requests.value.map((req) =>
-      req.id === requestId
-        ? { ...req, status: 'vacation_account', impactsBalance: true, takenAt: new Date().toISOString() }
-        : req,
-    )
-    requests.value = updatedRequests
-    localStorage.setItem('vacation-requests', JSON.stringify(updatedRequests))
-
-    // Update user balance
-    const request = requests.value.find((r) => r.id === requestId)
-    if (request) {
-      currentUser.value.usedDays = currentUser.value.usedDays + request.totalDays
-      currentUser.value.vacationBalance = currentUser.value.vacationBalance - request.totalDays
-    }
+    const requestId = typeof data === 'string' ? data : data.requestId
+    const replacements = typeof data === 'object' ? data.replacements : []
+    
+    console.log('📍 Tomar vacaciones - Request ID:', requestId)
+    console.log('📍 Tomar vacaciones - Reemplazantes:', replacements)
+    
+    // Aquí deberías llamar a la API para activar la solicitud de vacaciones programadas
+    // Por ahora, solo mostramos una notificación
+    showNotification('success', `Vacaciones activadas con ${replacements.length} reemplazante(s) seleccionado(s)`, 5000)
+    
+    // TODO: Llamar a la API real aquí
+    // const response = await fetch(`http://localhost:3005/api/take-vacation`, {
+    //   method: 'POST',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify({ 
+    //     requestId, 
+    //     replacements,
+    //     empId: employeeData.value?.empID || currentUser.value.id
+    //   })
+    // })
   } catch (error) {
     console.error('Error taking vacation:', error)
+    showNotification('error', 'Error al activar las vacaciones. Intenta nuevamente.', 5000)
   }
 }
 

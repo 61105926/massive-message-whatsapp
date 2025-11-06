@@ -23,7 +23,8 @@
       </div>
 
       <form @submit.prevent="handleSubmit" class="space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Ocultar TODO el formulario de tipo y reemplazantes si es modo programadas -->
+        <div v-if="formData.type !== 'programmed' && !defaultType" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="space-y-2">
             <label for="type" class="text-sm font-medium">
               Tipo de Vacación *
@@ -57,7 +58,7 @@
             </div>
           </div>
 
-          <div class="space-y-2">
+          <div v-if="formData.type !== 'programmed'" class="space-y-2">
             <div class="flex items-center justify-between">
               <label class="text-sm font-medium">
                 Reemplazantes * (puedes seleccionar varios)
@@ -408,9 +409,12 @@ const handleSubmit = () => {
     return;
   }
 
-  if (!formData.value.type || formData.value.replacements.length === 0) {
-    emit("validationError", "Por favor completa todos los campos obligatorios (tipo de vacación y al menos un reemplazante)");
-    return;
+  // Solo validar reemplazantes si NO es vacaciones programadas
+  if (formData.value.type !== 'programmed') {
+    if (!formData.value.type || formData.value.replacements.length === 0) {
+      emit("validationError", "Por favor completa todos los campos obligatorios (tipo de vacación y al menos un reemplazante)");
+      return;
+    }
   }
 
   // Validar días disponibles para AMBOS tipos de vacaciones

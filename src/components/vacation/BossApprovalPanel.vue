@@ -389,6 +389,90 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal de Reemplazantes para Vacaciones Programadas -->
+    <div
+      v-if="showReplacementModal"
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      @click="showReplacementModal = false"
+    >
+      <div
+        class="bg-white rounded-lg p-6 max-w-md w-full shadow-xl"
+        @click.stop
+      >
+        <div class="space-y-4">
+          <div>
+            <h3 class="text-lg font-semibold text-green-900">Aprobar Vacaciones Programadas</h3>
+            <p class="text-sm text-gray-600 mt-1">Selecciona los reemplazantes para esta solicitud</p>
+          </div>
+
+          <!-- Resumen de la solicitud -->
+          <div v-if="selectedRequest" class="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-gray-600">Empleado:</span>
+                <span class="font-semibold text-gray-900">{{ selectedRequest.empleado?.nombre || 'N/A' }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600">Días:</span>
+                <span class="font-medium text-gray-700">{{ selectedRequest.total_dias }} día{{ parseInt(selectedRequest.total_dias) > 1 ? 's' : '' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Selección de reemplazantes -->
+          <div>
+            <label class="text-sm font-medium mb-2 block">
+              Reemplazantes * (puedes seleccionar varios)
+            </label>
+            <div class="rounded-md border border-input bg-background p-3 max-h-64 overflow-y-auto space-y-2">
+              <div
+                v-for="person in availableReplacements"
+                :key="person.id"
+                class="flex items-center space-x-2 hover:bg-accent p-2 rounded"
+              >
+                <input
+                  type="checkbox"
+                  :id="`replacement-boss-${person.id}`"
+                  :value="person.id"
+                  v-model="selectedReplacements"
+                  class="rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <label
+                  :for="`replacement-boss-${person.id}`"
+                  class="flex-1 text-sm cursor-pointer"
+                >
+                  {{ person.name }} - {{ person.department }}
+                </label>
+              </div>
+              <div v-if="availableReplacements.length === 0" class="text-sm text-muted-foreground text-center py-2">
+                No hay reemplazantes disponibles. Será aprobada sin reemplazantes.
+              </div>
+            </div>
+            <p v-if="availableReplacements.length > 0" class="text-xs text-muted-foreground mt-2">
+              Selección opcional
+            </p>
+          </div>
+
+          <!-- Acciones -->
+          <div class="flex gap-3">
+            <button
+              @click="confirmApproveWithReplacements"
+              :disabled="isProcessing"
+              class="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 font-medium"
+            >
+              Aprobar
+            </button>
+            <button
+              @click="showReplacementModal = false"
+              class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-medium"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -446,10 +530,13 @@ const employeeCache = ref<EmployeeCache>({})
 const isProcessing = ref(false)
 const showRejectModal = ref(false)
 const showApproveModal = ref(false)
+const showReplacementModal = ref(false)
 const selectedRequestId = ref<string | null>(null)
 const selectedRequest = ref<VacationRequest | null>(null)
 const rejectComment = ref('')
 const approveComment = ref('')
+const availableReplacements = ref<any[]>([])
+const selectedReplacements = ref<string[]>([])
 
 // Notification state
 const notification = ref({
@@ -552,6 +639,14 @@ const fetchManagerRequests = async () => {
       }))
 
       console.log('✅ Solicitudes con info de empleados:', requests.value)
+      console.log('📊 Total de solicitudes:', requests.value.length)
+      
+      // 5. Emitir evento con las solicitudes para el calendario
+      const event = new CustomEvent('vacations-loaded', {
+        detail: { requests: requests.value }
+      })
+      console.log('📢 Disparando evento vacations-loaded con', requests.value.length, 'solicitudes')
+      window.dispatchEvent(event)
     } else {
       throw new Error('Formato de respuesta inválido')
     }
@@ -571,19 +666,27 @@ watch(() => props.managerId, (newId) => {
 }, { immediate: true })
 
 const pendingRequests = computed(() => {
-  return requests.value.filter(req => req.estado === 'PROCESO' || req.estado === 'PENDIENTE')
+  // Excluir vacaciones programadas del panel de aprobación
+  return requests.value.filter(req => 
+    (req.estado === 'PROCESO' || req.estado === 'PENDIENTE') && 
+    req.tipo !== 'PROGRAMADA'
+  )
 })
 
 const pendingCount = computed(() => {
-  return requests.value.filter(req => req.estado === 'PROCESO' || req.estado === 'PENDIENTE').length
+  return pendingRequests.value.length
 })
 
 const approvedCount = computed(() => {
-  return requests.value.filter(req => req.estado === 'APROBADO').length
+  return requests.value.filter(req => 
+    req.estado === 'APROBADO' && req.tipo !== 'PROGRAMADA'
+  ).length
 })
 
 const rejectedCount = computed(() => {
-  return requests.value.filter(req => req.estado === 'RECHAZADO').length
+  return requests.value.filter(req => 
+    req.estado === 'RECHAZADO' && req.tipo !== 'PROGRAMADA'
+  ).length
 })
 
 // Función para aprobar solicitud (abre modal)
@@ -594,7 +697,39 @@ const handleApprove = (requestId: string) => {
   selectedRequestId.value = requestId
   selectedRequest.value = request
   approveComment.value = ''
-  showApproveModal.value = true
+  
+  // Si es una solicitud programada, mostrar modal de reemplazantes
+  if (request.tipo === 'PROGRAMADA') {
+    showReplacementModal.value = true
+    // Aquí deberías cargar los reemplazantes disponibles
+    availableReplacements.value = []
+  } else {
+    showApproveModal.value = true
+  }
+}
+
+// Confirmar aprobación con reemplazantes
+const confirmApproveWithReplacements = async () => {
+  if (!selectedRequestId.value) return
+
+  isProcessing.value = true
+
+  try {
+    await updateRequestStatus(
+      selectedRequestId.value,
+      'APROBADO',
+      approveComment.value.trim() || 'Aprobado por el jefe',
+      selectedReplacements.value
+    )
+
+    // Cerrar modal
+    showReplacementModal.value = false
+    selectedRequestId.value = null
+    selectedRequest.value = null
+    selectedReplacements.value = []
+  } finally {
+    isProcessing.value = false
+  }
 }
 
 // Confirmar aprobación
@@ -660,7 +795,7 @@ const cancelReject = () => {
 }
 
 // Función principal para actualizar el estado en el backend
-const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECHAZADO', comentario: string) => {
+const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECHAZADO', comentario: string, reemplazantes?: string[]) => {
   if (isProcessing.value) {
     showNotification('info', 'Operación en proceso', 'Ya hay una operación en proceso. Por favor espera.')
     return
@@ -670,17 +805,24 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
 
   try {
     console.log(`📤 Actualizando solicitud ${requestId} a ${estado}`)
+    console.log(`📍 Reemplazantes:`, reemplazantes)
+
+    const payload: any = {
+      id_solicitud: parseInt(requestId),
+      estado: estado,
+      comentario: comentario || (estado === 'APROBADO' ? 'Aprobado por el jefe' : '')
+    }
+    
+    if (reemplazantes && reemplazantes.length > 0) {
+      payload.reemplazantes = reemplazantes
+    }
 
     const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        id_solicitud: parseInt(requestId),
-        estado: estado,
-        comentario: comentario || (estado === 'APROBADO' ? 'Aprobado por el jefe' : '')
-      })
+      body: JSON.stringify(payload)
     })
 
     if (!response.ok) {

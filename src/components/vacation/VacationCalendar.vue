@@ -155,6 +155,7 @@ import { ChevronLeft, ChevronRight, Sun, Sunset, Clock } from 'lucide-vue-next'
 interface CalendarProps {
   selectedDates: Date[]
   existingRequests: any[]
+  fixedYear?: number // Año fijo para el calendario (ej: 2026)
 }
 
 interface DaySelection {
@@ -168,12 +169,15 @@ interface PublicHoliday {
   name: string
 }
 
-const props = defineProps<CalendarProps>()
+const props = withDefaults(defineProps<CalendarProps>(), {
+  fixedYear: undefined
+})
+
 const emit = defineEmits<{
   dateSelect: [dates: Date[], daySelections: DaySelection[]]
 }>()
 
-const currentDate = ref(new Date())
+const currentDate = ref(props.fixedYear ? new Date(props.fixedYear, 0, 1) : new Date())
 const showDayTypeModal = ref(false)
 const selectedDateForType = ref<Date | null>(null)
 const daySelections = ref<DaySelection[]>([])
@@ -183,8 +187,8 @@ const publicHolidays = ref<PublicHoliday[]>([])
 // Fetch public holidays from API
 const fetchPublicHolidays = async () => {
   try {
-    const currentYear = new Date().getFullYear()
-    const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${currentYear}/BO`)
+    const year = props.fixedYear || new Date().getFullYear()
+    const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/BO`)
     if (response.ok) {
       publicHolidays.value = await response.json()
     }
@@ -349,6 +353,19 @@ const navigateMonth = (direction: 'prev' | 'next') => {
   } else {
     newDate.setMonth(currentDate.value.getMonth() + 1)
   }
+  
+  // Si hay un año fijo, mantener ese año
+  if (props.fixedYear) {
+    newDate.setFullYear(props.fixedYear)
+    
+    // Limitar navegación a enero-diciembre del año fijo
+    const minDate = new Date(props.fixedYear, 0, 1)
+    const maxDate = new Date(props.fixedYear, 11, 31)
+    
+    if (newDate < minDate) return
+    if (newDate > maxDate) return
+  }
+  
   currentDate.value = newDate
 }
 </script>

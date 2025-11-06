@@ -1,0 +1,1346 @@
+<template>
+  <div class="w-full space-y-4">
+    <!-- Header con navegación y filtros -->
+    <div class="bg-white border rounded-lg p-4">
+      <!-- Fila 1: Navegación y Vista -->
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-4">
+          <button
+            @click="navigateMonth('prev')"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-md border bg-background hover:bg-accent hover:text-accent-foreground"
+          >
+            <ChevronLeft class="h-4 w-4" />
+            <span>Anterior</span>
+          </button>
+          <h2 class="text-xl font-bold">
+            {{ monthNames[currentDate.getMonth()] }} {{ currentDate.getFullYear() }}
+          </h2>
+          <button
+            @click="navigateMonth('next')"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-md border bg-background hover:bg-accent hover:text-accent-foreground"
+          >
+            <span>Siguiente</span>
+            <ChevronRight class="h-4 w-4" />
+          </button>
+        </div>
+        
+        <!-- Botones de vista mensual/diaria -->
+        <div class="flex gap-2">
+          <button
+            @click="viewMode = 'month'"
+            :class="[
+              'px-4 py-2 rounded-md text-sm font-medium transition-colors',
+              viewMode === 'month' ? 'bg-primary text-primary-foreground' : 'bg-gray-100 hover:bg-gray-200'
+            ]"
+          >
+            Mensual
+          </button>
+      
+        </div>
+      </div>
+      
+      <!-- Fila 2: Filtro por Área -->
+      <div class="flex items-center gap-2">
+        <label class="text-sm font-medium text-gray-700">Filtrar por Área:</label>
+        <select
+          v-model="selectedDepartment"
+          @change="filterEmployees"
+          class="px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+        >
+          <option value="">Todas las Áreas</option>
+          <option
+            v-for="dept in departments"
+            :key="dept"
+            :value="dept"
+          >
+            {{ dept }}
+          </option>
+        </select>
+        <span class="text-sm text-gray-600">
+          {{ filteredEmployees.length }} empleado{{ filteredEmployees.length !== 1 ? 's' : '' }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Vista Mensual -->
+    <div v-if="viewMode === 'month'" class="bg-white border rounded-lg overflow-hidden shadow-lg w-full">
+      <!-- Indicador de scroll horizontal arriba -->
+      <div 
+        ref="scrollIndicator" 
+        class="overflow-x-auto bg-gray-100 border-b" 
+        style="height: 20px; display: flex; align-items: center; cursor: ew-resize;"
+        @scroll="handleIndicatorScroll"
+      >
+        <div class="flex-shrink-0" :style="{ width: `${daysInMonth * 65}px`, height: '100%', background: 'linear-gradient(to right, #e5e7eb 0%, #d1d5db 50%, #e5e7eb 100%)' }"></div>
+      </div>
+      
+      <div 
+        ref="calendarScroll" 
+        class="overflow-auto" 
+        style="height: calc(75vh - 20px); max-height: 580px;" 
+        @scroll="handleCalendarScroll"
+      >
+        <div class="w-max min-w-full">
+          <!-- Headers - Sticky -->
+          <div class="grid border-b sticky top-0 z-20" :style="{ gridTemplateColumns: `195px repeat(${daysInMonth}, 65px)` }">
+            <div class="border-r bg-gradient-to-b from-gray-900 to-gray-800 text-white text-center flex items-center justify-center h-[70px] sticky left-0 z-30">
+              <h3 class="font-bold text-xs">Empleados</h3>
+            </div>
+            <div
+              v-for="(day, index) in days"
+              :key="index"
+              class="border-r border-gray-600 text-center flex items-center justify-center bg-gradient-to-b from-gray-900 to-gray-800 text-white"
+              :class="{
+                'bg-red-900/20': day && isWeekend(day),
+                'bg-gray-800': day && !isWeekend(day)
+              }"
+              style="height: 70px;"
+            >
+              <div class="w-full">
+                <div class="font-bold text-white text-base mb-0.5">{{ day ? day.getDate() : '' }}</div>
+                <div class="text-[10px] text-gray-300 font-medium">{{ day ? dayNames[day.getDay()] : '' }}</div>
+                <div v-if="day && isToday(day)" class="w-4 h-1 bg-blue-500 rounded-full mx-auto mt-1"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filas de empleados -->
+          <div
+            v-for="employee in filteredEmployees"
+            :key="employee.emp_id"
+            class="grid border-b relative transition-all group hover:bg-gray-50/50"
+            :style="{ gridTemplateColumns: `195px repeat(${daysInMonth}, 65px)`, height: '70px' }"
+          >
+            <!-- Celda de empleado -->
+            <div class="border-r bg-gradient-to-b from-gray-50 to-white hover:bg-gray-100 cursor-pointer transition-colors flex items-center sticky left-0 z-10"
+                 :class="{ 'bg-blue-50': selectedEmployee?.emp_id === employee.emp_id }"
+                 @click="selectedEmployee = employee">
+              <div class="flex flex-col items-start justify-center gap-0.5 px-2 py-1 w-full">
+                <div class="flex items-center gap-2 w-full">
+                  <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold flex-shrink-0">
+                    {{ employee.name.charAt(0) }}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="font-semibold text-xs truncate">{{ employee.name }}</div>
+                    <div class="text-[10px] text-gray-600 truncate">{{ employee.department }}</div>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between gap-1 w-full flex-wrap">
+                  <span class="inline-flex items-center rounded-full px-1 py-0.5 font-bold text-[9px]" :class="(employee.vacationBalance ?? 0) > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">
+                    {{ (employee.vacationBalance ?? 0) > 0 ? (employee.vacationBalance ?? 0) + 'd' : '0d' }}
+                  </span>
+                  <span v-if="employee.usagePercentage" class="inline-flex items-center rounded-full px-1 py-0.5 font-bold text-[9px]" :class="employee.usagePercentage >= 80 ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'">
+                    {{ employee.usagePercentage }}%
+                  </span>
+                  <span v-if="employee.daysRemaining !== undefined" class="inline-flex items-center text-[9px] text-gray-500 font-medium">
+                    {{ employee.daysRemaining > 0 ? `${employee.daysRemaining}d rest.` : 'Sin días' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Celdas de días -->
+            <div
+              v-for="(day, dayIndex) in days"
+              :key="dayIndex"
+              class="border-r relative transition-colors cursor-pointer hover:bg-blue-50/40"
+              :class="{
+                'bg-red-50/30': day && isWeekend(day),
+                'bg-white': day && !isWeekend(day)
+              }"
+              @click="openVacationModal(employee.emp_id, day)"
+            >
+              <!-- Indicador de día de hoy -->
+              <div v-if="day && isToday(day)" class="absolute top-0 left-0 right-0 h-0.5 bg-blue-600 z-10"></div>
+              
+              <!-- Bloque de vacación -->
+              <div
+                v-if="day && hasVacation(employee.emp_id, day)"
+                class="absolute inset-0 flex items-center justify-center p-1.5"
+              >
+                <div
+                  class="w-full rounded-md transition-all duration-200 shadow-md hover:shadow-lg border-2 border-white/50 hover:border-white/80 hover:scale-[1.02] transform cursor-pointer relative group"
+                  :class="getVacationBlockClasses(employee.emp_id, day)"
+                  :title="getVacationTooltip(employee.emp_id, day)"
+                  @click.stop="showVacationContextMenu(employee.emp_id, day)"
+                >
+                  <div class="px-2 py-1.5 text-white text-[8px] font-bold text-center leading-tight">
+                    <div class="truncate font-bold drop-shadow">{{ employee.name.split(' ')[0] }}</div>
+                    <div class="text-[7px] font-semibold opacity-100 mt-0.5">{{ getVacationStatusShort(employee.emp_id, day) }}</div>
+                  </div>
+                  
+                  <!-- Menú contextual -->
+                  <div
+                    v-if="contextMenu.show && contextMenu.emp_id === employee.emp_id && contextMenu.date?.toDateString() === day.toDateString()"
+                    class="absolute z-50 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1"
+                    @click.stop
+                  >
+                    <button
+                      @click="approveVacationDay(employee.emp_id, day)"
+                      class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 flex items-center gap-2"
+                    >
+                      <span class="text-green-600">✓</span>
+                      Aprobar fecha
+                    </button>
+                    <button
+                      @click="rejectVacationDay(employee.emp_id, day)"
+                      class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 flex items-center gap-2"
+                    >
+                      <span class="text-red-600">✗</span>
+                      Rechazar fecha
+                    </button>
+                    <div class="border-t my-1"></div>
+                    <button
+                      @click="approveVacationMonth(employee.emp_id, day)"
+                      class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2"
+                    >
+                      <span class="text-blue-600">📅</span>
+                      Aprobar todo el mes
+                    </button>
+                    <button
+                      @click="suggestVacationMonth(employee.emp_id, day)"
+                      class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 flex items-center gap-2"
+                    >
+                      <span class="text-purple-600">💡</span>
+                      Sugerir alternativas
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Indicador de celda vacía (para programar vacaciones) -->
+              <div v-else-if="day" class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-20">
+                <div class="text-2xl text-blue-400">+</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vista Diaria -->
+    <div v-if="viewMode === 'day'" class="space-y-4">
+      <!-- Selector de fecha -->
+      <div class="bg-white border rounded-lg p-4">
+        <input
+          v-model="selectedDate"
+          type="date"
+          class="px-4 py-2 border rounded-md"
+        />
+      </div>
+
+      <!-- Lista de vacaciones del día -->
+      <div class="space-y-2">
+        <div
+          v-for="vacation in getDayVacations()"
+          :key="vacation.id"
+          class="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
+                {{ vacation.employee_name.charAt(0) }}
+              </div>
+              <div>
+                <div class="font-medium">{{ vacation.employee_name }}</div>
+                <div class="text-sm text-gray-600">{{ vacation.department }}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-600">
+                {{ formatDate(vacation.start_date) }} - {{ formatDate(vacation.end_date) }}
+              </span>
+              <button
+                @click="approveVacation(vacation.id)"
+                class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 transition-colors text-sm"
+              >
+                Aprobar
+              </button>
+              <button
+                @click="rejectVacation(vacation.id)"
+                class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors text-sm"
+              >
+                Rechazar
+              </button>
+              <button
+                @click="openSuggestModal(vacation)"
+                class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm"
+              >
+                Acciones
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de acciones de vacación -->
+    <div
+      v-if="showSuggestModal && currentVacation"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      @click="showSuggestModal = false"
+    >
+      <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4 shadow-2xl" @click.stop>
+        <h3 class="text-xl font-bold mb-4">Acciones de Vacación</h3>
+        
+        <!-- Información de la vacación -->
+        <div class="bg-gray-50 rounded-lg p-4 mb-4">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
+              {{ currentVacation.employee_name.charAt(0) }}
+            </div>
+            <div>
+              <div class="font-semibold text-lg">{{ currentVacation.employee_name }}</div>
+              <div class="text-sm text-gray-600">{{ currentVacation.department }}</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <div class="text-xs text-gray-600 mb-1">Fecha Inicio</div>
+              <div class="font-semibold">{{ formatDate(currentVacation.start_date) }}</div>
+            </div>
+            <div>
+              <div class="text-xs text-gray-600 mb-1">Fecha Fin</div>
+              <div class="font-semibold">{{ formatDate(currentVacation.end_date) }}</div>
+            </div>
+            <div>
+              <div class="text-xs text-gray-600 mb-1">Estado</div>
+              <div class="font-semibold" :class="{
+                'text-yellow-600': currentVacation.status === 'pending',
+                'text-green-600': currentVacation.status === 'approved',
+                'text-red-600': currentVacation.status === 'rejected'
+              }">
+                {{ currentVacation.status === 'pending' ? '⏳ Pendiente' : currentVacation.status === 'approved' ? '✓ Aprobado' : '✗ Rechazado' }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Acciones rápidas -->
+        <div class="grid grid-cols-3 gap-3 mb-4">
+          <button
+            @click="approveVacation(currentVacation.id)"
+            class="px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold"
+          >
+            ✓ Aprobar
+          </button>
+          <button
+            @click="rejectVacation(currentVacation.id)"
+            class="px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-semibold"
+          >
+            ✗ Rechazar
+          </button>
+          <button
+            @click="showSuggestModal = false"
+            class="px-4 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-semibold"
+          >
+            Cerrar
+          </button>
+        </div>
+
+        <!-- Sugerencia de fecha alternativa -->
+        <div class="border-t pt-4">
+          <h4 class="text-sm font-semibold mb-3">Confirmar</h4>
+          <div class="space-y-3">
+            <p class="text-sm text-gray-700">
+              ¿Deseas sugerirle <span class="font-medium">{{ formatDayMonth(currentVacation.start_date) }}</span> a {{ currentVacation.employee_name }}?
+            </p>
+            <div class="flex gap-3">
+              <button
+                @click="sendSuggestion"
+                class="flex-1 px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-semibold"
+              >
+                Sugerir
+              </button>
+              <button
+                @click="showSuggestModal = false"
+                class="px-4 py-3 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors font-semibold"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de creación de vacaciones -->
+    <div
+      v-if="showCreateModal && selectedEmployeeForVacation"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      @click="showCreateModal = false"
+    >
+      <div class="bg-white rounded-lg p-4 max-w-md w-full mx-4 shadow-2xl" @click.stop>
+        <!-- Header compacto -->
+        <div class="flex items-center gap-2 mb-4 pb-3 border-b">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
+            {{ selectedEmployeeForVacation.name.charAt(0) }}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold text-sm truncate">{{ selectedEmployeeForVacation.name }}</div>
+            <div class="text-xs text-gray-600">{{ selectedEmployeeForVacation.department }}</div>
+          </div>
+        </div>
+
+        <!-- Formulario compacto -->
+        <div class="space-y-3">
+          <!-- Mensaje con fecha y empleado -->
+          <p class="text-sm text-gray-700">
+            ¿Deseas sugerirle <span class="font-medium">{{ formatDayMonth(newVacationStartDate) }}</span> a {{ selectedEmployeeForVacation?.name }}?
+          </p>
+          
+          <div class="flex gap-2 pt-2">
+            <button
+              @click="submitVacationForm"
+              class="w-full px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors font-semibold"
+            >
+              Confirmar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Sugerencias -->
+    <div
+      v-if="showSuggestionModal"
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      @click="showSuggestionModal = false"
+    >
+      <div
+        class="bg-white rounded-lg p-6 max-w-2xl w-full shadow-xl"
+        @click.stop
+      >
+        <div class="space-y-4">
+          <div>
+            <h3 class="text-lg font-semibold text-purple-900">Sugerir Fechas Alternativas</h3>
+            <p class="text-sm text-gray-600 mt-1">Selecciona fechas alternativas para esta solicitud</p>
+          </div>
+
+          <!-- Fechas actuales -->
+          <div v-if="suggestionData.currentVacations && suggestionData.currentVacations.length > 0" class="p-4 bg-red-50 rounded-lg border border-red-200">
+            <p class="text-sm font-medium text-red-900 mb-2">Fechas actuales:</p>
+            <div class="flex flex-wrap gap-2">
+              <span
+                v-for="vac in suggestionData.currentVacations"
+                :key="vac.start_date"
+                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800"
+              >
+                {{ formatDateOnly(vac.start_date) }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Calendario de selección de fechas alternativas -->
+          <div class="border rounded-lg p-4 bg-gray-50">
+            <label class="text-sm font-medium mb-2 block">Selecciona fechas alternativas:</label>
+            <div class="grid grid-cols-7 gap-1 mb-2">
+              <div v-for="day in ['D', 'L', 'M', 'X', 'J', 'V', 'S']" :key="day" class="text-center text-xs font-medium text-gray-600">
+                {{ day }}
+              </div>
+            </div>
+            <div class="grid grid-cols-7 gap-1">
+              <button
+                v-for="(alternateDate, idx) in suggestionData.alternateDates"
+                :key="idx"
+                @click="toggleAlternateDate(alternateDate)"
+                class="aspect-square flex items-center justify-center text-xs rounded hover:bg-blue-100 transition-colors"
+                :class="isAlternateDateSelected(alternateDate) ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-700'"
+              >
+                {{ alternateDate.getDate() }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Acciones -->
+          <div class="flex gap-3">
+            <button
+              @click="confirmSuggestion"
+              :disabled="selectedAlternateDates.length === 0"
+              class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 font-medium"
+            >
+              Enviar Sugerencia
+            </button>
+            <button
+              @click="showSuggestionModal = false"
+              class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-medium"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
+
+interface Employee {
+  emp_id: string
+  name: string
+  department: string
+  vacationBalance?: number
+  usagePercentage?: number
+  daysRemaining?: number
+  totalDays?: number
+}
+
+interface Vacation {
+  id: string
+  emp_id: string
+  employee_name: string
+  department: string
+  start_date: string
+  end_date: string
+  status: 'pending' | 'approved' | 'rejected'
+}
+
+const props = defineProps<{
+  managerId?: number
+}>()
+
+// Log del managerId recibido
+console.log('🏢 BossCalendarView - Props recibidas:', props)
+console.log('🏢 BossCalendarView - managerId:', props.managerId)
+
+const currentDate = ref(new Date(2026, 0, 1)) // Iniciar en enero 2026
+const selectedEmployee = ref<Employee | null>(null)
+const viewMode = ref<'month' | 'day'>('month')
+const selectedDate = ref(new Date().toISOString().split('T')[0])
+const showSuggestModal = ref(false)
+const currentVacation = ref<Vacation | null>(null)
+const selectedDepartment = ref('')
+const departments = ref<string[]>([])
+const calendarScroll = ref<HTMLElement | null>(null)
+const scrollIndicator = ref<HTMLElement | null>(null)
+const isScrollingIndicator = ref(false)
+const isScrollingCalendar = ref(false)
+const showCreateModal = ref(false)
+const selectedEmployeeForVacation = ref<Employee | null>(null)
+const selectedDateForVacation = ref<Date | null>(null)
+const newVacationStartDate = ref('')
+const newVacationEndDate = ref('')
+const newVacationNote = ref('')
+
+// Menú contextual para vacaciones
+const contextMenu = ref({
+  show: false,
+  emp_id: '',
+  date: null as Date | null
+})
+
+// Modal de sugerencias
+const showSuggestionModal = ref(false)
+const suggestionData = ref({
+  emp_id: '',
+  currentVacations: [] as Vacation[],
+  alternateDates: [] as Date[],
+  originalDates: [] as string[]
+})
+const selectedAlternateDates = ref<Date[]>([])
+
+const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+const teamEmployees = ref<Employee[]>([])
+const vacations = ref<Vacation[]>([])
+
+const days = computed(() => {
+  const year = currentDate.value.getFullYear()
+  const month = currentDate.value.getMonth()
+  const lastDay = new Date(year, month + 1, 0)
+  const endDate = lastDay.getDate()
+  
+  const daysArray = []
+  
+  // Generar solo los días del mes desde el día 1
+  for (let i = 1; i <= endDate; i++) {
+    daysArray.push(new Date(year, month, i))
+  }
+  
+  return daysArray
+})
+
+const daysInMonth = computed(() => {
+  return days.value.length
+})
+
+const filteredEmployees = computed(() => {
+  if (!selectedDepartment.value) {
+    return teamEmployees.value
+  }
+  return teamEmployees.value.filter(emp => emp.department === selectedDepartment.value)
+})
+
+const navigateMonth = (direction: 'prev' | 'next') => {
+  if (direction === 'prev') {
+    currentDate.value = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() - 1, 1)
+  } else {
+    currentDate.value = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() + 1, 1)
+  }
+  loadData()
+}
+
+const isWeekend = (date: Date): boolean => {
+  const day = date.getDay()
+  return day === 0 || day === 6
+}
+
+const hasVacation = (empId: string, date: Date): boolean => {
+  const dateStr = date.toISOString().split('T')[0] // Formato YYYY-MM-DD
+  
+  const found = vacations.value.some(v => {
+    const vStart = v.start_date
+    const vEnd = v.end_date
+    const match = dateStr === vStart || dateStr === vEnd
+    return v.emp_id === empId && match
+  })
+  
+  // Debug logging
+  if (found && vacations.value.length > 0) {
+    console.log(`✓ Vacación encontrada para ${empId} en ${dateStr}`)
+  }
+  
+  return found
+}
+
+const getVacationTooltip = (empId: string, date: Date): string => {
+  const dateStr = date.toISOString().split('T')[0]
+  const vacation = vacations.value.find(v => {
+    const match = dateStr === v.start_date || dateStr === v.end_date
+    return v.emp_id === empId && match
+  })
+  return vacation ? `${vacation.employee_name}: ${vacation.start_date}` : ''
+}
+
+const isToday = (date: Date): boolean => {
+  const today = new Date()
+  return date.toDateString() === today.toDateString()
+}
+
+const getVacationBlockClasses = (empId: string, date: Date): string => {
+  const dateStr = date.toISOString().split('T')[0]
+  const vacation = vacations.value.find(v => {
+    const match = dateStr === v.start_date || dateStr === v.end_date
+    return v.emp_id === empId && match
+  })
+  
+  if (!vacation) return ''
+  
+  const classes = []
+  
+  // Colores por estado con mejores gradientes
+  if (vacation.status === 'approved') {
+    classes.push('bg-gradient-to-br from-green-500 via-green-600 to-emerald-600 hover:from-green-600 hover:via-green-700 hover:to-emerald-700')
+    classes.push('min-h-[50px]')
+  } else if (vacation.status === 'pending') {
+    classes.push('bg-gradient-to-br from-yellow-400 via-amber-500 to-orange-500 hover:from-yellow-500 hover:via-amber-600 hover:to-orange-600')
+    classes.push('min-h-[45px]')
+  } else if (vacation.status === 'rejected') {
+    classes.push('bg-gradient-to-br from-red-500 via-red-600 to-rose-600 hover:from-red-600 hover:via-red-700 hover:to-rose-700')
+    classes.push('min-h-[40px]')
+  } else {
+    classes.push('bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 hover:from-blue-600 hover:via-indigo-700 hover:to-purple-700')
+    classes.push('min-h-[50px]')
+  }
+  
+  return classes.join(' ')
+}
+
+const getVacationStatusShort = (empId: string, date: Date): string => {
+  const dateStr = date.toISOString().split('T')[0]
+  const vacation = vacations.value.find(v => {
+    const match = dateStr === v.start_date || dateStr === v.end_date
+    return v.emp_id === empId && match
+  })
+  
+  if (!vacation) return ''
+  
+  if (vacation.status === 'approved') return '✓ OK'
+  if (vacation.status === 'pending') return '⏳'
+  if (vacation.status === 'rejected') return '✗'
+  return ''
+}
+
+const getDayVacations = (): Vacation[] => {
+  return vacations.value.filter(v => {
+    const date = new Date(selectedDate.value)
+    return date >= new Date(v.start_date) && date <= new Date(v.end_date)
+  })
+}
+
+const openVacationModal = (empId: string, date: Date) => {
+  const vacation = vacations.value.find(v => 
+    v.emp_id === empId && 
+    date >= new Date(v.start_date) && 
+    date <= new Date(v.end_date)
+  )
+  
+  if (vacation) {
+    // Si hay vacación, mostrar modal de acciones
+    currentVacation.value = vacation
+    showSuggestModal.value = true
+  } else {
+    // Si no hay vacación, mostrar modal de creación
+    const employee = teamEmployees.value.find(emp => emp.emp_id === empId)
+    selectedEmployeeForVacation.value = employee || null
+    selectedDateForVacation.value = date
+    
+    // Prellenar fechas
+    const dateStr = date.toISOString().split('T')[0]
+    newVacationStartDate.value = dateStr
+    newVacationEndDate.value = dateStr
+    
+    showCreateModal.value = true
+  }
+}
+
+const approveVacation = async (vacationId: string) => {
+  try {
+    // TODO: Llamar a API para aprobar
+    console.log('Aprobar vacación:', vacationId)
+    loadData()
+  } catch (error) {
+    console.error('Error al aprobar vacación:', error)
+  }
+}
+
+const rejectVacation = async (vacationId: string) => {
+  try {
+    // TODO: Llamar a API para rechazar
+    console.log('Rechazar vacación:', vacationId)
+    loadData()
+  } catch (error) {
+    console.error('Error al rechazar vacación:', error)
+  }
+}
+
+const openSuggestModal = (vacation: Vacation) => {
+  currentVacation.value = vacation
+  showSuggestModal.value = true
+}
+
+const sendSuggestion = async () => {
+  try {
+    // TODO: Enviar sugerencia a API
+    console.log('Enviar sugerencia:', {
+      vacationId: currentVacation.value?.id,
+      start: currentVacation.value?.start_date,
+      end: currentVacation.value?.end_date
+    })
+    showSuggestModal.value = false
+  } catch (error) {
+    console.error('Error al enviar sugerencia:', error)
+  }
+}
+
+// Funciones del menú contextual
+const showVacationContextMenu = (empId: string, date: Date) => {
+  contextMenu.value = {
+    show: true,
+    emp_id: empId,
+    date: date
+  }
+}
+
+const approveVacationDay = async (empId: string, date: Date) => {
+  try {
+    const dateStr = date.toISOString().split('T')[0]
+    const vacation = vacations.value.find(v => v.emp_id === empId && v.start_date === dateStr)
+    
+    if (vacation) {
+      console.log('✓ Aprobando vacación:', vacation)
+      
+      // Extraer el id_solicitud del id de la vacación (formato: id_solicitud_fecha)
+      const id_solicitud = vacation.id.split('_')[0]
+      
+      // Llamar a la API para actualizar en la base de datos
+      const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id_solicitud: parseInt(id_solicitud),
+          estado: 'APROBADO',
+          comentario: `Fecha aprobada: ${dateStr}`
+        })
+      })
+      
+      if (response.ok) {
+        // Cambiar estado a aprobado en el array local
+        vacation.status = 'approved'
+        console.log('✅ Vacación aprobada en la base de datos')
+      } else {
+        console.error('❌ Error al aprobar en la API')
+      }
+      
+      contextMenu.value.show = false
+    }
+  } catch (error) {
+    console.error('Error al aprobar vacación:', error)
+  }
+}
+
+const rejectVacationDay = async (empId: string, date: Date) => {
+  try {
+    const dateStr = date.toISOString().split('T')[0]
+    const vacation = vacations.value.find(v => v.emp_id === empId && v.start_date === dateStr)
+    
+    if (vacation) {
+      console.log('✗ Rechazando vacación:', vacation)
+      
+      // Extraer el id_solicitud del id de la vacación (formato: id_solicitud_fecha)
+      const id_solicitud = vacation.id.split('_')[0]
+      
+      // Llamar a la API para actualizar en la base de datos
+      const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id_solicitud: parseInt(id_solicitud),
+          estado: 'RECHAZADO',
+          comentario: `Fecha rechazada: ${dateStr}`
+        })
+      })
+      
+      if (response.ok) {
+        // Cambiar estado a rechazado en el array local
+        vacation.status = 'rejected'
+        console.log('✅ Vacación rechazada en la base de datos')
+      } else {
+        console.error('❌ Error al rechazar en la API')
+      }
+      
+      contextMenu.value.show = false
+    }
+  } catch (error) {
+    console.error('Error al rechazar vacación:', error)
+  }
+}
+
+const approveVacationMonth = async (empId: string, date: Date) => {
+  try {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    
+    // Aprobar todas las vacaciones del empleado en ese mes
+    const monthVacations = vacations.value.filter(v => {
+      if (v.emp_id !== empId) return false
+      const vacDate = new Date(v.start_date)
+      return vacDate.getFullYear() === year && vacDate.getMonth() === month
+    })
+    
+    console.log(`📅 Aprobando ${monthVacations.length} vacaciones del mes`)
+    
+    // Obtener id_solicitud único del mes
+    const uniqueRequestIds = [...new Set(monthVacations.map(v => v.id.split('_')[0]))]
+    
+    // Aprobar cada solicitud en la base de datos
+    for (const id_solicitud of uniqueRequestIds) {
+      const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id_solicitud: parseInt(id_solicitud),
+          estado: 'APROBADO',
+          comentario: `Mes completo aprobado: ${monthNames[month]} ${year}`
+        })
+      })
+      
+      if (response.ok) {
+        console.log(`✅ Solicitud ${id_solicitud} aprobada en la base de datos`)
+      }
+    }
+    
+    // Cambiar estado a aprobado para todas las vacaciones del mes
+    monthVacations.forEach(v => {
+      v.status = 'approved'
+    })
+    
+    contextMenu.value.show = false
+  } catch (error) {
+    console.error('Error al aprobar mes:', error)
+  }
+}
+
+const suggestVacationMonth = async (empId: string, date: Date) => {
+  try {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    
+    // Obtener todas las vacaciones del empleado en ese mes
+    const monthVacations = vacations.value.filter(v => {
+      if (v.emp_id !== empId) return false
+      const vacDate = new Date(v.start_date)
+      return vacDate.getFullYear() === year && vacDate.getMonth() === month
+    })
+    
+    console.log('💡 Sugiriendo alternativas para:', empId, `Mes: ${monthNames[month]} ${year}`, monthVacations.length, 'fechas')
+    
+    // Preparar datos para el modal
+    suggestionData.value = {
+      emp_id: empId,
+      currentVacations: monthVacations,
+      alternateDates: [], // Se llenará con fechas disponibles en el mes
+      originalDates: monthVacations.map(v => v.start_date)
+    }
+    
+    // Generar fechas disponibles para sugerir (todos los días del mes)
+    const startDate = new Date(year, month, 1)
+    const endDate = new Date(year, month + 1, 0)
+    const dates: Date[] = []
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      dates.push(new Date(d))
+    }
+    suggestionData.value.alternateDates = dates
+    
+    selectedAlternateDates.value = []
+    showSuggestionModal.value = true
+    
+    contextMenu.value.show = false
+  } catch (error) {
+    console.error('Error al sugerir:', error)
+  }
+}
+
+const toggleAlternateDate = (date: Date) => {
+  const index = selectedAlternateDates.value.findIndex(d => d.toDateString() === date.toDateString())
+  if (index >= 0) {
+    selectedAlternateDates.value.splice(index, 1)
+  } else {
+    selectedAlternateDates.value.push(date)
+  }
+}
+
+const isAlternateDateSelected = (date: Date): boolean => {
+  return selectedAlternateDates.value.some(d => d.toDateString() === date.toDateString())
+}
+
+const formatDateOnly = (dateStr: string): string => {
+  const date = new Date(dateStr)
+  return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`
+}
+
+const confirmSuggestion = async () => {
+  try {
+    if (selectedAlternateDates.value.length === 0) {
+      return
+    }
+    
+    const suggestedDates = selectedAlternateDates.value.map(d => d.toISOString().split('T')[0])
+    
+    console.log('💡 Enviando sugerencia con fechas alternativas:', suggestedDates)
+    console.log('💡 Empleado:', suggestionData.value.emp_id)
+    console.log('💡 Fechas originales:', suggestionData.value.originalDates)
+    
+    // Crear solicitudes de sugerencia para cada fecha alternativo
+    for (const dateStr of suggestedDates) {
+      const payload = {
+        emp_id: suggestionData.value.emp_id,
+        tipo: 'PROGRAMADA',
+        comentario: `Sugerencia de fechas alternativas para ${dateStr}`,
+        manager_id: props.managerId,
+        antiguedad: '1',
+        detalle: [{
+          fecha: dateStr,
+          turno: 'COMPLETO',
+          observacion: 'Fecha sugerida como alternativa'
+        }],
+        reemplazantes: []
+      }
+
+      console.log(`💡 Enviando sugerencia para ${dateStr}:`, payload)
+
+      const response = await fetch('http://190.171.225.68/api/store-vacation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        throw new Error(`Error al enviar sugerencia para ${dateStr}`)
+      }
+
+      console.log(`✅ Sugerencia enviada para ${dateStr}`)
+    }
+    
+    console.log('✅ Todas las sugerencias enviadas exitosamente')
+    showSuggestionModal.value = false
+    selectedAlternateDates.value = []
+    
+    // Recargar datos para mostrar las sugerencias
+    await loadData()
+  } catch (error) {
+    console.error('Error al enviar sugerencia:', error)
+    alert('Error al enviar la sugerencia. Intenta nuevamente.')
+  }
+}
+
+// Cerrar menú contextual al hacer clic fuera
+const setupContextMenuListener = () => {
+  window.addEventListener('click', () => {
+    contextMenu.value.show = false
+  })
+}
+
+const getDayOfMonth = (dateString?: string) => {
+  if (!dateString) return ''
+  const d = new Date(dateString)
+  return d.getDate()
+}
+
+const formatDayMonth = (dateString?: string) => {
+  if (!dateString) return ''
+  const d = new Date(dateString)
+  const monthNamesEs = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+  return `${d.getDate()} de ${monthNamesEs[d.getMonth()]}`
+}
+
+const filterEmployees = () => {
+  // La función filteredEmployees es computada, no necesita lógica adicional
+  console.log('Filtrar empleados por departamento:', selectedDepartment.value)
+}
+
+const handleCalendarScroll = (event: Event) => {
+  if (isScrollingIndicator.value) return
+  const target = event.target as HTMLElement
+  if (scrollIndicator.value && target.scrollLeft !== undefined) {
+    isScrollingCalendar.value = true
+    scrollIndicator.value.scrollLeft = target.scrollLeft
+    setTimeout(() => {
+      isScrollingCalendar.value = false
+    }, 10)
+  }
+}
+
+const handleIndicatorScroll = (event: Event) => {
+  if (isScrollingCalendar.value) return
+  const target = event.target as HTMLElement
+  if (calendarScroll.value && target.scrollLeft !== undefined) {
+    isScrollingIndicator.value = true
+    calendarScroll.value.scrollLeft = target.scrollLeft
+    setTimeout(() => {
+      isScrollingIndicator.value = false
+    }, 10)
+  }
+}
+
+const submitVacationForm = () => {
+  // Ejecutar directamente sin modal de confirmación
+  createVacation()
+}
+
+const createVacation = async () => {
+  try {
+    if (!selectedEmployeeForVacation.value) {
+      return
+    }
+    
+    console.log('📝 Creando vacación:', {
+      employee: selectedEmployeeForVacation.value,
+      start_date: newVacationStartDate.value,
+      end_date: newVacationEndDate.value,
+      note: newVacationNote.value
+    })
+    
+    // Convertir fechas a formato YYYY-MM-DD
+    const startDate = newVacationStartDate.value || ''
+    const endDate = newVacationEndDate.value || startDate
+    
+    const payload = {
+      emp_id: selectedEmployeeForVacation.value.emp_id,
+      tipo: 'PROGRAMADA',
+      comentario: newVacationNote.value || `Vacación programada del ${startDate} al ${endDate}`,
+      manager_id: props.managerId,
+      antiguedad: '1',
+      detalle: [{
+        fecha: startDate,
+        turno: 'COMPLETO',
+        observacion: null
+      }],
+      reemplazantes: []
+    }
+
+    console.log('📤 Payload para crear vacación:', payload)
+
+    const response = await fetch('http://190.171.225.68/api/store-vacation', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+      throw new Error(`Error al crear vacación: ${response.status}`)
+    }
+
+    const result = await response.json()
+    console.log('✅ Vacación creada exitosamente:', result)
+    
+    // Cerrar modal de creación y recargar datos
+    showCreateModal.value = false
+    newVacationStartDate.value = ''
+    newVacationEndDate.value = ''
+    newVacationNote.value = ''
+    selectedEmployeeForVacation.value = null
+    await loadData()
+  } catch (error) {
+    console.error('❌ Error al crear vacación:', error)
+    alert('Error al crear la vacación. Intenta nuevamente.')
+    showCreateModal.value = false
+  }
+}
+
+const formatDate = (dateString: string): string => {
+  const date = new Date(dateString)
+  return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`
+}
+
+const loadData = async () => {
+  try {
+    console.log('📡 BossCalendarView - Cargando datos')
+    console.log('📡 Props.managerId:', props.managerId)
+    console.log('📡 Tipo de props.managerId:', typeof props.managerId)
+    
+    if (!props.managerId) {
+      console.warn('⚠️ No hay managerId, usando datos de ejemplo')
+      throw new Error('No managerId')
+    }
+    
+    // Cargar dependientes del manager desde la API de solicitudes
+    try {
+      console.log('📡 Llamando API de vacaciones del manager con managerId:', props.managerId)
+      const response = await fetch(`http://190.171.225.68/api/vacacion-data-manager?manager=${props.managerId}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('📦 Respuesta de solicitudes del manager:', data)
+        
+        if (data.success && Array.isArray(data.data)) {
+          // Extraer empleados únicos de las solicitudes
+          const uniqueEmployees = new Map<string, any>()
+          
+          for (const solicitud of data.data) {
+            if (!uniqueEmployees.has(solicitud.emp_id)) {
+              // Intentar cargar info del empleado
+              let nombre = `Empleado #${solicitud.emp_id}`
+              let cargo = 'N/A'
+              
+              try {
+                const empInfoResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${solicitud.emp_id}`)
+                if (empInfoResponse.ok) {
+                  const empInfoData = await empInfoResponse.json()
+                  if (empInfoData.status === 'success' && Array.isArray(empInfoData.data) && empInfoData.data.length > 0) {
+                    nombre = empInfoData.data[0].fullName || nombre
+                    cargo = empInfoData.data[0].cargo || cargo
+                  }
+                }
+              } catch (err) {
+                console.error('Error al cargar info del empleado:', err)
+              }
+              
+              uniqueEmployees.set(solicitud.emp_id, {
+                emp_id: solicitud.emp_id,
+                name: nombre,
+                department: cargo,
+                vacationBalance: 0,
+                totalDays: 0,
+                usagePercentage: 0,
+                daysRemaining: 0
+              })
+            }
+          }
+          
+          teamEmployees.value = Array.from(uniqueEmployees.values())
+          console.log('✅ BossCalendarView - Empleados extraídos de solicitudes:', teamEmployees.value.length)
+          
+          // Convertir solicitudes a vacaciones
+          const nuevasVacaciones: Vacation[] = []
+          
+          for (const solicitud of data.data) {
+            if (solicitud.tipo === 'PROGRAMADA') {
+              // Obtener el nombre del empleado desde el map
+              const empleado = uniqueEmployees.get(solicitud.emp_id)
+              const nombre = empleado?.name || `Empleado #${solicitud.emp_id}`
+              const departamento = empleado?.department || 'N/A'
+              
+              // Determinar el estado
+              let status: 'pending' | 'approved' | 'rejected' = 'pending'
+              if (solicitud.estado === 'APROBADO') {
+                status = 'approved'
+              } else if (solicitud.estado === 'RECHAZADO') {
+                status = 'rejected'
+              }
+              
+              console.log(`📅 Procesando solicitud ${solicitud.id_solicitud} para ${nombre} (${solicitud.estado}) con ${solicitud.fechas.length} fechas`)
+              
+              for (const fecha of solicitud.fechas) {
+                nuevasVacaciones.push({
+                  id: `${solicitud.id_solicitud}_${fecha.fecha}`,
+                  emp_id: solicitud.emp_id,
+                  employee_name: nombre,
+                  department: departamento,
+                  start_date: fecha.fecha,
+                  end_date: fecha.fecha,
+                  status: status
+                })
+              }
+            }
+          }
+          
+          console.log('📅 Vacaciones generadas para el calendario:', nuevasVacaciones.length)
+          
+          vacations.value = nuevasVacaciones // Reemplazar vacaciones anteriores
+          console.log('✅ BossCalendarView - Vacaciones cargadas:', nuevasVacaciones.length)
+          
+          // Debug: mostrar las vacaciones generadas
+          nuevasVacaciones.forEach((vac, idx) => {
+            if (idx < 5) { // Solo mostrar las primeras 5
+              console.log(`📅 Vacación ${idx + 1}:`, {
+                emp_id: vac.emp_id,
+                employee_name: vac.employee_name,
+                date: vac.start_date,
+                status: vac.status
+              })
+            }
+          })
+        } else {
+          console.warn('⚠️ No se encontraron datos en la respuesta:', data)
+          throw new Error('No hay datos en la respuesta')
+        }
+      } else {
+        console.error('❌ Respuesta no OK:', response.status, response.statusText)
+        throw new Error(`HTTP ${response.status}`)
+      }
+    } catch (err) {
+      console.error('❌ Error al cargar datos del manager:', err)
+      // Datos de ejemplo como fallback
+      teamEmployees.value = [
+      { emp_id: '1', name: 'Juan Pérez', department: 'Distribución', vacationBalance: 15, totalDays: 25, usagePercentage: 40, daysRemaining: 10 },
+      { emp_id: '2', name: 'María García', department: 'Almacén', vacationBalance: 0, totalDays: 20, usagePercentage: 100, daysRemaining: 0 },
+      { emp_id: '3', name: 'Pedro López', department: 'Logística', vacationBalance: 5, totalDays: 20, usagePercentage: 75, daysRemaining: 5 },
+      { emp_id: '4', name: 'Ana Martínez', department: 'Ventas', vacationBalance: 22, totalDays: 30, usagePercentage: 27, daysRemaining: 8 },
+      { emp_id: '5', name: 'Luis Sánchez', department: 'Producción', vacationBalance: 16, totalDays: 25, usagePercentage: 36, daysRemaining: 9 },
+      { emp_id: '6', name: 'Carmen Torres', department: 'Administración', vacationBalance: 19, totalDays: 25, usagePercentage: 24, daysRemaining: 6 },
+      { emp_id: '7', name: 'Roberto Silva', department: 'Contabilidad', vacationBalance: 12, totalDays: 20, usagePercentage: 40, daysRemaining: 8 },
+      { emp_id: '8', name: 'Laura Morales', department: 'Recursos Humanos', vacationBalance: 18, totalDays: 25, usagePercentage: 28, daysRemaining: 7 },
+      { emp_id: '9', name: 'Carlos Ramírez', department: 'Sistemas', vacationBalance: 8, totalDays: 20, usagePercentage: 60, daysRemaining: 12 },
+      { emp_id: '10', name: 'Patricia González', department: 'Marketing', vacationBalance: 20, totalDays: 25, usagePercentage: 20, daysRemaining: 5 },
+      { emp_id: '11', name: 'Fernando Herrera', department: 'Compras', vacationBalance: 10, totalDays: 20, usagePercentage: 50, daysRemaining: 10 },
+      { emp_id: '12', name: 'Sandra Vega', department: 'Ventas', vacationBalance: 15, totalDays: 25, usagePercentage: 40, daysRemaining: 10 },
+      { emp_id: '13', name: 'Miguel Ángel', department: 'Distribución', vacationBalance: 3, totalDays: 20, usagePercentage: 85, daysRemaining: 17 },
+      { emp_id: '14', name: 'Andrea Cárdenas', department: 'Almacén', vacationBalance: 25, totalDays: 30, usagePercentage: 17, daysRemaining: 5 },
+      { emp_id: '15', name: 'Jorge Méndez', department: 'Logística', vacationBalance: 14, totalDays: 20, usagePercentage: 30, daysRemaining: 6 },
+      { emp_id: '16', name: 'Lucía Fernández', department: 'Producción', vacationBalance: 11, totalDays: 20, usagePercentage: 45, daysRemaining: 9 },
+      { emp_id: '17', name: 'Ricardo Pacheco', department: 'Seguridad', vacationBalance: 22, totalDays: 25, usagePercentage: 12, daysRemaining: 3 },
+      { emp_id: '18', name: 'Estela Romero', department: 'Limpieza', vacationBalance: 19, totalDays: 25, usagePercentage: 24, daysRemaining: 6 },
+      { emp_id: '19', name: 'Mario Castillo', department: 'Mantenimiento', vacationBalance: 6, totalDays: 20, usagePercentage: 70, daysRemaining: 14 },
+      { emp_id: '20', name: 'Diana Flores', department: 'Atención al Cliente', vacationBalance: 17, totalDays: 25, usagePercentage: 32, daysRemaining: 8 }
+    ]
+    
+    // Datos de vacaciones de ejemplo para el mes actual
+    const currentMonth = currentDate.value.getMonth() + 1
+    const currentYear = currentDate.value.getFullYear()
+    
+    vacations.value = [
+      {
+        id: '1',
+        emp_id: '1',
+        employee_name: 'Juan Pérez',
+        department: 'Distribución',
+        start_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-27`,
+        end_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-29`,
+        status: 'pending'
+      },
+      {
+        id: '2',
+        emp_id: '2',
+        employee_name: 'María García',
+        department: 'Almacén',
+        start_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-10`,
+        end_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-15`,
+        status: 'approved'
+      },
+      {
+        id: '3',
+        emp_id: '3',
+        employee_name: 'Pedro López',
+        department: 'Logística',
+        start_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-05`,
+        end_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-08`,
+        status: 'approved'
+      }
+    ]
+    }
+    
+    // Extraer departamentos únicos para el filtro
+    departments.value = Array.from(new Set(teamEmployees.value.map(emp => emp.department))).sort()
+    
+  } catch (error) {
+    console.error('❌ Error al cargar datos en loadData:', error)
+    // Datos de ejemplo como fallback
+    teamEmployees.value = [
+      { emp_id: '1', name: 'Juan Pérez', department: 'Distribución', vacationBalance: 15, totalDays: 25, usagePercentage: 40, daysRemaining: 10 }
+    ]
+    departments.value = ['Distribución']
+  }
+}
+
+onMounted(() => {
+  loadData()
+  setupContextMenuListener()
+  
+  // Escuchar evento de solicitudes cargadas desde BossApprovalPanel
+  window.addEventListener('vacations-loaded', (event: any) => {
+    const requests = event.detail.requests || []
+    console.log('📅 BossCalendarView - Solicitudes recibidas:', requests)
+    
+    // Filtrar solo solicitudes programadas en proceso
+    const programadas = requests.filter((req: any) => {
+      const esProgramada = req.tipo === 'PROGRAMADA'
+      const estaEnProceso = req.estado === 'PROCESO'
+      console.log(`🔍 Solicitud ${req.id_solicitud}: tipo=${req.tipo}, estado=${req.estado}, esProgramada=${esProgramada}, estaEnProceso=${estaEnProceso}`)
+      return esProgramada && estaEnProceso
+    })
+    
+    console.log('📋 Solicitudes programadas en proceso:', programadas)
+    
+    // Convertir cada solicitud en vacaciones (una por cada fecha)
+    const nuevasVacaciones: Vacation[] = []
+    
+    for (const req of programadas) {
+      // Crear una vacación por cada fecha en la solicitud
+      for (const fecha of req.fechas) {
+        nuevasVacaciones.push({
+          id: `${req.id_solicitud}_${fecha.fecha}`,
+          emp_id: req.emp_id,
+          employee_name: req.empleado?.nombre || `Empleado #${req.emp_id}`,
+          department: req.empleado?.cargo || 'N/A',
+          start_date: fecha.fecha,
+          end_date: fecha.fecha, // Mismo día para cada fecha
+          status: 'pending' as 'pending' | 'approved' | 'rejected'
+        })
+      }
+    }
+    
+    console.log('📅 Nueva vacaciones generadas:', nuevasVacaciones.length)
+    
+    // Agregar al array de vacaciones
+    vacations.value = [...vacations.value, ...nuevasVacaciones]
+    console.log('📅 BossCalendarView - Vacaciones totales:', vacations.value.length)
+  })
+})
+</script>
+
