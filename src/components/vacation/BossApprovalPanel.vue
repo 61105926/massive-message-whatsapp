@@ -132,10 +132,12 @@
                 <span :class="[
                   'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold',
                   request.estado === 'PROCESO' ? 'bg-yellow-100 text-yellow-800' : '',
+                  request.estado === 'PENDIENTE' ? 'bg-blue-100 text-blue-800' : '',
+                  request.estado === 'PREAPROBADO' || request.estado === 'PRE-APROBADO' ? 'bg-yellow-100 text-yellow-800' : '',
                   request.estado === 'APROBADO' ? 'bg-green-100 text-green-800' : '',
                   request.estado === 'RECHAZADO' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
                 ]">
-                  {{ request.estado }}
+                  {{ request.estado === 'PREAPROBADO' || request.estado === 'PRE-APROBADO' ? 'REVISADO' : request.estado }}
                 </span>
               </div>
             </div>
@@ -159,9 +161,91 @@
               Solicitado el {{ formatDate(request.fecha_solicitud) }}
             </div>
 
+            <!-- Timeline Visual -->
+            <div class="border-t pt-4">
+              <p class="text-xs font-medium text-muted-foreground mb-3">Estado del Proceso</p>
+              <div class="flex items-center gap-2">
+                <!-- Paso 1: Pendiente -->
+                <div class="flex items-center gap-2">
+                  <div :class="[
+                    'w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold',
+                    request.estado === 'PENDIENTE' || request.estado === 'PROCESO' 
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-gray-200 text-gray-500'
+                  ]">
+                    <CheckCircle v-if="request.estado !== 'PENDIENTE' && request.estado !== 'PROCESO'" class="h-4 w-4" />
+                    <span v-else>1</span>
+                  </div>
+                  <span class="text-xs text-muted-foreground">Pendiente</span>
+                </div>
+                
+                <!-- Línea conectora -->
+                <div :class="[
+                  'flex-1 h-0.5',
+                  request.estado === 'PREAPROBADO' || request.estado === 'PRE-APROBADO' || request.estado === 'APROBADO' || request.estado === 'RECHAZADO'
+                    ? 'bg-blue-500' 
+                    : 'bg-gray-200'
+                ]"></div>
+                
+                <!-- Paso 2: Preaprobado -->
+                <div class="flex items-center gap-2">
+                  <div :class="[
+                    'w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold',
+                    request.estado === 'PREAPROBADO' || request.estado === 'PRE-APROBADO' 
+                      ? 'bg-yellow-500 text-white' 
+                      : request.estado === 'APROBADO' || request.estado === 'RECHAZADO'
+                        ? 'bg-yellow-500 text-white'
+                        : 'bg-gray-200 text-gray-500'
+                  ]">
+                    <CheckCircle v-if="request.estado === 'APROBADO' || request.estado === 'RECHAZADO'" class="h-4 w-4" />
+                    <span v-else-if="request.estado === 'PREAPROBADO'">2</span>
+                    <span v-else>2</span>
+                  </div>
+                  <span class="text-xs text-muted-foreground">Revisado</span>
+                </div>
+                
+                <!-- Línea conectora -->
+                <div :class="[
+                  'flex-1 h-0.5',
+                  request.estado === 'APROBADO' || request.estado === 'RECHAZADO'
+                    ? 'bg-yellow-500' 
+                    : 'bg-gray-200'
+                ]"></div>
+                
+                <!-- Paso 3: Final -->
+                <div class="flex items-center gap-2">
+                  <div :class="[
+                    'w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold',
+                    request.estado === 'APROBADO' 
+                      ? 'bg-green-500 text-white' 
+                      : request.estado === 'RECHAZADO'
+                        ? 'bg-red-500 text-white'
+                        : 'bg-gray-200 text-gray-500'
+                  ]">
+                    <CheckCircle v-if="request.estado === 'APROBADO' || request.estado === 'RECHAZADO'" class="h-4 w-4" />
+                    <span v-else>3</span>
+                  </div>
+                  <span class="text-xs text-muted-foreground">
+                    {{ request.estado === 'APROBADO' ? 'Aprobado' : request.estado === 'RECHAZADO' ? 'Rechazado' : 'Final' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <!-- Action Buttons -->
             <div class="flex gap-3 pt-4 border-t">
               <button
+                v-if="request.estado === 'PENDIENTE' || request.estado === 'PROCESO'"
+                @click="handlePreapprove(request.id_solicitud)"
+                :disabled="isProcessing"
+                class="flex-1 inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-yellow-500 text-white hover:bg-yellow-600 h-10 px-4 py-2"
+              >
+                <CheckCircle class="h-4 w-4 mr-2" />
+                Preaprobar
+              </button>
+
+              <button
+                v-if="request.estado === 'PREAPROBADO' || request.estado === 'PRE-APROBADO' || request.estado === 'PENDIENTE' || request.estado === 'PROCESO'"
                 @click="handleApprove(request.id_solicitud)"
                 :disabled="isProcessing"
                 class="flex-1 inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-green-600 text-white hover:bg-green-700 h-10 px-4 py-2"
@@ -171,6 +255,7 @@
               </button>
 
               <button
+                v-if="request.estado !== 'RECHAZADO'"
                 @click="handleReject(request.id_solicitud)"
                 :disabled="isProcessing"
                 class="flex-1 inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-red-600 text-white hover:bg-red-700 h-10 px-4 py-2"
@@ -226,12 +311,24 @@
       >
         <div class="space-y-4">
           <div>
-            <h3 class="text-lg font-semibold text-green-900">Aprobar Solicitud</h3>
-            <p class="text-sm text-gray-600 mt-1">Confirma la aprobación de esta solicitud</p>
+            <h3 :class="[
+              'text-lg font-semibold',
+              isPreapproving ? 'text-yellow-900' : 'text-green-900'
+            ]">
+              {{ isPreapproving ? 'Preaprobar Solicitud' : 'Aprobar Solicitud' }}
+            </h3>
+            <p class="text-sm text-gray-600 mt-1">
+              {{ isPreapproving 
+                ? 'Marca como revisado y envía notificación al empleado' 
+                : 'Confirma la aprobación de esta solicitud' }}
+            </p>
           </div>
 
           <!-- Resumen de la solicitud -->
-          <div v-if="selectedRequest" class="p-4 bg-green-50 rounded-lg border border-green-200">
+          <div v-if="selectedRequest" :class="[
+            'p-4 rounded-lg border',
+            isPreapproving ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'
+          ]">
             <div class="space-y-2 text-sm">
               <div class="flex justify-between">
                 <span class="text-gray-600">Empleado:</span>
@@ -260,14 +357,17 @@
 
           <div class="space-y-2">
             <label for="approve-comment" class="text-sm font-medium text-gray-700">
-              Comentario (opcional)
+              Comentario {{ isPreapproving ? '(opcional)' : '(opcional)' }}
             </label>
             <textarea
               id="approve-comment"
               v-model="approveComment"
               rows="3"
-              placeholder="Ej: Aprobado según disponibilidad del equipo"
-              class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+              :placeholder="isPreapproving ? 'Ej: Solicitud revisada, pendiente de aprobación final' : 'Ej: Aprobado según disponibilidad del equipo'"
+              :class="[
+                'w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none resize-none',
+                isPreapproving ? 'focus:ring-2 focus:ring-yellow-500' : 'focus:ring-2 focus:ring-green-500'
+              ]"
               :disabled="isProcessing"
             ></textarea>
           </div>
@@ -283,10 +383,14 @@
             <button
               @click="confirmApprove"
               :disabled="isProcessing"
-              class="flex-1 inline-flex items-center justify-center rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 h-10 px-4 py-2 disabled:opacity-50"
+              :class="[
+                'flex-1 inline-flex items-center justify-center rounded-md text-sm font-medium text-white h-10 px-4 py-2 disabled:opacity-50',
+                isPreapproving ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-600 hover:bg-green-700'
+              ]"
             >
               <CheckCircle class="h-4 w-4 mr-2" />
               <span v-if="isProcessing">Procesando...</span>
+              <span v-else-if="isPreapproving">Confirmar Preaprobación</span>
               <span v-else>Confirmar Aprobación</span>
             </button>
           </div>
@@ -537,6 +641,7 @@ const rejectComment = ref('')
 const approveComment = ref('')
 const availableReplacements = ref<any[]>([])
 const selectedReplacements = ref<string[]>([])
+const isPreapproving = ref(false)
 
 // Notification state
 const notification = ref({
@@ -667,8 +772,9 @@ watch(() => props.managerId, (newId) => {
 
 const pendingRequests = computed(() => {
   // Excluir vacaciones programadas del panel de aprobación
+  // Mostrar solicitudes pendientes, en proceso y preaprobadas
   return requests.value.filter(req => 
-    (req.estado === 'PROCESO' || req.estado === 'PENDIENTE') && 
+    (req.estado === 'PROCESO' || req.estado === 'PENDIENTE' || req.estado === 'PREAPROBADO' || req.estado === 'PRE-APROBADO') && 
     req.tipo !== 'PROGRAMADA'
   )
 })
@@ -688,6 +794,36 @@ const rejectedCount = computed(() => {
     req.estado === 'RECHAZADO' && req.tipo !== 'PROGRAMADA'
   ).length
 })
+
+// Función para preaprobar solicitud
+const handlePreapprove = (requestId: string) => {
+  const request = requests.value.find(r => r.id_solicitud === requestId)
+  if (!request) return
+
+  selectedRequestId.value = requestId
+  selectedRequest.value = request
+  approveComment.value = ''
+  showApproveModal.value = true
+  isPreapproving.value = true
+}
+
+// Confirmar preaprobación
+const confirmPreapprove = async () => {
+  if (!selectedRequestId.value) return
+
+  await updateRequestStatus(
+    selectedRequestId.value,
+    'PREAPROBADO',
+    approveComment.value.trim() || 'Solicitud revisada y preaprobada por el jefe'
+  )
+
+  // Cerrar modal
+  showApproveModal.value = false
+  selectedRequestId.value = null
+  selectedRequest.value = null
+  approveComment.value = ''
+  isPreapproving.value = false
+}
 
 // Función para aprobar solicitud (abre modal)
 const handleApprove = (requestId: string) => {
@@ -736,6 +872,12 @@ const confirmApproveWithReplacements = async () => {
 const confirmApprove = async () => {
   if (!selectedRequestId.value) return
 
+  // Si estamos en modo preaprobación, usar confirmPreapprove
+  if (isPreapproving.value) {
+    await confirmPreapprove()
+    return
+  }
+
   await updateRequestStatus(
     selectedRequestId.value,
     'APROBADO',
@@ -747,6 +889,7 @@ const confirmApprove = async () => {
   selectedRequestId.value = null
   selectedRequest.value = null
   approveComment.value = ''
+  isPreapproving.value = false
 }
 
 // Cancelar aprobación
@@ -755,6 +898,7 @@ const cancelApprove = () => {
   selectedRequestId.value = null
   selectedRequest.value = null
   approveComment.value = ''
+  isPreapproving.value = false
 }
 
 // Función para rechazar solicitud (abre modal)
@@ -795,7 +939,7 @@ const cancelReject = () => {
 }
 
 // Función principal para actualizar el estado en el backend
-const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECHAZADO', comentario: string, reemplazantes?: string[]) => {
+const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECHAZADO' | 'PREAPROBADO', comentario: string, reemplazantes?: string[]) => {
   if (isProcessing.value) {
     showNotification('info', 'Operación en proceso', 'Ya hay una operación en proceso. Por favor espera.')
     return
@@ -807,9 +951,12 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
     console.log(`📤 Actualizando solicitud ${requestId} a ${estado}`)
     console.log(`📍 Reemplazantes:`, reemplazantes)
 
+    // El backend espera 'PRE-APROBADO' (con guión) en lugar de 'PREAPROBADO'
+    const estadoBackend = estado === 'PREAPROBADO' ? 'PRE-APROBADO' : estado
+    
     const payload: any = {
       id_solicitud: parseInt(requestId),
-      estado: estado,
+      estado: estadoBackend,
       comentario: comentario || (estado === 'APROBADO' ? 'Aprobado por el jefe' : '')
     }
     
@@ -987,6 +1134,12 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
           'success',
           'Solicitud Aprobada',
           'La solicitud ha sido aprobada exitosamente y se enviaron las notificaciones'
+        )
+      } else if (estado === 'PREAPROBADO') {
+        showNotification(
+          'success',
+          'Solicitud Preaprobada',
+          'La solicitud ha sido marcada como revisada y se envió notificación al empleado'
         )
       } else {
         showNotification(

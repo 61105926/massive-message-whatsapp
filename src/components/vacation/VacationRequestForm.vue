@@ -24,7 +24,7 @@
 
       <form @submit.prevent="handleSubmit" class="space-y-4">
         <!-- Ocultar TODO el formulario de tipo y reemplazantes si es modo programadas -->
-        <div v-if="formData.type !== 'programmed' && !defaultType" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div v-if="formData.type !== 'programmed'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="space-y-2">
             <label for="type" class="text-sm font-medium">
               Tipo de Vacación *

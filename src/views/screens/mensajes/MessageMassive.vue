@@ -31,7 +31,10 @@
         Users,
         Pause,
         Play,
-        X
+        X,
+        CheckCircle,
+        AlertCircle,
+        Info
     } from 'lucide-vue-next'
     import { buildApiUrl, API_CONFIG } from '@/config/api'
 
@@ -55,6 +58,21 @@
         isCancelled: false
     })
     let progressInterval: number | null = null
+    
+    // Sistema de notificaciones
+    const notification = ref({
+        show: false,
+        type: 'success' as 'success' | 'error' | 'info',
+        title: '',
+        message: ''
+    })
+    
+    function showNotification(type: 'success' | 'error' | 'info', title: string, message: string, duration = 5000) {
+        notification.value = { show: true, type, title, message }
+        setTimeout(() => {
+            notification.value.show = false
+        }, duration)
+    }
 
     function toggleRegion(region: string) {
         if (seleccionados.value.includes(region)) {
@@ -136,8 +154,13 @@
                     }, 3000) // Limpiar después de 3 segundos para que el usuario vea el mensaje de cancelado
                 } else if (data.total > 0) {
                     // Mostrar resultado final solo si se completó normalmente
-                    alert(`✅ Envío completado!\n📊 Total: ${data.total}\n✅ Exitosos: ${data.completed}\n❌ Fallidos: ${data.failed}`)
-                    // Limpiar estado después del alert
+                    showNotification(
+                        'success',
+                        '¡Envío completado!',
+                        `Total: ${data.total} | Exitosos: ${data.completed} | Fallidos: ${data.failed}`,
+                        6000
+                    )
+                    // Limpiar estado después de la notificación
                     setTimeout(() => {
                         progreso.value = {
                             batchId: null,
@@ -150,7 +173,7 @@
                             isPaused: false,
                             isCancelled: false
                         }
-                    }, 1000)
+                    }, 2000)
                 }
             }
         } catch (error) {
@@ -165,7 +188,12 @@
                 detenerMonitoreoProgreso()
                 // Mostrar mensaje al usuario sobre el problema de conectividad
                 if (progreso.value.isActive) {
-                    alert('⚠️ Problemas de conectividad detectados.\nEl monitoreo se ha pausado. Verifique el estado manualmente.')
+                    showNotification(
+                        'error',
+                        'Problemas de conectividad',
+                        'El monitoreo se ha pausado. Verifique el estado manualmente.',
+                        8000
+                    )
                 }
             }
         }
@@ -219,7 +247,7 @@
             console.log('✅ Envío pausado:', result.message)
         } catch (error) {
             console.error('❌ Error pausando envío:', error)
-            alert('Error pausando el envío')
+            showNotification('error', 'Error', 'No se pudo pausar el envío. Intenta nuevamente.', 5000)
         }
     }
 
@@ -232,7 +260,7 @@
             console.log('✅ Envío reanudado:', result.message)
         } catch (error) {
             console.error('❌ Error reanudando envío:', error)
-            alert('Error reanudando el envío')
+            showNotification('error', 'Error', 'No se pudo reanudar el envío. Intenta nuevamente.', 5000)
         }
     }
 
@@ -249,7 +277,7 @@
             detenerMonitoreoProgreso()
         } catch (error) {
             console.error('❌ Error cancelando envío:', error)
-            alert('Error cancelando el envío')
+            showNotification('error', 'Error', 'No se pudo cancelar el envío. Intenta nuevamente.', 5000)
         }
     }
 
@@ -302,9 +330,17 @@
 
     async function enviar() {
         if (seleccionados.value.length === 0 || !mensaje.value.trim()) {
-            alert('Debe seleccionar al menos una región y escribir un mensaje')
+            showNotification('error', 'Formulario incompleto', 'Debe seleccionar al menos una región y escribir un mensaje', 5000)
             return
         }
+
+        // Mostrar notificación de confirmación ANTES de enviar
+        showNotification(
+            'info',
+            'Iniciando campaña...',
+            `Preparando envío a ${seleccionados.value.length} regional(es). Por favor espera.`,
+            3000
+        )
 
         try {
             // Iniciar monitoreo de progreso
@@ -336,13 +372,20 @@
 
             if (response.ok) {
                 console.log('✅ Campaña iniciada exitosamente')
+                showNotification(
+                    'success',
+                    '¡Campaña iniciada!',
+                    `Campaña de mensajería iniciada para ${seleccionados.value.length} regional(es). El envío está en progreso.`,
+                    5000
+                )
                 // NO limpiar el formulario hasta que termine el envío
             } else {
                 throw new Error(result)
             }
         } catch (error) {
             console.error('❌ Error enviando campaña:', error)
-            alert('Error enviando la campaña: ' + (error instanceof Error ? error.message : 'Error desconocido'))
+            const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
+            showNotification('error', 'Error al enviar campaña', errorMessage, 6000)
             detenerMonitoreoProgreso()
         }
     }
@@ -385,6 +428,60 @@
 
 <template>
     <div class="min-h-screen">
+        <!-- Toast Notification -->
+        <transition
+            enter-active-class="transition ease-out duration-300"
+            enter-from-class="opacity-0 translate-y-2"
+            enter-to-class="opacity-100 translate-y-0"
+            leave-active-class="transition ease-in duration-200"
+            leave-from-class="opacity-100 translate-y-0"
+            leave-to-class="opacity-0 translate-y-2"
+        >
+            <div
+                v-if="notification.show"
+                :class="[
+                    'fixed top-4 left-4 right-4 md:left-auto md:right-4 md:max-w-md z-[9999] rounded-lg shadow-xl p-4 flex items-start gap-3 animate-in slide-in-from-top-5',
+                    notification.type === 'success' ? 'bg-green-50 border-2 border-green-500' : '',
+                    notification.type === 'error' ? 'bg-red-50 border-2 border-red-500' : '',
+                    notification.type === 'info' ? 'bg-blue-50 border-2 border-blue-500' : ''
+                ]"
+            >
+                <div class="flex-shrink-0">
+                    <CheckCircle v-if="notification.type === 'success'" class="h-6 w-6 text-green-600" />
+                    <AlertCircle v-else-if="notification.type === 'error'" class="h-6 w-6 text-red-600" />
+                    <Info v-else class="h-6 w-6 text-blue-600" />
+                </div>
+                <div class="flex-1">
+                    <h4
+                        :class="[
+                            'font-semibold text-sm mb-1',
+                            notification.type === 'success' ? 'text-green-900' : '',
+                            notification.type === 'error' ? 'text-red-900' : '',
+                            notification.type === 'info' ? 'text-blue-900' : ''
+                        ]"
+                    >
+                        {{ notification.title }}
+                    </h4>
+                    <p
+                        :class="[
+                            'text-sm',
+                            notification.type === 'success' ? 'text-green-700' : '',
+                            notification.type === 'error' ? 'text-red-700' : '',
+                            notification.type === 'info' ? 'text-blue-700' : ''
+                        ]"
+                    >
+                        {{ notification.message }}
+                    </p>
+                </div>
+                <button
+                    @click="notification.show = false"
+                    class="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                    <X class="h-5 w-5" />
+                </button>
+            </div>
+        </transition>
+
         <!-- Corporate Header -->
         <div class="bg-white border-b-4 border-yellow-400 shadow-sm">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

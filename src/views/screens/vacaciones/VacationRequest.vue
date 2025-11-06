@@ -32,12 +32,24 @@
           </svg>
         </div>
         <div class="flex-1">
-          <p :class="[
-            'text-sm font-medium',
-            notification.type === 'success' ? 'text-green-900' : '',
-            notification.type === 'error' ? 'text-red-900' : '',
-            notification.type === 'info' ? 'text-blue-900' : ''
-          ]">
+          <h4
+            :class="[
+              'font-semibold text-sm mb-1',
+              notification.type === 'success' ? 'text-green-900' : '',
+              notification.type === 'error' ? 'text-red-900' : '',
+              notification.type === 'info' ? 'text-blue-900' : ''
+            ]"
+          >
+            {{ notification.title }}
+          </h4>
+          <p
+            :class="[
+              'text-sm',
+              notification.type === 'success' ? 'text-green-700' : '',
+              notification.type === 'error' ? 'text-red-700' : '',
+              notification.type === 'info' ? 'text-blue-700' : ''
+            ]"
+          >
             {{ notification.message }}
           </p>
         </div>
@@ -49,6 +61,87 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
+      </div>
+    </transition>
+
+    <!-- Modal de Confirmación -->
+    <transition
+      enter-active-class="transition ease-out duration-200"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition ease-in duration-150"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="showConfirmModal"
+        class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+        @click.self="showConfirmModal = false"
+      >
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all">
+          <!-- Header -->
+          <div class="bg-green-600 p-6 text-white">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-xl font-bold">Confirmar Envío</h3>
+                <p class="text-green-100 text-sm mt-1">¿Estás seguro de enviar tu solicitud?</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Content -->
+          <div class="p-6">
+            <div class="space-y-4">
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div class="flex items-start gap-3">
+                  <svg class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <div class="flex-1">
+                    <p class="text-sm font-medium text-gray-900 mb-2">Resumen de tu solicitud:</p>
+                    <div class="space-y-1 text-sm text-gray-600">
+                      <div class="flex justify-between">
+                        <span>Días seleccionados:</span>
+                        <span class="font-semibold text-gray-900">{{ selectedDates.length }} / {{ currentUser.vacationBalance }}</span>
+                      </div>
+                      <div class="flex justify-between">
+                        <span>Tipo:</span>
+                        <span class="font-semibold text-gray-900">Vacaciones Programadas</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p class="text-sm text-amber-800">
+                  <strong>⚠️ Importante:</strong> Una vez enviada, tu solicitud será revisada por tu jefe directo.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="bg-gray-50 px-6 py-4 flex gap-3 justify-end border-t">
+            <button
+              @click="showConfirmModal = false"
+              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              @click="confirmSubmitProgrammed"
+              class="px-6 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-all shadow-md hover:shadow-lg"
+            >
+              Sí, Enviar Solicitud
+            </button>
+          </div>
+        </div>
       </div>
     </transition>
 
@@ -261,7 +354,7 @@
                     </p>
                   </div>
                   <button
-                    @click="handleRequestSubmit({ type: 'programmed' })"
+                    @click="showConfirmModal = true"
                     :disabled="selectedDates.length !== currentUser.vacationBalance || isSubmittingRequest"
                     class="px-6 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -516,11 +609,15 @@ const employeeData = ref<any>(null)
 const programmedVacationsEnabled = ref(true)
 const isLoadingData = ref(false)
 const isSubmittingRequest = ref(false)
-const notification = ref<{ show: boolean; type: 'success' | 'error' | 'info'; message: string }>({
+const notification = ref<{ show: boolean; type: 'success' | 'error' | 'info'; title: string; message: string }>({
   show: false,
   type: 'info',
+  title: '',
   message: ''
 })
+
+// Modal de confirmación
+const showConfirmModal = ref(false)
 
 const currentUser = ref({
   id: 'user-1',
@@ -639,7 +736,7 @@ const fetchEmployeeData = async (base64Data: string) => {
     }
 
     console.log('✅ Datos de empleado cargados correctamente')
-    showNotification('success', `Bienvenido ${currentUser.value.name}! Tus datos se cargaron correctamente.`, 4000)
+    showNotification('success', 'Bienvenido', `${currentUser.value.name}! Tus datos se cargaron correctamente.`, 4000)
   } catch (error: any) {
     console.error('❌ Error al cargar datos de empleado:', error)
 
@@ -654,7 +751,7 @@ const fetchEmployeeData = async (base64Data: string) => {
       errorMessage += error.message || 'Por favor intenta nuevamente o contacta a soporte.'
     }
 
-    showNotification('error', errorMessage, 8000)
+    showNotification('error', 'Error al cargar datos', errorMessage, 8000)
 
     // Si es un error crítico, prevenir que el usuario continúe
     if (!employeeData.value) {
@@ -667,8 +764,8 @@ const fetchEmployeeData = async (base64Data: string) => {
 }
 
 // Notification helper
-const showNotification = (type: 'success' | 'error' | 'info', message: string, duration = 5000) => {
-  notification.value = { show: true, type, message }
+const showNotification = (type: 'success' | 'error' | 'info', title: string, message: string, duration = 5000) => {
+  notification.value = { show: true, type, title, message }
   setTimeout(() => {
     notification.value.show = false
   }, duration)
@@ -676,7 +773,13 @@ const showNotification = (type: 'success' | 'error' | 'info', message: string, d
 
 // Handle validation errors from VacationRequestForm
 const handleValidationError = (message: string) => {
-  showNotification('error', message, 5000)
+  showNotification('error', 'Error de validación', message, 5000)
+}
+
+// Función para confirmar y enviar programación
+const confirmSubmitProgrammed = () => {
+  showConfirmModal.value = false
+  handleRequestSubmit({ type: 'programmed' })
 }
 
 // Methods
@@ -693,45 +796,58 @@ const handleDateSelect = (dates: Date[], selections: any[]) => {
 const handleRequestSubmit = async (request: any) => {
   // Validaciones previas
   if (isSubmittingRequest.value) {
-    showNotification('info', 'Ya hay una solicitud en proceso. Por favor espera.', 3000)
+    showNotification('info', 'Solicitud en proceso', 'Ya hay una solicitud en proceso. Por favor espera.', 3000)
     return
   }
 
   // Validar datos del empleado
   if (!employeeData.value) {
-    showNotification('error', 'No se han cargado tus datos de empleado. Por favor recarga la página.', 5000)
+    showNotification('error', 'Datos no disponibles', 'No se han cargado tus datos de empleado. Por favor recarga la página.', 5000)
     return
   }
 
   // Validar manager
   if (!employeeData.value?.manager?.id_manager) {
-    showNotification('error', 'No se encontró tu jefe directo. Contacta a RRHH.', 5000)
+    showNotification('error', 'Jefe no encontrado', 'No se encontró tu jefe directo. Contacta a RRHH.', 5000)
     return
   }
 
   // Validar fechas seleccionadas
   if (!selectedDates.value || selectedDates.value.length === 0) {
-    showNotification('error', 'Debes seleccionar al menos una fecha.', 3000)
+    showNotification('error', 'Fechas requeridas', 'Debes seleccionar al menos una fecha.', 3000)
     return
   }
 
   // Validar que haya selecciones de días con turnos
   if (!daySelections.value || daySelections.value.length === 0) {
-    showNotification('error', 'No se detectaron selecciones de días válidas.', 3000)
+    showNotification('error', 'Selecciones inválidas', 'No se detectaron selecciones de días válidas.', 3000)
     return
   }
 
   // Validar tipo de vacación (solo si no es programadas)
   if (request.type !== 'programmed' && !request.type) {
-    showNotification('error', 'Debes seleccionar el tipo de vacación.', 3000)
+    showNotification('error', 'Tipo requerido', 'Debes seleccionar el tipo de vacación.', 3000)
     return
   }
 
   // Validar reemplazantes SOLO si NO es programadas
   if (request.type !== 'programmed' && (!request.replacements || request.replacements.length === 0)) {
-    showNotification('error', 'Debes seleccionar al menos un reemplazante.', 3000)
+    showNotification('error', 'Reemplazante requerido', 'Debes seleccionar al menos un reemplazante.', 3000)
     return
   }
+
+  // Mostrar notificación de confirmación ANTES de enviar
+  const totalDays = daySelections.value.length
+  const vacationType = request.type === 'programmed' ? 'programadas' : 'a cuenta'
+  showNotification(
+    'info',
+    'Enviando solicitud...',
+    `Procesando solicitud de ${totalDays} día(s) de vacaciones ${vacationType}. Por favor espera.`,
+    4000
+  )
+  
+  // Cerrar modal de confirmación antes de enviar
+  showConfirmModal.value = false
 
   isSubmittingRequest.value = true
 
@@ -803,7 +919,12 @@ const handleRequestSubmit = async (request: any) => {
       }
 
       // Todas las solicitudes fueron enviadas, mostrar notificación de éxito
-      showNotification('success', `${daySelections.value.length} solicitudes de vacaciones programadas enviadas exitosamente`, 5000)
+      showNotification(
+        'success', 
+        '¡Solicitudes enviadas exitosamente!', 
+        `${daySelections.value.length} solicitud(es) de vacaciones programadas enviada(s). Tu jefe recibirá la notificación para revisarlas.`, 
+        8000
+      )
       
       // Resetear formulario
       showForm.value = false
@@ -811,6 +932,10 @@ const handleRequestSubmit = async (request: any) => {
       daySelections.value = []
       
       isSubmittingRequest.value = false
+      
+      // Cerrar modal si está abierto
+      showConfirmModal.value = false
+      
       return
     }
 
@@ -927,9 +1052,13 @@ const handleRequestSubmit = async (request: any) => {
       // 5. Mostrar mensaje de éxito con detalles
       showNotification(
         'success',
-        `¡Solicitud enviada exitosamente! ID: ${result.solicitud_id}. Tu jefe recibirá la notificación para aprobarla.`,
-        7000
+        '¡Solicitud enviada exitosamente!',
+        `ID: ${result.solicitud_id}. Tu jefe recibirá la notificación por WhatsApp para revisarla.`,
+        8000
       )
+
+      // Cerrar modal si está abierto
+      showConfirmModal.value = false
 
       // Cambiar a la vista de solicitudes después de 2 segundos
       setTimeout(() => {
@@ -958,7 +1087,7 @@ const handleRequestSubmit = async (request: any) => {
       userMessage += error.message || 'Por favor intenta nuevamente o contacta a soporte.'
     }
 
-    showNotification('error', userMessage, 8000)
+    showNotification('error', 'Error al enviar solicitud', userMessage, 8000)
   } finally {
     isSubmittingRequest.value = false
   }
@@ -975,7 +1104,7 @@ const handleTakeVacation = async (data: string | { requestId: string, replacemen
     
     // Aquí deberías llamar a la API para activar la solicitud de vacaciones programadas
     // Por ahora, solo mostramos una notificación
-    showNotification('success', `Vacaciones activadas con ${replacements.length} reemplazante(s) seleccionado(s)`, 5000)
+    showNotification('success', 'Vacaciones activadas', `Con ${replacements.length} reemplazante(s) seleccionado(s)`, 5000)
     
     // TODO: Llamar a la API real aquí
     // const response = await fetch(`http://localhost:3005/api/take-vacation`, {
@@ -989,7 +1118,7 @@ const handleTakeVacation = async (data: string | { requestId: string, replacemen
     // })
   } catch (error) {
     console.error('Error taking vacation:', error)
-    showNotification('error', 'Error al activar las vacaciones. Intenta nuevamente.', 5000)
+    showNotification('error', 'Error al activar', 'Error al activar las vacaciones. Intenta nuevamente.', 5000)
   }
 }
 

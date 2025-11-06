@@ -39,26 +39,55 @@
         </div>
       </div>
       
-      <!-- Fila 2: Filtro por Área -->
-      <div class="flex items-center gap-2">
-        <label class="text-sm font-medium text-gray-700">Filtrar por Área:</label>
-        <select
-          v-model="selectedDepartment"
-          @change="filterEmployees"
-          class="px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-        >
-          <option value="">Todas las Áreas</option>
-          <option
-            v-for="dept in departments"
-            :key="dept"
-            :value="dept"
+      <!-- Fila 2: Filtro por Área y Leyenda -->
+      <div class="flex items-center justify-between gap-4 flex-wrap">
+        <div class="flex items-center gap-2">
+          <label class="text-sm font-medium text-gray-700">Filtrar por Área:</label>
+          <select
+            v-model="selectedDepartment"
+            @change="filterEmployees"
+            class="px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-primary focus:border-primary"
           >
-            {{ dept }}
-          </option>
-        </select>
-        <span class="text-sm text-gray-600">
-          {{ filteredEmployees.length }} empleado{{ filteredEmployees.length !== 1 ? 's' : '' }}
-        </span>
+            <option value="">Todas las Áreas</option>
+            <option
+              v-for="dept in departments"
+              :key="dept"
+              :value="dept"
+            >
+              {{ dept }}
+            </option>
+          </select>
+          <span class="text-sm text-gray-600">
+            {{ filteredEmployees.length }} empleado{{ filteredEmployees.length !== 1 ? 's' : '' }}
+          </span>
+        </div>
+        
+        <!-- Leyenda de estados mejorada -->
+        <div class="flex items-center gap-3 text-xs flex-wrap">
+          <span class="text-gray-600 font-medium">Estados:</span>
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="flex items-center gap-1">
+              <div class="w-4 h-4 rounded bg-gradient-to-br from-blue-400 to-indigo-500 border border-blue-300"></div>
+              <span class="text-gray-700">Pendiente</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <div class="w-4 h-4 rounded bg-gradient-to-br from-yellow-400 to-amber-500 border-2 border-yellow-400/60"></div>
+              <span class="text-gray-700">Revisado</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <div class="w-4 h-4 rounded bg-gradient-to-br from-green-500 to-emerald-600 ring-2 ring-green-300/50"></div>
+              <span class="text-gray-700">Aprobado</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <div class="w-4 h-4 rounded bg-gradient-to-br from-red-500 to-rose-600 ring-2 ring-red-300/50"></div>
+              <span class="text-gray-700">Rechazado</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-1 ml-2">
+            <div class="w-4 h-4 rounded bg-purple-500/40 border border-purple-400"></div>
+            <span class="text-gray-700">Feriado</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -92,13 +121,15 @@
               class="border-r border-gray-600 text-center flex items-center justify-center bg-gradient-to-b from-gray-900 to-gray-800 text-white"
               :class="{
                 'bg-red-900/20': day && isWeekend(day),
-                'bg-gray-800': day && !isWeekend(day)
+                'bg-purple-900/40': day && isHoliday(day),
+                'bg-gray-800': day && !isWeekend(day) && !isHoliday(day)
               }"
               style="height: 70px;"
             >
               <div class="w-full">
                 <div class="font-bold text-white text-base mb-0.5">{{ day ? day.getDate() : '' }}</div>
                 <div class="text-[10px] text-gray-300 font-medium">{{ day ? dayNames[day.getDay()] : '' }}</div>
+                <div v-if="day && isHoliday(day)" class="text-[8px] text-purple-200 font-semibold mt-0.5">FERIADO</div>
                 <div v-if="day && isToday(day)" class="w-4 h-1 bg-blue-500 rounded-full mx-auto mt-1"></div>
               </div>
             </div>
@@ -146,7 +177,8 @@
               class="border-r relative transition-colors cursor-pointer hover:bg-blue-50/40"
               :class="{
                 'bg-red-50/30': day && isWeekend(day),
-                'bg-white': day && !isWeekend(day)
+                'bg-purple-50/40': day && isHoliday(day),
+                'bg-white': day && !isWeekend(day) && !isHoliday(day)
               }"
               @click="openVacationModal(employee.emp_id, day)"
             >
@@ -159,58 +191,92 @@
                 class="absolute inset-0 flex items-center justify-center p-1.5"
               >
                 <div
-                  class="w-full rounded-md transition-all duration-200 shadow-md hover:shadow-lg border-2 border-white/50 hover:border-white/80 hover:scale-[1.02] transform cursor-pointer relative group"
+                  class="w-full rounded-md transition-all duration-200 shadow-md hover:shadow-xl border-2 border-white/50 hover:border-white/90 hover:scale-[1.03] transform cursor-pointer relative group"
                   :class="getVacationBlockClasses(employee.emp_id, day)"
                   :title="getVacationTooltip(employee.emp_id, day)"
                   @click.stop="showVacationContextMenu(employee.emp_id, day)"
                 >
-                  <div class="px-2 py-1.5 text-white text-[8px] font-bold text-center leading-tight">
-                    <div class="truncate font-bold drop-shadow">{{ employee.name.split(' ')[0] }}</div>
-                    <div class="text-[7px] font-semibold opacity-100 mt-0.5">{{ getVacationStatusShort(employee.emp_id, day) }}</div>
+                  <!-- Indicador de acción rápida en hover -->
+                  <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div class="w-5 h-5 rounded-full bg-white/90 flex items-center justify-center shadow-md">
+                      <svg class="w-3 h-3 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                      </svg>
+                    </div>
                   </div>
                   
-                  <!-- Menú contextual -->
+                  <div class="px-2 py-1.5 text-white text-[8px] font-bold text-center leading-tight">
+                    <div class="truncate font-bold drop-shadow">{{ employee.name.split(' ')[0] }}</div>
+                    <div class="text-[7px] font-semibold opacity-100 mt-0.5 flex items-center justify-center gap-1">
+                      <span>{{ getVacationStatusShort(employee.emp_id, day) }}</span>
+                      <span v-if="getVacationStatus(employee.emp_id, day) === 'preapproved'" class="text-[6px] opacity-90">✓</span>
+                    </div>
+                  </div>
+                  
+                  <!-- Menú contextual mejorado con preaprobación -->
                   <div
                     v-if="contextMenu.show && contextMenu.emp_id === employee.emp_id && contextMenu.date?.toDateString() === day.toDateString()"
-                    class="absolute z-50 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1"
+                    class="absolute z-50 mt-1 w-56 bg-white rounded-lg shadow-xl border-2 border-gray-200 py-2 overflow-hidden"
                     @click.stop
                   >
-                    <button
-                      @click="approveVacationDay(employee.emp_id, day)"
-                      class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 flex items-center gap-2"
-                    >
-                      <span class="text-green-600">✓</span>
-                      Aprobar fecha
-                    </button>
-                    <button
-                      @click="rejectVacationDay(employee.emp_id, day)"
-                      class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 flex items-center gap-2"
-                    >
-                      <span class="text-red-600">✗</span>
-                      Rechazar fecha
-                    </button>
+                    <!-- Header del menú -->
+                    <div class="px-4 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+                      <div class="text-xs font-semibold text-gray-700">Acciones Rápidas</div>
+                      <div class="text-[10px] text-gray-500 mt-0.5">{{ formatDate(day) }}</div>
+                    </div>
+                    
+                    <!-- Acciones principales -->
+                    <div class="py-1">
+                      <button
+                        v-if="getVacationStatus(employee.emp_id, day) === 'pending'"
+                        @click="preapproveVacationDay(employee.emp_id, day)"
+                        class="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-yellow-50 hover:text-yellow-700 flex items-center gap-2 transition-colors group"
+                      >
+                        <div class="w-8 h-8 rounded-full bg-yellow-100 group-hover:bg-yellow-200 flex items-center justify-center flex-shrink-0">
+                          <span class="text-yellow-600 font-bold">✓</span>
+                        </div>
+                        <div class="flex-1">
+                          <div class="font-semibold">Preaprobar</div>
+                          <div class="text-xs text-gray-500">Marcar como revisado</div>
+                        </div>
+                      </button>
+                      
+                      <button
+                        v-if="getVacationStatus(employee.emp_id, day) !== 'rejected'"
+                        @click="rejectVacationDay(employee.emp_id, day)"
+                        class="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-red-50 hover:text-red-700 flex items-center gap-2 transition-colors group"
+                      >
+                        <div class="w-8 h-8 rounded-full bg-red-100 group-hover:bg-red-200 flex items-center justify-center flex-shrink-0">
+                          <span class="text-red-600 font-bold">✗</span>
+                        </div>
+                        <div class="flex-1">
+                          <div class="font-semibold">Rechazar</div>
+                          <div class="text-xs text-gray-500">Rechazar solicitud</div>
+                        </div>
+                      </button>
+                    </div>
+                    
                     <div class="border-t my-1"></div>
-                    <button
-                      @click="approveVacationMonth(employee.emp_id, day)"
-                      class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2"
-                    >
-                      <span class="text-blue-600">📅</span>
-                      Aprobar todo el mes
-                    </button>
-                    <button
-                      @click="suggestVacationMonth(employee.emp_id, day)"
-                      class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 flex items-center gap-2"
-                    >
-                      <span class="text-purple-600">💡</span>
-                      Sugerir alternativas
-                    </button>
+                    
+                    <!-- Acciones adicionales -->
+                    <div class="py-1">
+                      <button
+                        @click="preapproveVacationYear(employee.emp_id)"
+                        class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-yellow-50 hover:text-yellow-700 flex items-center gap-2 transition-colors"
+                      >
+                        <span class="text-yellow-600">📅</span>
+                        <span>Preaprobar todo el año</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
               
               <!-- Indicador de celda vacía (para programar vacaciones) -->
-              <div v-else-if="day" class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-20">
-                <div class="text-2xl text-blue-400">+</div>
+              <div v-else-if="day" class="absolute inset-0 flex flex-col items-center justify-center">
+                <!-- Indicador de feriado -->
+                <div v-if="isHoliday(day)" class="text-[8px] font-bold text-purple-600 mb-1">FERIADO</div>
+                <div class="opacity-0 group-hover:opacity-20 text-2xl text-blue-400">+</div>
               </div>
             </div>
           </div>
@@ -306,36 +372,87 @@
             <div>
               <div class="text-xs text-gray-600 mb-1">Estado</div>
               <div class="font-semibold" :class="{
-                'text-yellow-600': currentVacation.status === 'pending',
+                'text-blue-600': currentVacation.status === 'pending',
+                'text-yellow-600': currentVacation.status === 'preapproved',
                 'text-green-600': currentVacation.status === 'approved',
                 'text-red-600': currentVacation.status === 'rejected'
               }">
-                {{ currentVacation.status === 'pending' ? '⏳ Pendiente' : currentVacation.status === 'approved' ? '✓ Aprobado' : '✗ Rechazado' }}
+                {{ currentVacation.status === 'pending' ? '⏳ Pendiente' : 
+                   currentVacation.status === 'preapproved' ? '✓ Revisado' : 
+                   currentVacation.status === 'approved' ? '✓ Aprobado' : 
+                   '✗ Rechazado' }}
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Acciones rápidas -->
-        <div class="grid grid-cols-3 gap-3 mb-4">
-          <button
-            @click="approveVacation(currentVacation.id)"
-            class="px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold"
-          >
-            ✓ Aprobar
-          </button>
-          <button
-            @click="rejectVacation(currentVacation.id)"
-            class="px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-semibold"
-          >
-            ✗ Rechazar
-          </button>
-          <button
-            @click="showSuggestModal = false"
-            class="px-4 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-semibold"
-          >
-            Cerrar
-          </button>
+        <!-- Acciones rápidas mejoradas -->
+        <div class="space-y-2 mb-4">
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              v-if="currentVacation.status === 'pending'"
+              @click="preapproveVacationFromModal(currentVacation)"
+              class="px-4 py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-semibold flex items-center justify-center gap-2"
+            >
+              <span>✓</span>
+              <span>Preaprobar</span>
+            </button>
+            <button
+              v-if="currentVacation.status !== 'rejected'"
+              @click="rejectVacation(currentVacation.id)"
+              class="px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-semibold flex items-center justify-center gap-2"
+            >
+              <span>✗</span>
+              <span>Rechazar</span>
+            </button>
+            <button
+              @click="showSuggestModal = false"
+              class="px-4 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-semibold"
+            >
+              Cerrar
+            </button>
+          </div>
+          
+          <!-- Timeline visual en el modal -->
+          <div class="flex items-center gap-2 pt-2 border-t">
+            <div class="flex items-center gap-1 text-xs">
+              <div :class="[
+                'w-4 h-4 rounded-full flex items-center justify-center text-[8px]',
+                currentVacation.status !== 'pending' ? 'bg-blue-500 text-white' : 'bg-gray-300 text-gray-600'
+              ]">
+                <span v-if="currentVacation.status !== 'pending'">✓</span>
+                <span v-else>1</span>
+              </div>
+              <span class="text-gray-600">Pendiente</span>
+            </div>
+            <div class="flex-1 h-0.5" :class="currentVacation.status === 'preapproved' || currentVacation.status === 'approved' || currentVacation.status === 'rejected' ? 'bg-blue-500' : 'bg-gray-300'"></div>
+            <div class="flex items-center gap-1 text-xs">
+              <div :class="[
+                'w-4 h-4 rounded-full flex items-center justify-center text-[8px]',
+                currentVacation.status === 'preapproved' || currentVacation.status === 'approved' || currentVacation.status === 'rejected' ? 'bg-yellow-500 text-white' : 'bg-gray-300 text-gray-600'
+              ]">
+                <span v-if="currentVacation.status === 'approved' || currentVacation.status === 'rejected'">✓</span>
+                <span v-else-if="currentVacation.status === 'preapproved'">2</span>
+                <span v-else>2</span>
+              </div>
+              <span class="text-gray-600">Revisado</span>
+            </div>
+            <div class="flex-1 h-0.5" :class="currentVacation.status === 'approved' || currentVacation.status === 'rejected' ? 'bg-yellow-500' : 'bg-gray-300'"></div>
+            <div class="flex items-center gap-1 text-xs">
+              <div :class="[
+                'w-4 h-4 rounded-full flex items-center justify-center text-[8px]',
+                currentVacation.status === 'approved' ? 'bg-green-500 text-white' : 
+                currentVacation.status === 'rejected' ? 'bg-red-500 text-white' : 
+                'bg-gray-300 text-gray-600'
+              ]">
+                <span v-if="currentVacation.status === 'approved' || currentVacation.status === 'rejected'">✓</span>
+                <span v-else>3</span>
+              </div>
+              <span class="text-gray-600">
+                {{ currentVacation.status === 'approved' ? 'Aprobado' : currentVacation.status === 'rejected' ? 'Rechazado' : 'Final' }}
+              </span>
+            </div>
+          </div>
         </div>
 
         <!-- Sugerencia de fecha alternativa -->
@@ -444,8 +561,9 @@
                 v-for="(alternateDate, idx) in suggestionData.alternateDates"
                 :key="idx"
                 @click="toggleAlternateDate(alternateDate)"
-                class="aspect-square flex items-center justify-center text-xs rounded hover:bg-blue-100 transition-colors"
-                :class="isAlternateDateSelected(alternateDate) ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-700'"
+                :disabled="isHoliday(alternateDate) || alternateDate.getDay() === 0"
+                class="aspect-square flex items-center justify-center text-xs rounded hover:bg-blue-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                :class="isAlternateDateSelected(alternateDate) ? 'bg-blue-600 text-white' : isHoliday(alternateDate) ? 'bg-purple-100 border border-purple-300 text-purple-700' : 'bg-white border border-gray-200 text-gray-700'"
               >
                 {{ alternateDate.getDate() }}
               </button>
@@ -496,7 +614,7 @@ interface Vacation {
   department: string
   start_date: string
   end_date: string
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'preapproved' | 'approved' | 'rejected'
 }
 
 const props = defineProps<{
@@ -548,6 +666,7 @@ const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Juli
 
 const teamEmployees = ref<Employee[]>([])
 const vacations = ref<Vacation[]>([])
+const publicHolidays = ref<{ date: string; name: string }[]>([])
 
 const days = computed(() => {
   const year = currentDate.value.getFullYear()
@@ -582,12 +701,19 @@ const navigateMonth = (direction: 'prev' | 'next') => {
   } else {
     currentDate.value = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() + 1, 1)
   }
+  fetchHolidays() // Recargar feriados al cambiar de mes
   loadData()
 }
 
 const isWeekend = (date: Date): boolean => {
   const day = date.getDay()
   return day === 0 || day === 6
+}
+
+const isHoliday = (date: Date): boolean => {
+  if (!date) return false
+  const dateStr = date.toISOString().split('T')[0]
+  return publicHolidays.value.some(h => h.date === dateStr)
 }
 
 const hasVacation = (empId: string, date: Date): boolean => {
@@ -614,7 +740,15 @@ const getVacationTooltip = (empId: string, date: Date): string => {
     const match = dateStr === v.start_date || dateStr === v.end_date
     return v.emp_id === empId && match
   })
-  return vacation ? `${vacation.employee_name}: ${vacation.start_date}` : ''
+  
+  if (!vacation) return ''
+  
+  const statusText = vacation.status === 'pending' ? 'Pendiente' :
+                     vacation.status === 'preapproved' ? 'Revisado/Preaprobado' :
+                     vacation.status === 'approved' ? 'Aprobado' :
+                     vacation.status === 'rejected' ? 'Rechazado' : 'Desconocido'
+  
+  return `${vacation.employee_name}\n${formatDate(vacation.start_date)}\nEstado: ${statusText}\nClic para acciones`
 }
 
 const isToday = (date: Date): boolean => {
@@ -637,12 +771,20 @@ const getVacationBlockClasses = (empId: string, date: Date): string => {
   if (vacation.status === 'approved') {
     classes.push('bg-gradient-to-br from-green-500 via-green-600 to-emerald-600 hover:from-green-600 hover:via-green-700 hover:to-emerald-700')
     classes.push('min-h-[50px]')
+    classes.push('ring-2 ring-green-300/50')
+  } else if (vacation.status === 'preapproved') {
+    classes.push('bg-gradient-to-br from-yellow-400 via-yellow-500 to-amber-500 hover:from-yellow-500 hover:via-yellow-600 hover:to-amber-600')
+    classes.push('min-h-[48px]')
+    classes.push('ring-2 ring-yellow-300/50')
+    classes.push('border-2 border-yellow-400/60')
   } else if (vacation.status === 'pending') {
-    classes.push('bg-gradient-to-br from-yellow-400 via-amber-500 to-orange-500 hover:from-yellow-500 hover:via-amber-600 hover:to-orange-600')
+    classes.push('bg-gradient-to-br from-blue-400 via-blue-500 to-indigo-500 hover:from-blue-500 hover:via-blue-600 hover:to-indigo-600')
     classes.push('min-h-[45px]')
+    classes.push('ring-2 ring-blue-300/50')
   } else if (vacation.status === 'rejected') {
     classes.push('bg-gradient-to-br from-red-500 via-red-600 to-rose-600 hover:from-red-600 hover:via-red-700 hover:to-rose-700')
     classes.push('min-h-[40px]')
+    classes.push('ring-2 ring-red-300/50')
   } else {
     classes.push('bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 hover:from-blue-600 hover:via-indigo-700 hover:to-purple-700')
     classes.push('min-h-[50px]')
@@ -661,9 +803,20 @@ const getVacationStatusShort = (empId: string, date: Date): string => {
   if (!vacation) return ''
   
   if (vacation.status === 'approved') return '✓ OK'
-  if (vacation.status === 'pending') return '⏳'
-  if (vacation.status === 'rejected') return '✗'
+  if (vacation.status === 'preapproved') return '✓ REV'
+  if (vacation.status === 'pending') return '⏳ PEN'
+  if (vacation.status === 'rejected') return '✗ REC'
   return ''
+}
+
+const getVacationStatus = (empId: string, date: Date): string => {
+  const dateStr = date.toISOString().split('T')[0]
+  const vacation = vacations.value.find(v => {
+    const match = dateStr === v.start_date || dateStr === v.end_date
+    return v.emp_id === empId && match
+  })
+  
+  return vacation?.status || 'pending'
 }
 
 const getDayVacations = (): Vacation[] => {
@@ -674,6 +827,12 @@ const getDayVacations = (): Vacation[] => {
 }
 
 const openVacationModal = (empId: string, date: Date) => {
+  // No permitir sugerir días feriados
+  if (isHoliday(date)) {
+    alert('No se pueden sugerir vacaciones en días feriados.')
+    return
+  }
+  
   const vacation = vacations.value.find(v => 
     v.emp_id === empId && 
     date >= new Date(v.start_date) && 
@@ -747,6 +906,75 @@ const showVacationContextMenu = (empId: string, date: Date) => {
   }
 }
 
+// Función para preaprobar vacación desde el calendario
+const preapproveVacationDay = async (empId: string, date: Date) => {
+  try {
+    const dateStr = date.toISOString().split('T')[0]
+    const vacation = vacations.value.find(v => v.emp_id === empId && v.start_date === dateStr)
+    
+    if (vacation) {
+      console.log('✓ Preaprobando vacación:', vacation)
+      
+      // Extraer el id_solicitud del id de la vacación (formato: id_solicitud_fecha)
+      const id_solicitud = vacation.id.split('_')[0]
+      
+      // Obtener datos completos de la solicitud para la notificación
+      const employee = teamEmployees.value.find(e => e.emp_id === empId)
+      const employeeName = employee?.name || vacation.employee_name
+      
+      // Llamar a la API para actualizar en la base de datos
+      // El backend ahora acepta 'PRE-APROBADO' (con guión)
+      const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id_solicitud: parseInt(id_solicitud),
+          estado: 'PRE-APROBADO', // Estado válido en el backend
+          comentario: `Solicitud revisada y preaprobada: ${dateStr}`
+        })
+      })
+      
+      if (response.ok) {
+        // Cambiar estado a preaprobado en el array local
+        vacation.status = 'preapproved'
+        console.log('✅ Vacación preaprobada en la base de datos')
+        
+        // Enviar notificación al empleado
+        try {
+          const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
+          await fetch(`${BOT_URL}/api/vacation-notification`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              id_solicitud: id_solicitud,
+              emp_id: empId,
+              emp_nombre: employeeName,
+              estado: 'PREAPROBADO',
+              comentario: `Solicitud revisada y preaprobada para ${dateStr}`,
+              tipo: 'PROGRAMADA',
+              dias_solicitados: 1,
+              fechas: [dateStr]
+            })
+          })
+          console.log('✅ Notificación de preaprobación enviada')
+        } catch (notifError) {
+          console.warn('⚠️ Error al enviar notificación:', notifError)
+        }
+      } else {
+        console.error('❌ Error al preaprobar en la API')
+      }
+      
+      contextMenu.value.show = false
+    }
+  } catch (error) {
+    console.error('Error al preaprobar vacación:', error)
+  }
+}
+
 const approveVacationDay = async (empId: string, date: Date) => {
   try {
     const dateStr = date.toISOString().split('T')[0]
@@ -783,6 +1011,59 @@ const approveVacationDay = async (empId: string, date: Date) => {
     }
   } catch (error) {
     console.error('Error al aprobar vacación:', error)
+  }
+}
+
+// Función para preaprobar desde el modal
+const preapproveVacationFromModal = async (vacation: Vacation) => {
+  try {
+    const dateStr = vacation.start_date
+    const id_solicitud = vacation.id.split('_')[0]
+    
+    // El backend ahora acepta 'PRE-APROBADO' (con guión)
+    const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id_solicitud: parseInt(id_solicitud),
+        estado: 'PRE-APROBADO', // Estado válido en el backend
+        comentario: `Solicitud revisada y preaprobada: ${dateStr}`
+      })
+    })
+    
+    if (response.ok) {
+      vacation.status = 'preapproved'
+      console.log('✅ Vacación preaprobada desde modal')
+      
+      // Enviar notificación
+      try {
+        const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
+        await fetch(`${BOT_URL}/api/vacation-notification`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id_solicitud: id_solicitud,
+            emp_id: vacation.emp_id,
+            emp_nombre: vacation.employee_name,
+            estado: 'PREAPROBADO',
+            comentario: `Solicitud revisada y preaprobada para ${dateStr}`,
+            tipo: 'PROGRAMADA',
+            dias_solicitados: 1,
+            fechas: [dateStr]
+          })
+        })
+      } catch (notifError) {
+        console.warn('⚠️ Error al enviar notificación:', notifError)
+      }
+      
+      showSuggestModal.value = false
+    }
+  } catch (error) {
+    console.error('Error al preaprobar desde modal:', error)
   }
 }
 
@@ -825,50 +1106,231 @@ const rejectVacationDay = async (empId: string, date: Date) => {
   }
 }
 
-const approveVacationMonth = async (empId: string, date: Date) => {
+// Función para preaprobar todo el año (excepto rechazadas)
+const preapproveVacationYear = async (empId: string) => {
   try {
-    const year = date.getFullYear()
-    const month = date.getMonth()
+    const year = currentDate.value.getFullYear()
     
-    // Aprobar todas las vacaciones del empleado en ese mes
-    const monthVacations = vacations.value.filter(v => {
+    console.log(`📅 ===== INICIANDO PREAPROBACIÓN =====`)
+    console.log(`📅 Empleado: ${empId}`)
+    console.log(`📅 Año: ${year}`)
+    console.log(`📅 Total de vacaciones cargadas: ${vacations.value.length}`)
+    console.log(`📅 Vacaciones del empleado:`, vacations.value.filter(v => v.emp_id === empId))
+    
+    // Obtener todas las vacaciones del empleado en el año (excepto rechazadas)
+    const yearVacations = vacations.value.filter(v => {
       if (v.emp_id !== empId) return false
       const vacDate = new Date(v.start_date)
-      return vacDate.getFullYear() === year && vacDate.getMonth() === month
+      const isSameYear = vacDate.getFullYear() === year
+      const isNotRejected = v.status !== 'rejected'
+      return isSameYear && isNotRejected
     })
     
-    console.log(`📅 Aprobando ${monthVacations.length} vacaciones del mes`)
+    console.log(`📅 Vacaciones del año ${year} (sin rechazadas): ${yearVacations.length}`)
+    console.log(`📅 Detalle de vacaciones:`, yearVacations.map(v => ({
+      id: v.id,
+      fecha: v.start_date,
+      status: v.status,
+      emp_id: v.emp_id
+    })))
     
-    // Obtener id_solicitud único del mes
-    const uniqueRequestIds = [...new Set(monthVacations.map(v => v.id.split('_')[0]))]
+    if (yearVacations.length === 0) {
+      alert('No hay vacaciones para este empleado en el año seleccionado.')
+      contextMenu.value.show = false
+      return
+    }
     
-    // Aprobar cada solicitud en la base de datos
-    for (const id_solicitud of uniqueRequestIds) {
-      const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id_solicitud: parseInt(id_solicitud),
-          estado: 'APROBADO',
-          comentario: `Mes completo aprobado: ${monthNames[month]} ${year}`
+    // Obtener id_solicitud únicos del año (solo las que están pendientes)
+    const pendingVacations = yearVacations.filter(v => v.status === 'pending')
+    console.log(`📅 Vacaciones pendientes: ${pendingVacations.length}`)
+    console.log(`📅 IDs de vacaciones pendientes:`, pendingVacations.map(v => v.id))
+    
+    if (pendingVacations.length === 0) {
+      alert('No hay solicitudes pendientes para preaprobar. Todas las solicitudes ya fueron procesadas.')
+      contextMenu.value.show = false
+      return
+    }
+    
+    // Extraer id_solicitud únicos
+    const requestIdsRaw = pendingVacations.map(v => {
+      const parts = v.id.split('_')
+      console.log(`📅 ID de vacación: ${v.id} -> partes:`, parts)
+      return parts[0]
+    })
+    
+    console.log(`📅 IDs raw extraídos:`, requestIdsRaw)
+    const uniqueRequestIds = [...new Set(requestIdsRaw)]
+    console.log(`📅 IDs únicos a preaprobar:`, uniqueRequestIds)
+    
+    // Validar que todos los IDs sean números válidos
+    const validRequestIds = uniqueRequestIds.filter(id => {
+      const numId = parseInt(id)
+      const isValid = !isNaN(numId) && numId > 0
+      if (!isValid) {
+        console.error(`❌ ID inválido encontrado: "${id}" (parseInt result: ${numId})`)
+      }
+      return isValid
+    })
+    
+    console.log(`📅 IDs válidos después de validación:`, validRequestIds)
+    
+    if (validRequestIds.length === 0) {
+      alert('No se encontraron IDs de solicitud válidos. Verifica la consola para más detalles.')
+      contextMenu.value.show = false
+      return
+    }
+    
+    // Obtener datos del empleado para notificación
+    const employee = teamEmployees.value.find(e => e.emp_id === empId)
+    const employeeName = employee?.name || `Empleado #${empId}`
+    console.log(`📅 Nombre del empleado: ${employeeName}`)
+    
+    let successCount = 0
+    let errorCount = 0
+    const errors: string[] = []
+    const successfulRequestIdsSet = new Set<string>() // Rastrear IDs exitosos
+    
+    // Preaprobar cada solicitud en la base de datos
+    for (const id_solicitud of validRequestIds) {
+      try {
+        const numId = parseInt(id_solicitud)
+        console.log(`📤 ===== Preaprobando solicitud ${numId} (${id_solicitud}) =====`)
+        
+        // El backend ahora acepta 'PRE-APROBADO' (con guión)
+        const payload = {
+          id_solicitud: numId,
+          estado: 'PRE-APROBADO', // Estado válido en el backend
+          comentario: `Año completo preaprobado: ${year}`
+        }
+        
+        console.log(`📤 Payload:`, payload)
+        console.log(`📤 URL: http://190.171.225.68/api/vacaciones/state`)
+        
+        const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload)
         })
-      })
-      
-      if (response.ok) {
-        console.log(`✅ Solicitud ${id_solicitud} aprobada en la base de datos`)
+        
+        console.log(`📤 Response status: ${response.status}`)
+        console.log(`📤 Response ok: ${response.ok}`)
+        
+        if (response.ok) {
+          const result = await response.json()
+          console.log(`✅ Solicitud ${numId} preaprobada exitosamente (estado PRE-APROBADO en backend):`, result)
+          successCount++
+          successfulRequestIdsSet.add(id_solicitud) // Marcar como exitoso
+          
+          // Enviar notificación al empleado con estado PREAPROBADO
+          // (el bot sí acepta PREAPROBADO para las notificaciones)
+          try {
+            const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
+            const solicitudVacations = pendingVacations.filter(v => v.id.startsWith(`${id_solicitud}_`))
+            const fechas = solicitudVacations.map(v => v.start_date)
+            
+            console.log(`📱 Enviando notificación para solicitud ${numId}`)
+            console.log(`📱 Fechas:`, fechas)
+            
+            const notifPayload = {
+              id_solicitud: id_solicitud,
+              emp_id: empId,
+              emp_nombre: employeeName,
+              estado: 'PREAPROBADO', // El bot sí acepta PREAPROBADO
+              comentario: `Todas tus solicitudes de vacaciones del año ${year} han sido preaprobadas`,
+              tipo: 'PROGRAMADA',
+              dias_solicitados: fechas.length,
+              fechas: fechas
+            }
+            
+            console.log(`📱 Notificación payload:`, notifPayload)
+            
+            const notifResponse = await fetch(`${BOT_URL}/api/vacation-notification`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(notifPayload)
+            })
+            
+            if (notifResponse.ok) {
+              console.log(`✅ Notificación enviada exitosamente para solicitud ${numId}`)
+            } else {
+              const notifErrorText = await notifResponse.text()
+              console.warn(`⚠️ Error al enviar notificación para solicitud ${numId}:`, notifResponse.status, notifErrorText)
+            }
+          } catch (notifError) {
+            console.warn(`⚠️ Excepción al enviar notificación para solicitud ${numId}:`, notifError)
+          }
+        } else {
+          const errorText = await response.text()
+          const errorMsg = `Error ${response.status}: ${errorText}`
+          console.error(`❌ Error al preaprobar solicitud ${numId}:`, errorMsg)
+          errors.push(`Solicitud ${numId}: ${errorMsg}`)
+          errorCount++
+        }
+      } catch (requestError) {
+        const errorMsg = requestError instanceof Error ? requestError.message : String(requestError)
+        console.error(`❌ Excepción al preaprobar solicitud ${id_solicitud}:`, requestError)
+        errors.push(`Solicitud ${id_solicitud}: ${errorMsg}`)
+        errorCount++
       }
     }
     
-    // Cambiar estado a aprobado para todas las vacaciones del mes
-    monthVacations.forEach(v => {
-      v.status = 'approved'
-    })
+    console.log(`📅 ===== RESUMEN DE PREAPROBACIÓN =====`)
+    console.log(`✅ Exitosas: ${successCount}`)
+    console.log(`❌ Errores: ${errorCount}`)
+    if (errors.length > 0) {
+      console.error(`📋 Detalles de errores:`, errors)
+    }
+    
+    // Actualizar el estado local de las vacaciones preaprobadas exitosamente
+    for (const id_solicitud of successfulRequestIdsSet) {
+      const solicitudVacations = pendingVacations.filter(v => v.id.startsWith(`${id_solicitud}_`))
+      solicitudVacations.forEach(v => {
+        if (v.status === 'pending') {
+          v.status = 'preapproved'
+        }
+      })
+    }
     
     contextMenu.value.show = false
+    
+    if (successCount > 0) {
+      const message = `✅ ${successCount} solicitud(es) preaprobada(s) exitosamente para el año ${year}${errorCount > 0 ? `\n\n⚠️ ${errorCount} solicitud(es) con errores:\n${errors.slice(0, 3).join('\n')}${errors.length > 3 ? '\n...' : ''}` : ''}`
+      alert(message)
+    } else {
+      const message = `❌ No se pudo preaprobar ninguna solicitud.\n\nErrores:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}\n\nRevisa la consola (F12) para más detalles.`
+      alert(message)
+      return // No recargar si no hubo éxitos
+    }
+    
+    // Guardar los IDs de vacaciones que fueron preaprobadas antes de recargar
+    const preapprovedVacationIds = new Set<string>()
+    for (const id_solicitud of successfulRequestIdsSet) {
+      const solicitudVacations = pendingVacations.filter(v => v.id.startsWith(`${id_solicitud}_`))
+      solicitudVacations.forEach(v => {
+        preapprovedVacationIds.add(v.id)
+      })
+    }
+    
+    // Recargar datos para reflejar cambios
+    await loadData()
+    
+    // Después de recargar, si hay vacaciones que fueron preaprobadas exitosamente,
+    // asegurarnos de que se muestren como preapproved (amarillo) incluso si el backend devuelve PROCESO
+    for (const vacationId of preapprovedVacationIds) {
+      const vacation = vacations.value.find(v => v.id === vacationId)
+      if (vacation && vacation.status === 'pending') {
+        vacation.status = 'preapproved'
+        console.log(`🔄 Corrigiendo estado de ${vacationId} a preapproved (fue preaprobado exitosamente)`)
+      }
+    }
   } catch (error) {
-    console.error('Error al aprobar mes:', error)
+    console.error('❌ Error general al preaprobar año:', error)
+    alert(`Error al preaprobar las vacaciones: ${error instanceof Error ? error.message : 'Error desconocido'}\n\nRevisa la consola (F12) para más detalles.`)
+    contextMenu.value.show = false
   }
 }
 
@@ -894,12 +1356,15 @@ const suggestVacationMonth = async (empId: string, date: Date) => {
       originalDates: monthVacations.map(v => v.start_date)
     }
     
-    // Generar fechas disponibles para sugerir (todos los días del mes)
+    // Generar fechas disponibles para sugerir (excluyendo feriados y domingos)
     const startDate = new Date(year, month, 1)
     const endDate = new Date(year, month + 1, 0)
     const dates: Date[] = []
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      dates.push(new Date(d))
+      // No incluir domingos ni feriados
+      if (d.getDay() !== 0 && !isHoliday(d)) {
+        dates.push(new Date(d))
+      }
     }
     suggestionData.value.alternateDates = dates
     
@@ -992,12 +1457,6 @@ const setupContextMenuListener = () => {
   window.addEventListener('click', () => {
     contextMenu.value.show = false
   })
-}
-
-const getDayOfMonth = (dateString?: string) => {
-  if (!dateString) return ''
-  const d = new Date(dateString)
-  return d.getDate()
 }
 
 const formatDayMonth = (dateString?: string) => {
@@ -1108,8 +1567,29 @@ const formatDate = (dateString: string): string => {
   return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`
 }
 
+// Cargar feriados de Bolivia
+const fetchHolidays = async () => {
+  try {
+    const year = currentDate.value.getFullYear()
+    const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/BO`)
+    if (response.ok) {
+      const holidays = await response.json()
+      publicHolidays.value = holidays.map((h: any) => ({
+        date: h.date,
+        name: h.localName
+      }))
+      console.log(`✅ ${publicHolidays.value.length} feriados cargados para ${year}`)
+    }
+  } catch (error) {
+    console.error('Error al cargar feriados:', error)
+  }
+}
+
 const loadData = async () => {
   try {
+    // Cargar feriados primero
+    await fetchHolidays()
+    
     console.log('📡 BossCalendarView - Cargando datos')
     console.log('📡 Props.managerId:', props.managerId)
     console.log('📡 Tipo de props.managerId:', typeof props.managerId)
@@ -1176,12 +1656,19 @@ const loadData = async () => {
               const nombre = empleado?.name || `Empleado #${solicitud.emp_id}`
               const departamento = empleado?.department || 'N/A'
               
-              // Determinar el estado
-              let status: 'pending' | 'approved' | 'rejected' = 'pending'
+              // Determinar el estado (incluyendo PRE-APROBADO)
+              // PROCESO y PENDIENTE son ambos estados pendientes (azul)
+              // PRE-APROBADO (con guión) y PREAPROBADO (sin guión) son estados revisado/preaprobado (amarillo)
+              let status: 'pending' | 'preapproved' | 'approved' | 'rejected' = 'pending'
               if (solicitud.estado === 'APROBADO') {
                 status = 'approved'
+              } else if (solicitud.estado === 'PREAPROBADO' || solicitud.estado === 'PRE-APROBADO') {
+                // Ambas variantes (con y sin guión) se mapean a preapproved
+                status = 'preapproved'
               } else if (solicitud.estado === 'RECHAZADO') {
                 status = 'rejected'
+              } else if (solicitud.estado === 'PROCESO' || solicitud.estado === 'PENDIENTE') {
+                status = 'pending'
               }
               
               console.log(`📅 Procesando solicitud ${solicitud.id_solicitud} para ${nombre} (${solicitud.estado}) con ${solicitud.fechas.length} fechas`)
@@ -1307,12 +1794,13 @@ onMounted(() => {
     const requests = event.detail.requests || []
     console.log('📅 BossCalendarView - Solicitudes recibidas:', requests)
     
-    // Filtrar solo solicitudes programadas en proceso
+    // Filtrar solicitudes programadas (pendientes, preaprobadas, aprobadas - no rechazadas)
     const programadas = requests.filter((req: any) => {
       const esProgramada = req.tipo === 'PROGRAMADA'
-      const estaEnProceso = req.estado === 'PROCESO'
-      console.log(`🔍 Solicitud ${req.id_solicitud}: tipo=${req.tipo}, estado=${req.estado}, esProgramada=${esProgramada}, estaEnProceso=${estaEnProceso}`)
-      return esProgramada && estaEnProceso
+      const estadoValido = req.estado === 'PROCESO' || req.estado === 'PENDIENTE' || 
+                          req.estado === 'PREAPROBADO' || req.estado === 'APROBADO'
+      console.log(`🔍 Solicitud ${req.id_solicitud}: tipo=${req.tipo}, estado=${req.estado}, esProgramada=${esProgramada}, estadoValido=${estadoValido}`)
+      return esProgramada && estadoValido
     })
     
     console.log('📋 Solicitudes programadas en proceso:', programadas)
@@ -1330,7 +1818,10 @@ onMounted(() => {
           department: req.empleado?.cargo || 'N/A',
           start_date: fecha.fecha,
           end_date: fecha.fecha, // Mismo día para cada fecha
-          status: 'pending' as 'pending' | 'approved' | 'rejected'
+          status: req.estado === 'APROBADO' ? 'approved' as const :
+                  req.estado === 'PREAPROBADO' || req.estado === 'PRE-APROBADO' ? 'preapproved' as const :
+                  req.estado === 'RECHAZADO' ? 'rejected' as const :
+                  'pending' as const // PROCESO y PENDIENTE son ambos pending
         })
       }
     }
