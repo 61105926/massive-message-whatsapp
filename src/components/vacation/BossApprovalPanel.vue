@@ -116,12 +116,21 @@
               <div>
                 <p class="text-muted-foreground">Período</p>
                 <p class="font-medium">
-                  {{ formatDate(request.fechas[0].fecha) }} - {{ formatDate(request.fechas[request.fechas.length - 1].fecha) }}
+                  <span v-if="request.fechas && request.fechas.length > 0">
+                    {{ formatDate(request.fechas[0].fecha) }} - {{ formatDate(request.fechas[request.fechas.length - 1].fecha) }}
+                  </span>
+                  <span v-else-if="(request as any).fechas_agrupadas && (request as any).fechas_agrupadas.length > 0">
+                    {{ formatDate((request as any).fechas_agrupadas[0]) }} - {{ formatDate((request as any).fechas_agrupadas[(request as any).fechas_agrupadas.length - 1]) }}
+                  </span>
+                  <span v-else>N/A</span>
                 </p>
               </div>
               <div>
                 <p class="text-muted-foreground">Días solicitados</p>
-                <p class="font-medium">{{ request.total_dias }} día{{ parseInt(request.total_dias) > 1 ? 's' : '' }}</p>
+                <p class="font-medium">
+                  {{ (request.total_dias || request.fechas?.length || (request as any).fechas_agrupadas?.length || 0) }} 
+                  día{{ (request.total_dias || request.fechas?.length || (request as any).fechas_agrupadas?.length || 0) > 1 ? 's' : '' }}
+                </p>
               </div>
               <div>
                 <p class="text-muted-foreground">Tipo</p>
@@ -549,12 +558,15 @@
                   {{ person.name }} - {{ person.department }}
                 </label>
               </div>
-              <div v-if="availableReplacements.length === 0" class="text-sm text-muted-foreground text-center py-2">
-                No hay reemplazantes disponibles. Será aprobada sin reemplazantes.
+              <div v-if="availableReplacements.length === 0" class="text-sm text-red-600 text-center py-2">
+                ⚠️ No hay reemplazantes disponibles. No se puede aprobar sin reemplazantes.
               </div>
             </div>
             <p v-if="availableReplacements.length > 0" class="text-xs text-muted-foreground mt-2">
-              Selección opcional
+              {{ selectedReplacements.length > 0 ? `${selectedReplacements.length} reemplazante(s) seleccionado(s)` : 'Selección obligatoria' }}
+            </p>
+            <p v-if="selectedReplacements.length === 0 && availableReplacements.length > 0" class="text-xs text-red-600 mt-1">
+              ⚠️ Debes seleccionar al menos un reemplazante para aprobar
             </p>
           </div>
 
@@ -562,8 +574,8 @@
           <div class="flex gap-3">
             <button
               @click="confirmApproveWithReplacements"
-              :disabled="isProcessing"
-              class="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 font-medium"
+              :disabled="isProcessing || selectedReplacements.length === 0 || availableReplacements.length === 0"
+              class="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               Aprobar
             </button>
@@ -581,7 +593,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { CheckCircle, User, X, AlertCircle } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import CardHeader from '@/components/ui/CardHeader.vue'
@@ -642,6 +654,36 @@ const approveComment = ref('')
 const availableReplacements = ref<any[]>([])
 const selectedReplacements = ref<string[]>([])
 const isPreapproving = ref(false)
+
+// Cargar reemplazantes disponibles desde la API
+const loadAvailableReplacements = async (empId: string) => {
+  try {
+    console.log('🔍 Cargando reemplazantes para empId:', empId)
+    
+    const response = await fetch(`http://190.171.225.68/api/recomendar-reemplazante?empId=${empId}`)
+    
+    if (response.ok) {
+      const data = await response.json()
+      if (data.reemplazantes && Array.isArray(data.reemplazantes)) {
+        availableReplacements.value = data.reemplazantes.map((rep: any) => ({
+          id: rep.REEMPLAZANTE_EMP_ID || rep.emp_id,
+          name: rep.REEMPLAZANTE_NOMBRE || rep.nombre,
+          department: rep.CARGO || rep.cargo || 'N/A'
+        }))
+        console.log('✅ Reemplazantes cargados para el jefe:', availableReplacements.value.length)
+      } else {
+        availableReplacements.value = []
+        console.warn('⚠️ No se encontraron reemplazantes en la respuesta')
+      }
+    } else {
+      console.warn('⚠️ No se pudieron cargar reemplazantes desde la API')
+      availableReplacements.value = []
+    }
+  } catch (error) {
+    console.error('Error al cargar reemplazantes:', error)
+    availableReplacements.value = []
+  }
+}
 
 // Notification state
 const notification = ref({
@@ -770,13 +812,124 @@ watch(() => props.managerId, (newId) => {
   }
 }, { immediate: true })
 
-const pendingRequests = computed(() => {
-  // Excluir vacaciones programadas del panel de aprobación
-  // Mostrar solicitudes pendientes, en proceso y preaprobadas
-  return requests.value.filter(req => 
-    (req.estado === 'PROCESO' || req.estado === 'PENDIENTE' || req.estado === 'PREAPROBADO' || req.estado === 'PRE-APROBADO') && 
-    req.tipo !== 'PROGRAMADA'
+// Escuchar eventos de cambio de estado desde el calendario
+const handleVacationStatusChanged = () => {
+  console.log('🔄 Evento de cambio de estado recibido, recargando solicitudes...')
+  fetchManagerRequests()
+}
+
+onMounted(() => {
+  window.addEventListener('vacation-status-changed', handleVacationStatusChanged)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('vacation-status-changed', handleVacationStatusChanged)
+})
+
+// Función para agrupar fechas que están muy cerca (1-2 días)
+const agruparFechasCercanas = (fechas: string[]): string[][] => {
+  if (fechas.length === 0) return []
+  
+  const ordenadas = [...fechas].sort()
+  const grupos: string[][] = []
+  let grupoActual: string[] = [ordenadas[0]]
+  
+  for (let i = 1; i < ordenadas.length; i++) {
+    const fechaActual = new Date(ordenadas[i] + 'T00:00:00')
+    const fechaAnterior = new Date(ordenadas[i - 1] + 'T00:00:00')
+    
+    // Calcular diferencia en días
+    const diferenciaMs = fechaActual.getTime() - fechaAnterior.getTime()
+    const diferenciaDias = diferenciaMs / (1000 * 60 * 60 * 24)
+    
+    // Agrupar si están a 1-2 días de distancia
+    if (diferenciaDias <= 2) {
+      grupoActual.push(ordenadas[i])
+    } else {
+      // Están más separadas, terminar grupo actual y empezar uno nuevo
+      grupos.push([...grupoActual])
+      grupoActual = [ordenadas[i]]
+    }
+  }
+  
+  // Agregar el último grupo
+  grupos.push(grupoActual)
+  
+  return grupos
+}
+
+// Procesar solicitudes programadas: separar día por día, pero agrupar las que están muy cerca
+const processedProgrammedRequests = computed(() => {
+  const programadas = requests.value.filter(req => 
+    req.tipo === 'PROGRAMADA' &&
+    (req.estado === 'PROCESO' || 
+     req.estado === 'PENDIENTE' || 
+     req.estado === 'PREAPROBADO' || 
+     req.estado === 'PRE-APROBADO')
   )
+  
+  const resultado: any[] = []
+  
+  // Agrupar por empleado y fecha de solicitud
+  const porEmpleado = new Map<string, any[]>()
+  
+  for (const req of programadas) {
+    const key = `${req.emp_id}_${req.fecha_solicitud}`
+    if (!porEmpleado.has(key)) {
+      porEmpleado.set(key, [])
+    }
+    porEmpleado.get(key)!.push(req)
+  }
+  
+  // Para cada empleado, procesar sus fechas
+  for (const [key, solicitudes] of porEmpleado.entries()) {
+    const primera = solicitudes[0]
+    
+    // Obtener todas las fechas de todas las solicitudes del mismo empleado
+    const todasFechas = solicitudes.flatMap(s => s.fechas.map(f => f.fecha))
+    const fechasUnicas = [...new Set(todasFechas)].sort()
+    
+    // Agrupar fechas que están muy cerca (1-2 días)
+    const gruposFechas = agruparFechasCercanas(fechasUnicas)
+    
+    // Crear una solicitud por cada grupo de fechas cercanas
+    for (let i = 0; i < gruposFechas.length; i++) {
+      const grupoFechas = gruposFechas[i]
+      
+      // Obtener las fechas completas (con turno) para este grupo
+      const fechasCompletas = solicitudes
+        .flatMap(s => s.fechas)
+        .filter(f => grupoFechas.includes(f.fecha))
+        .sort((a, b) => a.fecha.localeCompare(b.fecha))
+      
+      resultado.push({
+        ...primera,
+        id_solicitud: `${primera.id_solicitud}_grupo_${i}`,
+        fechas: fechasCompletas,
+        total_dias: grupoFechas.length,
+        es_grupo: grupoFechas.length > 1
+      })
+    }
+  }
+  
+  return resultado
+})
+
+const pendingRequests = computed(() => {
+  // Separar vacaciones programadas y no programadas
+  const noProgramadas = requests.value.filter(req => 
+    req.tipo !== 'PROGRAMADA' &&
+    (req.estado === 'PROCESO' || 
+     req.estado === 'PENDIENTE' || 
+     req.estado === 'PREAPROBADO' || 
+     req.estado === 'PRE-APROBADO')
+  )
+  
+  // Para programadas, usar el procesamiento que agrupa fechas cercanas
+  const programadas = processedProgrammedRequests.value
+  
+  // Combinar ambas listas
+  return [...noProgramadas, ...programadas]
 })
 
 const pendingCount = computed(() => {
@@ -785,19 +938,20 @@ const pendingCount = computed(() => {
 
 const approvedCount = computed(() => {
   return requests.value.filter(req => 
-    req.estado === 'APROBADO' && req.tipo !== 'PROGRAMADA'
+    req.estado === 'APROBADO'
   ).length
 })
 
 const rejectedCount = computed(() => {
   return requests.value.filter(req => 
-    req.estado === 'RECHAZADO' && req.tipo !== 'PROGRAMADA'
+    req.estado === 'RECHAZADO'
   ).length
 })
 
 // Función para preaprobar solicitud
 const handlePreapprove = (requestId: string) => {
-  const request = requests.value.find(r => r.id_solicitud === requestId)
+  // Buscar en pendingRequests primero (puede tener grupos)
+  const request = pendingRequests.value.find(r => String(r.id_solicitud) === String(requestId))
   if (!request) return
 
   selectedRequestId.value = requestId
@@ -826,8 +980,9 @@ const confirmPreapprove = async () => {
 }
 
 // Función para aprobar solicitud (abre modal)
-const handleApprove = (requestId: string) => {
-  const request = requests.value.find(r => r.id_solicitud === requestId)
+const handleApprove = async (requestId: string) => {
+  // Buscar en pendingRequests primero (puede tener grupos)
+  const request = pendingRequests.value.find(r => String(r.id_solicitud) === String(requestId))
   if (!request) return
 
   selectedRequestId.value = requestId
@@ -837,8 +992,9 @@ const handleApprove = (requestId: string) => {
   // Si es una solicitud programada, mostrar modal de reemplazantes
   if (request.tipo === 'PROGRAMADA') {
     showReplacementModal.value = true
-    // Aquí deberías cargar los reemplazantes disponibles
-    availableReplacements.value = []
+    selectedReplacements.value = []
+    // Cargar los reemplazantes disponibles desde la API
+    await loadAvailableReplacements(request.emp_id)
   } else {
     showApproveModal.value = true
   }
@@ -903,7 +1059,8 @@ const cancelApprove = () => {
 
 // Función para rechazar solicitud (abre modal)
 const handleReject = (requestId: string) => {
-  const request = requests.value.find(r => r.id_solicitud === requestId)
+  // Buscar en pendingRequests primero (puede tener grupos)
+  const request = pendingRequests.value.find(r => String(r.id_solicitud) === String(requestId))
   if (!request) return
 
   selectedRequestId.value = requestId
@@ -919,6 +1076,25 @@ const confirmReject = async () => {
   if (!rejectComment.value.trim()) {
     showNotification('error', 'Campo requerido', 'Por favor ingresa un motivo para el rechazo')
     return
+  }
+
+  // Confirmación adicional de seguridad
+  const request = selectedRequest.value
+  if (request) {
+    const employeeName = request.empleado?.nombre || `Empleado #${request.emp_id}`
+    const fechasTexto = request.fechas?.map((f: any) => new Date(f.fecha).toLocaleDateString('es-ES')).join(', ') || 'N/A'
+    
+    const confirmar = confirm(
+      `¿Estás SEGURO de que deseas RECHAZAR esta solicitud?\n\n` +
+      `Empleado: ${employeeName}\n` +
+      `Fechas: ${fechasTexto}\n` +
+      `Motivo: ${rejectComment.value}\n\n` +
+      `Esta acción no se puede deshacer.`
+    )
+    
+    if (!confirmar) {
+      return
+    }
   }
 
   await updateRequestStatus(selectedRequestId.value, 'RECHAZADO', rejectComment.value)
@@ -951,40 +1127,84 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
     console.log(`📤 Actualizando solicitud ${requestId} a ${estado}`)
     console.log(`📍 Reemplazantes:`, reemplazantes)
 
+    // Verificar si es un grupo de fechas cercanas (id contiene "_grupo_")
+    const esGrupo = String(requestId).includes('_grupo_')
+    
+    let solicitudesAActualizar: any[] = []
+    
+    if (esGrupo) {
+      // Es un grupo, encontrar todas las solicitudes originales que corresponden a estas fechas
+      const request = pendingRequests.value.find(r => String(r.id_solicitud) === String(requestId))
+      if (!request) {
+        throw new Error('Solicitud no encontrada')
+      }
+      
+      // Obtener las fechas del grupo
+      const fechasGrupo = request.fechas.map((f: any) => f.fecha)
+      
+      // Buscar todas las solicitudes originales que tienen estas fechas
+      solicitudesAActualizar = requests.value.filter(req => 
+        req.tipo === 'PROGRAMADA' &&
+        req.emp_id === request.emp_id &&
+        req.fecha_solicitud === request.fecha_solicitud &&
+        req.fechas.some((f: any) => fechasGrupo.includes(f.fecha))
+      )
+      
+      console.log(`📋 Grupo detectado. Actualizando ${solicitudesAActualizar.length} solicitudes originales`)
+    } else {
+      // No es grupo, actualizar solo esta solicitud
+      const request = requests.value.find(r => String(r.id_solicitud) === String(requestId))
+      if (!request) {
+        throw new Error('Solicitud no encontrada')
+      }
+      solicitudesAActualizar = [request]
+    }
+
     // El backend espera 'PRE-APROBADO' (con guión) en lugar de 'PREAPROBADO'
     const estadoBackend = estado === 'PREAPROBADO' ? 'PRE-APROBADO' : estado
     
-    const payload: any = {
-      id_solicitud: parseInt(requestId),
-      estado: estadoBackend,
-      comentario: comentario || (estado === 'APROBADO' ? 'Aprobado por el jefe' : '')
-    }
-    
-    if (reemplazantes && reemplazantes.length > 0) {
-      payload.reemplazantes = reemplazantes
-    }
-
-    const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload)
+    // Actualizar cada solicitud
+    const actualizaciones = solicitudesAActualizar.map(req => {
+      const payload: any = {
+        id_solicitud: parseInt(String(req.id_solicitud)),
+        estado: estadoBackend,
+        comentario: comentario || (estado === 'APROBADO' ? 'Aprobado por el jefe' : '')
+      }
+      
+      if (reemplazantes && reemplazantes.length > 0) {
+        payload.reemplazantes = reemplazantes
+      }
+      
+      return fetch('http://190.171.225.68/api/vacaciones/state', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      })
     })
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null)
-      throw new Error(errorData?.message || `Error ${response.status}: ${response.statusText}`)
+    
+    const responses = await Promise.all(actualizaciones)
+    
+    // Verificar que todas las respuestas sean exitosas
+    const response = responses[0] // Usar la primera para el flujo de notificaciones
+    const todasExitosas = responses.every(r => r.ok)
+    
+    if (!todasExitosas) {
+      const errores = responses.filter(r => !r.ok)
+      const errorData = await errores[0].json().catch(() => null)
+      throw new Error(errorData?.message || `Error al actualizar algunas solicitudes`)
     }
 
     const result = await response.json()
 
     if (result.status === 'success' || response.ok) {
-      console.log('✅ Solicitud actualizada exitosamente')
+      console.log('✅ Solicitud(es) actualizada(s) exitosamente')
 
-      // Actualizar localmente
+      // Actualizar localmente todas las solicitudes que se actualizaron
+      const idsActualizados = new Set(solicitudesAActualizar.map(req => String(req.id_solicitud)))
       requests.value = requests.value.map(req => {
-        if (req.id_solicitud === requestId) {
+        if (idsActualizados.has(String(req.id_solicitud))) {
           return {
             ...req,
             estado: estado
@@ -995,7 +1215,11 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
 
       // 🚀 GUARDAR EN API EXTERNA
       // Después de actualizar el estado, guardar en la API externa
-      const requestData = requests.value.find(req => req.id_solicitud === requestId)
+      // Usar la primera solicitud actualizada como referencia
+      const requestData = esGrupo 
+        ? pendingRequests.value.find(r => String(r.id_solicitud) === String(requestId))
+        : requests.value.find(req => String(req.id_solicitud) === String(requestId))
+      
       if (requestData) {
         try {
           console.log('📤 Guardando vacación en API externa...')
@@ -1028,103 +1252,326 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
       }
 
       // 🔔 ENVIAR NOTIFICACIONES DE WHATSAPP
-      // Enviar notificaciones a los reemplazantes (si es aprobado) o al empleado (si es rechazado)
+      // Solo enviar notificaciones si:
+      // - Es APROBADO y todas las fechas están aprobadas (no quedan pendientes)
+      // - Es RECHAZADO (siempre notificar)
+      // - NO enviar si es PREAPROBADO (se enviará cuando todas estén aprobadas)
 
       if (requestData) {
-        try {
-          // Usar los datos de reemplazantes que ya vienen en requestData
-          let reemplazantesCompletos = []
-          
-          console.log('🔍 DEBUG - requestData completo:', JSON.stringify(requestData, null, 2))
-          console.log('🔍 DEBUG - requestData.reemplazante:', requestData.reemplazante)
-          console.log('🔍 DEBUG - requestData.reemplazante length:', requestData.reemplazante?.length)
-          
-          if (requestData.reemplazante && requestData.reemplazante.length > 0) {
-            console.log('✅ Hay reemplazantes en la solicitud, usando datos existentes...')
-            // Usar directamente los datos que ya vienen en requestData.reemplazante
-            reemplazantesCompletos = requestData.reemplazante.map((rep: any) => ({
-              emp_id: rep.emp_id,
-              nombre: rep.nombre,
-              telefono: rep.telefono || '77711124' // Fallback si no hay teléfono
-            }))
-            console.log('✅ Reemplazantes obtenidos de requestData:', reemplazantesCompletos)
-          } else {
-            console.log('⚠️ No hay reemplazantes en requestData, obteniendo desde API específica...')
-            // Como la API vacacion-data-manager no incluye reemplazantes,
-            // obtener los reemplazantes específicos de esta solicitud desde la API
-            try {
-              const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}`)
-              if (reemplazanteResponse.ok) {
-                const reemplazanteData = await reemplazanteResponse.json()
-                if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
-                  // Usar los reemplazantes específicos de esta solicitud
-                  reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
-                    emp_id: rep.EMP_ID,
-                    nombre: rep.NOMBRE,
-                    telefono: rep.TELEFONO
-                  }))
-                  console.log('✅ Reemplazantes específicos obtenidos de API:', reemplazantesCompletos)
+        // Si es PREAPROBADO, verificar si todas las fechas están preaprobadas
+        if (estado === 'PREAPROBADO') {
+          try {
+            // Verificar si hay otras solicitudes del mismo empleado que estén pendientes
+            // Recargar las solicitudes para verificar el estado actual
+            const checkResponse = await fetch(`http://190.171.225.68/api/vacacion-data-manager?manager=${props.managerId}`)
+            if (checkResponse.ok) {
+              const checkData = await checkResponse.json()
+              if (checkData.success && Array.isArray(checkData.data)) {
+                // Buscar todas las solicitudes del mismo empleado
+                const solicitudesEmpleado = checkData.data.filter((req: any) => 
+                  req.emp_id === requestData.emp_id && 
+                  req.tipo === requestData.tipo &&
+                  req.fecha_solicitud === requestData.fecha_solicitud
+                )
+
+                // Verificar si hay alguna pendiente (no preaprobada ni aprobada)
+                const hayPendientes = solicitudesEmpleado.some((req: any) => 
+                  req.estado === 'PENDIENTE' || 
+                  req.estado === 'PROCESO'
+                )
+
+                // Si hay pendientes, NO enviar notificación todavía
+                if (hayPendientes) {
+                  console.log('⏸️ Preaprobación parcial: Aún hay fechas pendientes. No se envía notificación todavía.')
                 } else {
-                  throw new Error('No se encontraron reemplazantes específicos en la API')
+                  // Todas las fechas están preaprobadas (o aprobadas), enviar notificación
+                  console.log('✅ Todas las fechas están preaprobadas. Enviando notificación de confirmación.')
+
+                  // Usar los datos de reemplazantes que ya vienen en requestData
+                  let reemplazantesCompletos = []
+                  
+                  if (requestData.reemplazante && requestData.reemplazante.length > 0) {
+                    reemplazantesCompletos = requestData.reemplazante.map((rep: any) => ({
+                      emp_id: rep.emp_id,
+                      nombre: rep.nombre,
+                      telefono: rep.telefono || '77711124'
+                    }))
+                  } else {
+                    try {
+                      const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}`)
+                      if (reemplazanteResponse.ok) {
+                        const reemplazanteData = await reemplazanteResponse.json()
+                        if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
+                          reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
+                            emp_id: rep.EMP_ID,
+                            nombre: rep.NOMBRE,
+                            telefono: rep.TELEFONO
+                          }))
+                        }
+                      }
+                    } catch (apiError) {
+                      console.warn('⚠️ Error al obtener reemplazantes:', apiError)
+                      reemplazantesCompletos = [
+                        {
+                          emp_id: '493',
+                          nombre: 'Charvel Santiago',
+                          telefono: '78003551'
+                        }
+                      ]
+                    }
+                  }
+
+                  // Obtener todas las fechas preaprobadas de todas las solicitudes del empleado
+                  const todasFechas = solicitudesEmpleado
+                    .filter((req: any) => req.estado === 'PREAPROBADO' || req.estado === 'PRE-APROBADO' || req.estado === 'APROBADO')
+                    .flatMap((req: any) => req.fechas.map((f: any) => `${f.fecha} (${f.turno})`))
+
+                  // Preparar payload para notificaciones
+                  const notificationPayload = {
+                    id_solicitud: requestId,
+                    emp_id: requestData.emp_id,
+                    emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
+                    estado: 'PREAPROBADO',
+                    comentario: comentario || 'Todas tus fechas han sido preaprobadas',
+                    tipo: requestData.tipo,
+                    dias_solicitados: todasFechas.length,
+                    fechas: todasFechas,
+                    reemplazantes: reemplazantesCompletos.map((rep: any) => ({
+                      emp_id: rep.emp_id,
+                      nombre: rep.nombre,
+                      telefono: rep.telefono
+                    }))
+                  }
+
+                  const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+                  await fetch(`${BOT_URL}/api/vacation-notification`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(notificationPayload)
+                  }).catch(err => {
+                    console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
+                  })
+
+                  console.log('✅ Notificación de preaprobación completa enviada')
                 }
-              } else {
-                throw new Error('Error al obtener reemplazantes específicos')
               }
-            } catch (apiError) {
-              console.warn('⚠️ Error al obtener reemplazantes específicos, usando fallback:', apiError)
-              // Fallback: usar Charvel Santiago como default
-              reemplazantesCompletos = [
-                {
-                  emp_id: '493',
-                  nombre: 'Charvel Santiago',
-                  telefono: '78003551'
-                }
-              ]
-              console.log('✅ Usando reemplazantes de fallback:', reemplazantesCompletos)
             }
+          } catch (notifError) {
+            console.warn('⚠️ Error al verificar y enviar notificaciones de preaprobación:', notifError)
           }
+        } 
+        // Si es RECHAZADO, siempre notificar
+        else if (estado === 'RECHAZADO') {
+          try {
+            // Preparar payload para notificaciones de rechazo
+            const notificationPayload = {
+              id_solicitud: requestId,
+              emp_id: requestData.emp_id,
+              emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
+              estado: estado,
+              comentario: comentario,
+              tipo: requestData.tipo,
+              dias_solicitados: parseInt(requestData.total_dias),
+              fechas: requestData.fechas.map((f: any) => `${f.fecha} (${f.turno})`)
+            }
 
-          // Preparar payload para notificaciones
-          const notificationPayload = {
-            id_solicitud: requestId,
-            emp_id: requestData.emp_id,
-            emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
-            estado: estado,
-            comentario: comentario,
-            tipo: requestData.tipo,
-            dias_solicitados: parseInt(requestData.total_dias),
-            fechas: requestData.fechas.map((f: any) => `${f.fecha} (${f.turno})`),
-            // Usar los reemplazantes obtenidos de la API
-            reemplazantes: reemplazantesCompletos.map((rep: any) => ({
-              emp_id: rep.emp_id,
-              nombre: rep.nombre,
-              telefono: rep.telefono
-            }))
+            const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+            await fetch(`${BOT_URL}/api/vacation-notification`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(notificationPayload)
+            }).catch(err => {
+              console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
+            })
+
+            console.log('✅ Notificación de rechazo enviada')
+          } catch (notifError) {
+            console.warn('⚠️ Error al enviar notificación de rechazo:', notifError)
           }
+        }
+        // Si es APROBADO, verificar si estaba preaprobada para enviar resumen o individual
+        else if (estado === 'APROBADO') {
+          try {
+            // Verificar si esta solicitud estaba preaprobada antes de aprobar
+            const estabaPreaprobada = requestData.estado === 'PREAPROBADO' || requestData.estado === 'PRE-APROBADO'
+            
+            if (estabaPreaprobada) {
+              // Si estaba preaprobada, verificar si todas las fechas preaprobadas están ahora aprobadas
+              console.log('📋 Solicitud estaba preaprobada. Verificando si todas las fechas están aprobadas para enviar resumen.')
+              
+              const checkResponse = await fetch(`http://190.171.225.68/api/vacacion-data-manager?manager=${props.managerId}`)
+              if (checkResponse.ok) {
+                const checkData = await checkResponse.json()
+                if (checkData.success && Array.isArray(checkData.data)) {
+                  // Buscar todas las solicitudes del mismo empleado
+                  const solicitudesEmpleado = checkData.data.filter((req: any) => 
+                    req.emp_id === requestData.emp_id && 
+                    req.tipo === requestData.tipo &&
+                    req.fecha_solicitud === requestData.fecha_solicitud
+                  )
 
-          console.log('🔍 DEBUG - Datos de la solicitud:', requestData)
-          console.log('🔍 DEBUG - Reemplazantes obtenidos:', reemplazantesCompletos)
-          console.log('🔍 DEBUG - Payload de notificación:', notificationPayload)
+                  // Verificar si hay alguna preaprobada que aún no esté aprobada
+                  const hayPreaprobadasPendientes = solicitudesEmpleado.some((req: any) => 
+                    (req.estado === 'PREAPROBADO' || req.estado === 'PRE-APROBADO') &&
+                    req.id_solicitud !== requestId
+                  )
 
-          // Enviar al bot de WhatsApp
-          // Usa VITE_BACKEND_URL del .env
-          const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+                  // Si no hay preaprobadas pendientes, todas están aprobadas - enviar resumen
+                  if (!hayPreaprobadasPendientes) {
+                    console.log('✅ Todas las fechas preaprobadas están ahora aprobadas. Enviando resumen.')
 
-          await fetch(`${BOT_URL}/api/vacation-notification`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(notificationPayload)
-          }).catch(err => {
-            console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
-            // No fallar la operación si las notificaciones fallan
-          })
+                    // Usar los datos de reemplazantes
+                    let reemplazantesCompletos = []
+                    
+                    if (requestData.reemplazante && requestData.reemplazante.length > 0) {
+                      reemplazantesCompletos = requestData.reemplazante.map((rep: any) => ({
+                        emp_id: rep.emp_id,
+                        nombre: rep.nombre,
+                        telefono: rep.telefono || '77711124'
+                      }))
+                    } else {
+                      try {
+                        const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}`)
+                        if (reemplazanteResponse.ok) {
+                          const reemplazanteData = await reemplazanteResponse.json()
+                          if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
+                            reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
+                              emp_id: rep.EMP_ID,
+                              nombre: rep.NOMBRE,
+                              telefono: rep.TELEFONO
+                            }))
+                          }
+                        }
+                      } catch (apiError) {
+                        console.warn('⚠️ Error al obtener reemplazantes:', apiError)
+                        reemplazantesCompletos = [
+                          {
+                            emp_id: '493',
+                            nombre: 'Charvel Santiago',
+                            telefono: '78003551'
+                          }
+                        ]
+                      }
+                    }
 
-          console.log('✅ Notificaciones de WhatsApp enviadas')
-        } catch (notifError) {
-          console.warn('⚠️ Error al enviar notificaciones:', notifError)
-          // Continuar aunque fallen las notificaciones
+                    // Obtener todas las fechas aprobadas (resumen completo)
+                    const todasFechas = solicitudesEmpleado
+                      .filter((req: any) => req.estado === 'APROBADO')
+                      .flatMap((req: any) => req.fechas.map((f: any) => `${f.fecha} (${f.turno})`))
+
+                    // Preparar payload para notificación de resumen
+                    const notificationPayload = {
+                      id_solicitud: requestId,
+                      emp_id: requestData.emp_id,
+                      emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
+                      estado: 'APROBADO',
+                      comentario: comentario || 'Todas tus vacaciones preaprobadas han sido aprobadas',
+                      tipo: requestData.tipo,
+                      dias_solicitados: todasFechas.length,
+                      fechas: todasFechas,
+                      reemplazantes: reemplazantesCompletos.map((rep: any) => ({
+                        emp_id: rep.emp_id,
+                        nombre: rep.nombre,
+                        telefono: rep.telefono
+                      }))
+                    }
+
+                    const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+                    await fetch(`${BOT_URL}/api/vacation-notification`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify(notificationPayload)
+                    }).catch(err => {
+                      console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
+                    })
+
+                    console.log('✅ Resumen de aprobación enviado')
+                  } else {
+                    console.log('⏸️ Aún hay fechas preaprobadas pendientes. No se envía notificación todavía.')
+                  }
+                }
+              }
+            } else {
+              // Si NO estaba preaprobada, enviar notificación individual inmediatamente
+              console.log('✅ Aprobación directa (no preaprobada): Enviando notificación individual inmediata.')
+
+              // Usar los datos de reemplazantes que ya vienen en requestData
+              let reemplazantesCompletos = []
+              
+              if (requestData.reemplazante && requestData.reemplazante.length > 0) {
+                reemplazantesCompletos = requestData.reemplazante.map((rep: any) => ({
+                  emp_id: rep.emp_id,
+                  nombre: rep.nombre,
+                  telefono: rep.telefono || '77711124'
+                }))
+              } else {
+                try {
+                  const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}`)
+                  if (reemplazanteResponse.ok) {
+                    const reemplazanteData = await reemplazanteResponse.json()
+                    if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
+                      reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
+                        emp_id: rep.EMP_ID,
+                        nombre: rep.NOMBRE,
+                        telefono: rep.TELEFONO
+                      }))
+                    }
+                  }
+                } catch (apiError) {
+                  console.warn('⚠️ Error al obtener reemplazantes:', apiError)
+                  reemplazantesCompletos = [
+                    {
+                      emp_id: '493',
+                      nombre: 'Charvel Santiago',
+                      telefono: '78003551'
+                    }
+                  ]
+                }
+              }
+
+              // Obtener solo las fechas de esta solicitud específica (aprobación individual)
+              const fechasAprobadas = requestData.fechas.map((f: any) => `${f.fecha} (${f.turno})`)
+
+              // Preparar payload para notificaciones individuales
+              const notificationPayload = {
+                id_solicitud: requestId,
+                emp_id: requestData.emp_id,
+                emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
+                estado: 'APROBADO',
+                comentario: comentario,
+                tipo: requestData.tipo,
+                dias_solicitados: fechasAprobadas.length,
+                fechas: fechasAprobadas,
+                reemplazantes: reemplazantesCompletos.map((rep: any) => ({
+                  emp_id: rep.emp_id,
+                  nombre: rep.nombre,
+                  telefono: rep.telefono
+                }))
+              }
+
+              const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+              await fetch(`${BOT_URL}/api/vacation-notification`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(notificationPayload)
+              }).catch(err => {
+                console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
+              })
+
+              console.log('✅ Notificación de aprobación individual enviada')
+            }
+          } catch (notifError) {
+            console.warn('⚠️ Error al enviar notificación de aprobación:', notifError)
+            // Continuar aunque fallen las notificaciones
+          }
         }
       }
 
@@ -1133,14 +1580,40 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
         showNotification(
           'success',
           'Solicitud Aprobada',
-          'La solicitud ha sido aprobada exitosamente y se enviaron las notificaciones'
+          'La solicitud ha sido aprobada y se envió la notificación al empleado'
         )
       } else if (estado === 'PREAPROBADO') {
-        showNotification(
-          'success',
-          'Solicitud Preaprobada',
-          'La solicitud ha sido marcada como revisada y se envió notificación al empleado'
-        )
+        // Verificar si se envió notificación o no
+        const checkResponse = await fetch(`http://190.171.225.68/api/vacacion-data-manager?manager=${props.managerId}`)
+        let todasPreaprobadas = false
+        if (checkResponse.ok) {
+          const checkData = await checkResponse.json()
+          if (checkData.success && Array.isArray(checkData.data)) {
+            const solicitudesEmpleado = checkData.data.filter((req: any) => 
+              req.emp_id === requestData.emp_id && 
+              req.tipo === requestData.tipo &&
+              req.fecha_solicitud === requestData.fecha_solicitud
+            )
+            todasPreaprobadas = !solicitudesEmpleado.some((req: any) => 
+              req.estado === 'PENDIENTE' || 
+              req.estado === 'PROCESO'
+            )
+          }
+        }
+        
+        if (todasPreaprobadas) {
+          showNotification(
+            'success',
+            'Solicitud Preaprobada',
+            'Todas las fechas han sido preaprobadas y se envió la notificación al empleado'
+          )
+        } else {
+          showNotification(
+            'success',
+            'Solicitud Preaprobada',
+            'La fecha ha sido preaprobada. Se enviará notificación cuando todas las fechas estén preaprobadas.'
+          )
+        }
       } else {
         showNotification(
           'success',

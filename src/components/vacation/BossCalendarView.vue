@@ -340,6 +340,34 @@
       </div>
     </div>
 
+    <!-- Modal de Progreso para Preaprobación -->
+    <div
+      v-if="showProgressModal"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-[200]"
+      @click.self="false"
+    >
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+        <h3 class="text-lg font-semibold mb-4">Preaprobando Vacaciones</h3>
+        <div class="space-y-4">
+          <div>
+            <div class="flex justify-between text-sm mb-2">
+              <span class="text-gray-600">{{ progressInfo.message }}</span>
+              <span class="text-gray-600 font-medium">{{ progressInfo.current }} / {{ progressInfo.total }}</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+              <div 
+                class="bg-blue-600 h-full rounded-full transition-all duration-300"
+                :style="{ width: `${(progressInfo.current / progressInfo.total) * 100}%` }"
+              ></div>
+            </div>
+          </div>
+          <p class="text-sm text-gray-500 text-center">
+            Por favor espera, esto puede tomar unos momentos...
+          </p>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal de acciones de vacación -->
     <div
       v-if="showSuggestModal && currentVacation"
@@ -643,6 +671,12 @@ const selectedDateForVacation = ref<Date | null>(null)
 const newVacationStartDate = ref('')
 const newVacationEndDate = ref('')
 const newVacationNote = ref('')
+const showProgressModal = ref(false)
+const progressInfo = ref({
+  current: 0,
+  total: 0,
+  message: ''
+})
 
 // Menú contextual para vacaciones
 const contextMenu = ref({
@@ -940,30 +974,7 @@ const preapproveVacationDay = async (empId: string, date: Date) => {
         // Cambiar estado a preaprobado en el array local
         vacation.status = 'preapproved'
         console.log('✅ Vacación preaprobada en la base de datos')
-        
-        // Enviar notificación al empleado
-        try {
-          const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
-          await fetch(`${BOT_URL}/api/vacation-notification`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              id_solicitud: id_solicitud,
-              emp_id: empId,
-              emp_nombre: employeeName,
-              estado: 'PREAPROBADO',
-              comentario: `Solicitud revisada y preaprobada para ${dateStr}`,
-              tipo: 'PROGRAMADA',
-              dias_solicitados: 1,
-              fechas: [dateStr]
-            })
-          })
-          console.log('✅ Notificación de preaprobación enviada')
-        } catch (notifError) {
-          console.warn('⚠️ Error al enviar notificación:', notifError)
-        }
+        console.log('⏸️ No se envía notificación. Se enviará cuando todas las fechas estén aprobadas.')
       } else {
         console.error('❌ Error al preaprobar en la API')
       }
@@ -986,6 +997,10 @@ const approveVacationDay = async (empId: string, date: Date) => {
       // Extraer el id_solicitud del id de la vacación (formato: id_solicitud_fecha)
       const id_solicitud = vacation.id.split('_')[0]
       
+      // Obtener datos completos de la solicitud para la notificación
+      const employee = teamEmployees.value.find(e => e.emp_id === empId)
+      const employeeName = employee?.name || vacation.employee_name
+      
       // Llamar a la API para actualizar en la base de datos
       const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
         method: 'POST',
@@ -1000,9 +1015,143 @@ const approveVacationDay = async (empId: string, date: Date) => {
       })
       
       if (response.ok) {
+        // Guardar el estado original antes de cambiarlo
+        const estadoOriginal = vacation.status
+        
         // Cambiar estado a aprobado en el array local
         vacation.status = 'approved'
         console.log('✅ Vacación aprobada en la base de datos')
+        
+        // Verificar si estaba preaprobada para enviar resumen o individual
+        const estabaPreaprobada = estadoOriginal === 'preapproved' || estadoOriginal === 'pre-approved'
+        
+        if (estabaPreaprobada) {
+          // Si estaba preaprobada, verificar si todas las fechas preaprobadas están ahora aprobadas
+          console.log('📋 Vacación estaba preaprobada. Verificando si todas las fechas están aprobadas para enviar resumen.')
+          
+          try {
+            const checkResponse = await fetch(`http://190.171.225.68/api/vacacion-data-manager?manager=${props.managerId}`)
+            if (checkResponse.ok) {
+              const checkData = await checkResponse.json()
+              if (checkData.success && Array.isArray(checkData.data)) {
+                // Buscar todas las solicitudes del mismo empleado con el mismo id_solicitud
+                const solicitudesEmpleado = checkData.data.filter((req: any) => 
+                  req.emp_id === empId && 
+                  req.tipo === 'PROGRAMADA' &&
+                  String(req.id_solicitud) === id_solicitud
+                )
+
+                // Verificar si hay alguna preaprobada que aún no esté aprobada
+                const hayPreaprobadasPendientes = solicitudesEmpleado.some((req: any) => 
+                  req.estado === 'PREAPROBADO' || req.estado === 'PRE-APROBADO'
+                )
+
+                // Si no hay preaprobadas pendientes, todas están aprobadas - enviar resumen
+                if (!hayPreaprobadasPendientes) {
+                  console.log('✅ Todas las fechas preaprobadas están ahora aprobadas. Enviando resumen.')
+
+                  // Obtener reemplazantes
+                  let reemplazantesCompletos = []
+                  try {
+                    const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${id_solicitud}`)
+                    if (reemplazanteResponse.ok) {
+                      const reemplazanteData = await reemplazanteResponse.json()
+                      if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
+                        reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
+                          emp_id: rep.EMP_ID,
+                          nombre: rep.NOMBRE,
+                          telefono: rep.TELEFONO
+                        }))
+                      }
+                    }
+                  } catch (apiError) {
+                    console.warn('⚠️ Error al obtener reemplazantes:', apiError)
+                  }
+
+                  // Obtener todas las fechas aprobadas (resumen completo)
+                  const todasFechas = solicitudesEmpleado
+                    .filter((req: any) => req.estado === 'APROBADO')
+                    .flatMap((req: any) => req.fechas.map((f: any) => `${f.fecha} (${f.turno})`))
+
+                  const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+                  await fetch(`${BOT_URL}/api/vacation-notification`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      id_solicitud: id_solicitud,
+                      emp_id: empId,
+                      emp_nombre: employeeName,
+                      estado: 'APROBADO',
+                      comentario: `Todas tus vacaciones preaprobadas han sido aprobadas`,
+                      tipo: 'PROGRAMADA',
+                      dias_solicitados: todasFechas.length,
+                      fechas: todasFechas,
+                      reemplazantes: reemplazantesCompletos
+                    })
+                  }).catch(err => {
+                    console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
+                  })
+                  
+                  console.log('✅ Resumen de aprobación enviado')
+                } else {
+                  console.log('⏸️ Aún hay fechas preaprobadas pendientes. No se envía notificación todavía.')
+                }
+              }
+            }
+          } catch (checkError) {
+            console.warn('⚠️ Error al verificar estado de solicitudes:', checkError)
+          }
+        } else {
+          // Si NO estaba preaprobada, enviar notificación individual inmediatamente
+          console.log('✅ Aprobación directa desde calendario: Enviando notificación individual inmediata.')
+          
+          try {
+            // Obtener reemplazantes
+            let reemplazantesCompletos = []
+            try {
+              const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${id_solicitud}`)
+              if (reemplazanteResponse.ok) {
+                const reemplazanteData = await reemplazanteResponse.json()
+                if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
+                  reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
+                    emp_id: rep.EMP_ID,
+                    nombre: rep.NOMBRE,
+                    telefono: rep.TELEFONO
+                  }))
+                }
+              }
+            } catch (apiError) {
+              console.warn('⚠️ Error al obtener reemplazantes:', apiError)
+            }
+
+            const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+            await fetch(`${BOT_URL}/api/vacation-notification`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                id_solicitud: id_solicitud,
+                emp_id: empId,
+                emp_nombre: employeeName,
+                estado: 'APROBADO',
+                comentario: `Fecha aprobada: ${dateStr}`,
+                tipo: 'PROGRAMADA',
+                dias_solicitados: 1,
+                fechas: [`${dateStr} (COMPLETO)`],
+                reemplazantes: reemplazantesCompletos
+              })
+            }).catch(err => {
+              console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
+            })
+            
+            console.log('✅ Notificación de aprobación individual enviada')
+          } catch (notifError) {
+            console.warn('⚠️ Error al enviar notificación de aprobación:', notifError)
+          }
+        }
       } else {
         console.error('❌ Error al aprobar en la API')
       }
@@ -1073,6 +1222,28 @@ const rejectVacationDay = async (empId: string, date: Date) => {
     const vacation = vacations.value.find(v => v.emp_id === empId && v.start_date === dateStr)
     
     if (vacation) {
+      // Pedir confirmación antes de rechazar
+      const employee = teamEmployees.value.find(e => e.emp_id === empId)
+      const employeeName = employee?.name || vacation.employee_name
+      const fechaFormateada = new Date(dateStr).toLocaleDateString('es-ES', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      })
+      
+      const confirmar = confirm(
+        `¿Estás seguro de que deseas RECHAZAR la solicitud de vacaciones?\n\n` +
+        `Empleado: ${employeeName}\n` +
+        `Fecha: ${fechaFormateada}\n\n` +
+        `Esta acción no se puede deshacer.`
+      )
+      
+      if (!confirmar) {
+        contextMenu.value.show = false
+        return
+      }
+      
       console.log('✗ Rechazando vacación:', vacation)
       
       // Extraer el id_solicitud del id de la vacación (formato: id_solicitud_fecha)
@@ -1095,14 +1266,26 @@ const rejectVacationDay = async (empId: string, date: Date) => {
         // Cambiar estado a rechazado en el array local
         vacation.status = 'rejected'
         console.log('✅ Vacación rechazada en la base de datos')
+        
+        // Disparar evento para actualizar el Panel de Aprobación
+        const event = new CustomEvent('vacation-status-changed', {
+          detail: { 
+            action: 'rejected',
+            id_solicitud: id_solicitud,
+            emp_id: empId
+          }
+        })
+        window.dispatchEvent(event)
       } else {
         console.error('❌ Error al rechazar en la API')
+        alert('Error al rechazar la solicitud. Por favor intenta nuevamente.')
       }
       
       contextMenu.value.show = false
     }
   } catch (error) {
     console.error('Error al rechazar vacación:', error)
+    alert('Error al rechazar la solicitud. Por favor intenta nuevamente.')
   }
 }
 
@@ -1177,6 +1360,7 @@ const preapproveVacationYear = async (empId: string) => {
     if (validRequestIds.length === 0) {
       alert('No se encontraron IDs de solicitud válidos. Verifica la consola para más detalles.')
       contextMenu.value.show = false
+      showProgressModal.value = false
       return
     }
     
@@ -1190,11 +1374,27 @@ const preapproveVacationYear = async (empId: string) => {
     const errors: string[] = []
     const successfulRequestIdsSet = new Set<string>() // Rastrear IDs exitosos
     
+    // Mostrar modal de progreso
+    showProgressModal.value = true
+    progressInfo.value = {
+      current: 0,
+      total: validRequestIds.length,
+      message: 'Iniciando preaprobación...'
+    }
+    
     // Preaprobar cada solicitud en la base de datos
-    for (const id_solicitud of validRequestIds) {
+    for (let i = 0; i < validRequestIds.length; i++) {
+      const id_solicitud = validRequestIds[i]
       try {
         const numId = parseInt(id_solicitud)
         console.log(`📤 ===== Preaprobando solicitud ${numId} (${id_solicitud}) =====`)
+        
+        // Actualizar progreso
+        progressInfo.value = {
+          current: i + 1,
+          total: validRequestIds.length,
+          message: `Preaprobando solicitud ${numId}... (${i + 1}/${validRequestIds.length})`
+        }
         
         // El backend ahora acepta 'PRE-APROBADO' (con guión)
         const payload = {
@@ -1222,47 +1422,7 @@ const preapproveVacationYear = async (empId: string) => {
           console.log(`✅ Solicitud ${numId} preaprobada exitosamente (estado PRE-APROBADO en backend):`, result)
           successCount++
           successfulRequestIdsSet.add(id_solicitud) // Marcar como exitoso
-          
-          // Enviar notificación al empleado con estado PREAPROBADO
-          // (el bot sí acepta PREAPROBADO para las notificaciones)
-          try {
-            const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
-            const solicitudVacations = pendingVacations.filter(v => v.id.startsWith(`${id_solicitud}_`))
-            const fechas = solicitudVacations.map(v => v.start_date)
-            
-            console.log(`📱 Enviando notificación para solicitud ${numId}`)
-            console.log(`📱 Fechas:`, fechas)
-            
-            const notifPayload = {
-              id_solicitud: id_solicitud,
-              emp_id: empId,
-              emp_nombre: employeeName,
-              estado: 'PREAPROBADO', // El bot sí acepta PREAPROBADO
-              comentario: `Todas tus solicitudes de vacaciones del año ${year} han sido preaprobadas`,
-              tipo: 'PROGRAMADA',
-              dias_solicitados: fechas.length,
-              fechas: fechas
-            }
-            
-            console.log(`📱 Notificación payload:`, notifPayload)
-            
-            const notifResponse = await fetch(`${BOT_URL}/api/vacation-notification`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(notifPayload)
-            })
-            
-            if (notifResponse.ok) {
-              console.log(`✅ Notificación enviada exitosamente para solicitud ${numId}`)
-            } else {
-              const notifErrorText = await notifResponse.text()
-              console.warn(`⚠️ Error al enviar notificación para solicitud ${numId}:`, notifResponse.status, notifErrorText)
-            }
-          } catch (notifError) {
-            console.warn(`⚠️ Excepción al enviar notificación para solicitud ${numId}:`, notifError)
-          }
+          // NO enviar notificación individual aquí - se enviará un resumen consolidado al final
         } else {
           const errorText = await response.text()
           const errorMsg = `Error ${response.status}: ${errorText}`
@@ -1297,7 +1457,82 @@ const preapproveVacationYear = async (empId: string) => {
     
     contextMenu.value.show = false
     
+    // Cerrar modal de progreso
+    showProgressModal.value = false
+    
     if (successCount > 0) {
+      // Enviar un solo mensaje consolidado con todas las fechas preaprobadas
+      try {
+        console.log('📱 Enviando mensaje consolidado de preaprobación...')
+        
+        // Obtener todas las fechas de todas las solicitudes preaprobadas exitosamente
+        const todasFechas: string[] = []
+        for (const id_solicitud of successfulRequestIdsSet) {
+          const solicitudVacations = pendingVacations.filter(v => v.id.startsWith(`${id_solicitud}_`))
+          const fechas = solicitudVacations.map(v => v.start_date)
+          todasFechas.push(...fechas)
+        }
+        
+        // Ordenar fechas y eliminar duplicados
+        const fechasUnicas = [...new Set(todasFechas)].sort()
+        
+        console.log(`📱 Total de fechas preaprobadas: ${fechasUnicas.length}`)
+        console.log(`📱 Fechas:`, fechasUnicas)
+        
+        // Obtener reemplazantes (usar la primera solicitud como referencia)
+        let reemplazantesCompletos: any[] = []
+        if (successfulRequestIdsSet.size > 0) {
+          const primeraSolicitudId = Array.from(successfulRequestIdsSet)[0]
+          try {
+            const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${primeraSolicitudId}`)
+            if (reemplazanteResponse.ok) {
+              const reemplazanteData = await reemplazanteResponse.json()
+              if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
+                reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
+                  emp_id: rep.EMP_ID,
+                  nombre: rep.NOMBRE,
+                  telefono: rep.TELEFONO
+                }))
+              }
+            }
+          } catch (apiError) {
+            console.warn('⚠️ Error al obtener reemplazantes:', apiError)
+          }
+        }
+        
+        const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+        const notifPayload = {
+          id_solicitud: Array.from(successfulRequestIdsSet)[0], // Usar el primer ID como referencia
+          emp_id: empId,
+          emp_nombre: employeeName,
+          estado: 'PREAPROBADO',
+          comentario: `Todas tus solicitudes de vacaciones del año ${year} han sido preaprobadas`,
+          tipo: 'PROGRAMADA',
+          dias_solicitados: fechasUnicas.length,
+          fechas: fechasUnicas.map(f => `${f} (COMPLETO)`),
+          reemplazantes: reemplazantesCompletos
+        }
+        
+        console.log(`📱 Payload consolidado:`, notifPayload)
+        
+        const notifResponse = await fetch(`${BOT_URL}/api/vacation-notification`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(notifPayload)
+        })
+        
+        if (notifResponse.ok) {
+          console.log(`✅ Mensaje consolidado de preaprobación enviado exitosamente`)
+        } else {
+          const notifErrorText = await notifResponse.text()
+          console.warn(`⚠️ Error al enviar mensaje consolidado:`, notifResponse.status, notifErrorText)
+        }
+      } catch (notifError) {
+        console.warn('⚠️ Excepción al enviar mensaje consolidado:', notifError)
+      }
+      
       const message = `✅ ${successCount} solicitud(es) preaprobada(s) exitosamente para el año ${year}${errorCount > 0 ? `\n\n⚠️ ${errorCount} solicitud(es) con errores:\n${errors.slice(0, 3).join('\n')}${errors.length > 3 ? '\n...' : ''}` : ''}`
       alert(message)
     } else {
@@ -1329,6 +1564,7 @@ const preapproveVacationYear = async (empId: string) => {
     }
   } catch (error) {
     console.error('❌ Error general al preaprobar año:', error)
+    showProgressModal.value = false
     alert(`Error al preaprobar las vacaciones: ${error instanceof Error ? error.message : 'Error desconocido'}\n\nRevisa la consola (F12) para más detalles.`)
     contextMenu.value.show = false
   }

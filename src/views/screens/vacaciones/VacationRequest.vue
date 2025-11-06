@@ -387,6 +387,7 @@
       <div v-if="activeView === 'requests'" class="space-y-4">
         <RequestsList
           :emp-id="employeeData?.empID || currentUser.id"
+          :employee-replacements="employeeData?.replacements || []"
           @take-vacation="handleTakeVacation"
         />
       </div>
