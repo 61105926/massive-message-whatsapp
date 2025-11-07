@@ -43,7 +43,7 @@
     </Card>
 
     <!-- Empty State -->
-    <div v-else-if="requests.length === 0" class="text-center py-8">
+    <div v-else-if="!sortedRequests || sortedRequests.length === 0" class="text-center py-8">
       <Calendar class="mx-auto h-12 w-12 text-muted-foreground mb-4" />
       <p class="text-muted-foreground">No tienes solicitudes de vacaciones aún</p>
     </div>
@@ -64,7 +64,7 @@
                   {{ getStatusText(request.estado) }}
                 </span>
                 <span class="text-sm text-muted-foreground">
-                  {{ request.total_dias }} día{{ parseInt(request.total_dias) > 1 ? 's' : '' }}
+                  {{ (request as any).fechas_agrupadas ? (request as any).fechas_agrupadas.length : request.total_dias }} día{{ ((request as any).fechas_agrupadas ? (request as any).fechas_agrupadas.length : parseInt(request.total_dias)) > 1 ? 's' : '' }}
                 </span>
                 <span class="text-xs text-muted-foreground">
                   ID: {{ request.id_solicitud }}
@@ -75,10 +75,10 @@
                 <p class="text-sm">
                   <strong>Período:</strong>
                   <span v-if="(request as any).fechas_agrupadas">
-                    {{ formatDate((request as any).fechas_agrupadas[0]) }} - {{ formatDate((request as any).fechas_agrupadas[(request as any).fechas_agrupadas.length - 1]) }}
+                    {{ formatFechasAgrupadas((request as any).fechas_agrupadas) }}
                   </span>
                   <span v-else-if="request.fechas && request.fechas.length > 0">
-                    {{ formatDate(request.fechas[0].fecha) }} - {{ formatDate(request.fechas[request.fechas.length - 1].fecha) }}
+                    {{ formatFechasList(request.fechas.map((f: any) => f.fecha)) }}
                   </span>
                   <span v-else>
                     No especificado
@@ -98,7 +98,7 @@
                     v-if="(request as any).fechas_agrupadas"
                     class="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700"
                   >
-                    {{ formatDate((request as any).fechas_agrupadas[0]) }} - {{ formatDate((request as any).fechas_agrupadas[(request as any).fechas_agrupadas.length - 1]) }}
+                    {{ formatFechasAgrupadas((request as any).fechas_agrupadas) }}
                     <span class="ml-1 text-blue-600">({{ (request as any).fechas_agrupadas.length }} días)</span>
                   </span>
                   <!-- Si no, mostrar fechas individuales -->
@@ -119,9 +119,16 @@
             </div>
 
             <div class="flex flex-col gap-2 ml-3">
+              <!-- Si está rechazada, no mostrar ningún botón -->
+              <div
+                v-if="request.estado === 'RECHAZADO'"
+                class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-gray-100 text-gray-600 border border-gray-300 h-9 px-3 whitespace-nowrap"
+              >
+                Rechazada
+              </div>
               <!-- Si es programada y tiene estado PROGRAMADA, mostrar botón "Tomar Vacaciones" -->
               <button
-                v-if="request.tipo === 'PROGRAMADA' && request.estado === 'PROGRAMADA'"
+                v-else-if="request.tipo === 'PROGRAMADA' && request.estado === 'PROGRAMADA'"
                 @click="() => openTakeVacationModal(request)"
                 class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-3 whitespace-nowrap"
               >
@@ -180,7 +187,7 @@
               {{ currentTakeVacationRequest?.fechas_agrupadas && currentTakeVacationRequest.fechas_agrupadas.length > 0 ? formatDate(currentTakeVacationRequest.fechas_agrupadas[currentTakeVacationRequest.fechas_agrupadas.length - 1]) : (currentTakeVacationRequest?.fechas && currentTakeVacationRequest.fechas.length > 0 ? formatDate(currentTakeVacationRequest.fechas[currentTakeVacationRequest.fechas.length - 1].fecha) : '') }}
             </p>
             <p class="text-xs text-gray-600 mt-2">
-              Días totales: {{ currentTakeVacationRequest?.total_dias }}
+              Días totales: {{ (currentTakeVacationRequest as any)?.fechas_agrupadas ? (currentTakeVacationRequest as any).fechas_agrupadas.length : currentTakeVacationRequest?.total_dias }}
             </p>
           </div>
 
@@ -267,7 +274,7 @@
               {{ currentViewVacationRequest?.fechas_agrupadas && currentViewVacationRequest.fechas_agrupadas.length > 0 ? formatDate(currentViewVacationRequest.fechas_agrupadas[currentViewVacationRequest.fechas_agrupadas.length - 1]) : (currentViewVacationRequest?.fechas && currentViewVacationRequest.fechas.length > 0 ? formatDate(currentViewVacationRequest.fechas[currentViewVacationRequest.fechas.length - 1].fecha) : '') }}
             </p>
             <p class="text-xs text-gray-600 mt-2">
-              Días totales: {{ currentViewVacationRequest?.total_dias }}
+              Días totales: {{ (currentViewVacationRequest as any)?.fechas_agrupadas ? (currentViewVacationRequest as any).fechas_agrupadas.length : currentViewVacationRequest?.total_dias }}
             </p>
           </div>
 
@@ -394,6 +401,13 @@ interface VacationRequest {
     observacion: string | null
   }>
   fechas_agrupadas?: string[]
+  reemplazantes?: Array<{
+    ID_REEMPLAZO: string
+    NOMBRE: string
+    CARGO: string
+    TELEFONO: string
+    TIPO: string
+  }>
 }
 
 interface Props {
@@ -720,26 +734,84 @@ const confirmViewVacation = async () => {
   isLoadingViewVacation.value = true
   
   try {
-    // Extraer el id_solicitud real (sin _grupo_X si existe)
     const requestId = currentViewVacationRequest.value?.id_solicitud || ''
+    const isGrouped = String(requestId).includes('_grupo_')
     const realRequestId = requestId.split('_grupo_')[0]
     
     const empId = props.empId || currentViewVacationRequest.value?.emp_id
     
     console.log('💾 Guardando reemplazantes...')
-    console.log('💾 id_solicitud:', realRequestId)
+    console.log('💾 requestId:', requestId)
+    console.log('💾 isGrouped:', isGrouped)
+    console.log('💾 realRequestId:', realRequestId)
     console.log('💾 emp_id:', empId)
     console.log('💾 Reemplazantes seleccionados:', selectedViewReplacements.value)
     
+    // Si es un grupo, encontrar todas las solicitudes individuales que corresponden a las fechas del grupo
+    let solicitudesAActualizar: any[] = []
+    
+    if (isGrouped) {
+      // Es un grupo, obtener las fechas del grupo
+      const fechasGrupo = (currentViewVacationRequest.value as any)?.fechas_agrupadas || []
+      const fechaSolicitud = currentViewVacationRequest.value?.fecha_solicitud
+      
+      console.log('💾 Grupo detectado. Fechas del grupo:', fechasGrupo)
+      console.log('💾 Fecha de solicitud:', fechaSolicitud)
+      console.log('💾 Emp ID:', empId)
+      
+      // Buscar todas las solicitudes originales que corresponden a estas fechas
+      // IMPORTANTE: No filtrar por realRequestId, sino por fecha_solicitud, emp_id y fechas
+      solicitudesAActualizar = requests.value.filter(req => {
+        // Verificar que sea del mismo empleado
+        const mismoEmpleado = String(req.emp_id) === String(empId)
+        
+        // Verificar que tenga la misma fecha_solicitud (para agrupar correctamente)
+        const mismaFechaSolicitud = req.fecha_solicitud === fechaSolicitud
+        
+        // Verificar que tenga alguna de las fechas del grupo
+        const tieneFechaGrupo = req.fechas.some((f: any) => fechasGrupo.includes(f.fecha))
+        
+        // Verificar que NO sea un grupo (solo solicitudes individuales)
+        const noEsGrupo = !String(req.id_solicitud).includes('_grupo_')
+        
+        const cumple = mismoEmpleado && mismaFechaSolicitud && tieneFechaGrupo && noEsGrupo
+        
+        if (cumple) {
+          console.log(`✅ Solicitud ${req.id_solicitud} cumple criterios:`, {
+            fecha: req.fechas[0]?.fecha,
+            fecha_solicitud: req.fecha_solicitud,
+            emp_id: req.emp_id
+          })
+        }
+        
+        return cumple
+      })
+      
+      console.log(`💾 Encontradas ${solicitudesAActualizar.length} solicitudes individuales para el grupo`)
+      console.log('💾 IDs de solicitudes:', solicitudesAActualizar.map(s => s.id_solicitud))
+      console.log('💾 Fechas de solicitudes:', solicitudesAActualizar.map(s => s.fechas[0]?.fecha))
+    } else {
+      // No es grupo, usar solo esta solicitud
+      const solicitud = requests.value.find(r => 
+        String(r.id_solicitud) === String(realRequestId) && 
+        !String(r.id_solicitud).includes('_grupo_')
+      )
+      if (solicitud) {
+        solicitudesAActualizar = [solicitud]
+      }
+    }
+    
+    if (solicitudesAActualizar.length === 0) {
+      throw new Error('No se encontraron solicitudes para actualizar')
+    }
+    
     // Obtener los datos completos de cada reemplazante seleccionado
-    const replacementsToSave = selectedViewReplacements.value.map((repId: string) => {
+    const replacementsData = selectedViewReplacements.value.map((repId: string) => {
       // Buscar el reemplazante en availableReplacements para obtener todos sus datos
       const replacement = availableReplacements.value.find(r => r.id === repId || r.empID === repId)
       
       if (replacement) {
         return {
-          id_solicitud: parseInt(realRequestId),
-          emp_id: parseInt(String(empId || '0')),
           nombre: replacement.name,
           cargo: replacement.department,
           telefono: replacement.phone || '',
@@ -753,8 +825,6 @@ const confirmViewVacation = async () => {
         
         if (empReplacement) {
           return {
-            id_solicitud: parseInt(realRequestId),
-            emp_id: parseInt(String(empId || '0')),
             nombre: empReplacement.name,
             cargo: empReplacement.cargo,
             telefono: empReplacement.phone || '',
@@ -764,8 +834,6 @@ const confirmViewVacation = async () => {
         
         // Si no se encuentra, usar datos mínimos
         return {
-          id_solicitud: parseInt(realRequestId),
-          emp_id: parseInt(String(empId || '0')),
           nombre: 'Reemplazante',
           cargo: 'N/A',
           telefono: '',
@@ -774,7 +842,24 @@ const confirmViewVacation = async () => {
       }
     })
     
+    // Crear un array de reemplazantes a guardar para cada solicitud
+    const replacementsToSave: any[] = []
+    
+    for (const solicitud of solicitudesAActualizar) {
+      for (const replacementData of replacementsData) {
+        replacementsToSave.push({
+          id_solicitud: parseInt(String(solicitud.id_solicitud)),
+          emp_id: parseInt(String(empId || '0')),
+          nombre: replacementData.nombre,
+          cargo: replacementData.cargo,
+          telefono: replacementData.telefono,
+          tipo: replacementData.tipo
+        })
+      }
+    }
+    
     console.log('💾 Reemplazantes a guardar:', replacementsToSave)
+    console.log(`💾 Total de registros a guardar: ${replacementsToSave.length} (${solicitudesAActualizar.length} solicitudes × ${replacementsData.length} reemplazantes)`)
     
     // Guardar cada reemplazante individualmente usando la API correcta
     const savePromises = replacementsToSave.map(replacement => 
@@ -791,10 +876,13 @@ const confirmViewVacation = async () => {
     const allSuccessful = responses.every(r => r.ok)
     
     if (allSuccessful) {
-      console.log('✅ Todos los reemplazantes guardados exitosamente')
+      console.log('✅ Todos los reemplazantes guardados exitosamente para todas las solicitudes del grupo')
       
-      // Marcar esta solicitud como que tiene reemplazantes
-      requestsWithReplacements.value.add(realRequestId)
+      // Marcar esta solicitud/grupo específico como que tiene reemplazantes
+      // Usar el ID completo del grupo si es un grupo, o el ID base si no
+      const requestIdToMark = currentViewVacationRequest.value?.id_solicitud || realRequestId
+      requestsWithReplacements.value.add(requestIdToMark)
+      console.log(`✅ Marcando solicitud/grupo ${requestIdToMark} como que tiene reemplazantes`)
       
       showViewVacationModal.value = false
       // Recargar el historial para actualizar la vista
@@ -856,10 +944,8 @@ const fetchEmployeeRequests = async () => {
       console.log('📋 Tipos de solicitudes:', [...new Set(requests.value.map(r => r.tipo))])
       console.log('📋 Estados de solicitudes:', [...new Set(requests.value.map(r => r.estado))])
       
-      // Verificar qué solicitudes tienen reemplazantes guardados (en segundo plano, no bloquea)
-      checkRequestsWithReplacements().catch(err => {
-        console.error('❌ Error al verificar reemplazantes:', err)
-      })
+      // Verificar qué solicitudes tienen reemplazantes guardados (usando los datos que ya vienen en la respuesta)
+      checkRequestsWithReplacementsFromData()
     } else {
       console.error('❌ Formato de respuesta inválido:', data)
       throw new Error('Formato de respuesta inválido')
@@ -872,8 +958,8 @@ const fetchEmployeeRequests = async () => {
   }
 }
 
-// Verificar qué solicitudes tienen reemplazantes guardados
-const checkRequestsWithReplacements = async () => {
+// Verificar qué solicitudes tienen reemplazantes guardados usando los datos que ya vienen en la respuesta
+const checkRequestsWithReplacementsFromData = () => {
   requestsWithReplacements.value.clear()
   
   if (requests.value.length === 0) {
@@ -881,74 +967,83 @@ const checkRequestsWithReplacements = async () => {
     return
   }
   
-  // Obtener IDs únicos de solicitudes (sin _grupo_X)
-  const uniqueRequestIds = Array.from(new Set(
-    requests.value.map(r => {
-      const id = String(r.id_solicitud)
-      return id.split('_grupo_')[0]
-    })
-  ))
+  console.log('🔍 ===== VERIFICANDO REEMPLAZANTES DESDE DATOS =====')
   
-  if (uniqueRequestIds.length === 0) {
-    console.log('ℹ️ No hay IDs únicos para verificar')
-    return
-  }
+  // Crear un mapa de fechas que tienen reemplazantes
+  // Clave: fecha (YYYY-MM-DD), Valor: true si tiene reemplazantes
+  const fechasConReemplazantes = new Map<string, boolean>()
   
-  console.log('🔍 ===== VERIFICANDO REEMPLAZANTES =====')
-  console.log('🔍 IDs únicos de solicitudes a verificar:', uniqueRequestIds)
-  console.log('🔍 Total de solicitudes a verificar:', uniqueRequestIds.length)
-  
-  // Verificar todas las solicitudes en paralelo (más rápido)
-  const checkPromises = uniqueRequestIds.map(async (requestId) => {
-    try {
-      // Intentar con ambos formatos de parámetro (id_solicitud e idsolicitud)
-      const url1 = `http://190.171.225.68/api/reemplazante-vacation?id_solicitud=${requestId}`
-      const url2 = `http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}`
+  // Verificar cada solicitud original (antes de agrupar) usando los datos que ya vienen en la respuesta
+  requests.value.forEach((request) => {
+    // Verificar si la solicitud tiene reemplazantes en el campo reemplazantes
+    if (request.reemplazantes && Array.isArray(request.reemplazantes) && request.reemplazantes.length > 0) {
+      // Obtener las fechas de esta solicitud
+      const fechas = request.fechas.map(f => f.fecha)
       
-      let response = await fetch(url1)
-      if (!response.ok) {
-        // Si falla con id_solicitud, intentar con idsolicitud
-        response = await fetch(url2)
-      }
+      fechas.forEach(fecha => {
+        fechasConReemplazantes.set(fecha, true)
+      })
       
-      if (response.ok) {
-        const data = await response.json()
-        console.log(`📦 Respuesta para solicitud ${requestId}:`, data)
-        
-        // Verificar diferentes formatos de respuesta
-        let reemplazantes = null
-        if (data.reemplazantes && Array.isArray(data.reemplazantes)) {
-          reemplazantes = data.reemplazantes
-        } else if (data.success && data.data && Array.isArray(data.data)) {
-          reemplazantes = data.data
-        } else if (Array.isArray(data)) {
-          reemplazantes = data
-        }
-        
-        if (reemplazantes && reemplazantes.length > 0) {
-          requestsWithReplacements.value.add(requestId)
-          console.log(`✅ Solicitud ${requestId} tiene ${reemplazantes.length} reemplazante(s) guardado(s)`)
-          return { requestId, hasReplacements: true, count: reemplazantes.length }
-        }
-        console.log(`ℹ️ Solicitud ${requestId} no tiene reemplazantes guardados`)
-        return { requestId, hasReplacements: false, count: 0 }
-      } else {
-        console.warn(`⚠️ Error ${response.status} al verificar solicitud ${requestId}`)
-        return { requestId, hasReplacements: false, count: 0 }
-      }
-    } catch (error) {
-      console.warn(`⚠️ Error al verificar reemplazantes para solicitud ${requestId}:`, error)
-      return { requestId, hasReplacements: false, count: 0 }
+      console.log(`✅ Solicitud ${request.id_solicitud} tiene ${request.reemplazantes.length} reemplazante(s) para fechas:`, fechas)
     }
   })
   
-  const results = await Promise.all(checkPromises)
-  const withReplacements = results.filter(r => r.hasReplacements)
+  // Ahora verificar las solicitudes agrupadas
+  // Solo marcar como "con reemplazantes" si TODAS las fechas del grupo tienen reemplazantes
+  const groupedRequests = sortedRequests.value
+  console.log('🔍 Verificando grupos:', groupedRequests.length)
+  
+  groupedRequests.forEach((request: any) => {
+    const requestId = String(request.id_solicitud).split('_grupo_')[0]
+    const isGrouped = String(request.id_solicitud).includes('_grupo_')
+    
+    console.log(`🔍 Verificando request: ${request.id_solicitud}, isGrouped: ${isGrouped}`)
+    
+    if (isGrouped) {
+      // Es un grupo, verificar si todas las fechas del grupo tienen reemplazantes
+      const fechasGrupo = request.fechas_agrupadas || []
+      console.log(`🔍 Grupo ${request.id_solicitud} tiene fechas:`, fechasGrupo)
+      
+      // Verificar si TODAS las fechas del grupo tienen reemplazantes
+      const fechasConReemplazantesList: string[] = []
+      const fechasSinReemplazantesList: string[] = []
+      
+      fechasGrupo.forEach((fechaGrupo: string) => {
+        if (fechasConReemplazantes.has(fechaGrupo)) {
+          fechasConReemplazantesList.push(fechaGrupo)
+        } else {
+          fechasSinReemplazantesList.push(fechaGrupo)
+        }
+      })
+      
+      console.log(`🔍 Grupo ${request.id_solicitud}:`)
+      console.log(`   - Fechas con reemplazantes:`, fechasConReemplazantesList)
+      console.log(`   - Fechas sin reemplazantes:`, fechasSinReemplazantesList)
+      
+      // Solo marcar si TODAS las fechas tienen reemplazantes
+      if (fechasSinReemplazantesList.length === 0 && fechasConReemplazantesList.length > 0) {
+        // Usar el ID completo del grupo para identificar específicamente este grupo
+        requestsWithReplacements.value.add(request.id_solicitud)
+        console.log(`✅ Grupo ${request.id_solicitud} (fechas: ${fechasGrupo.join(', ')}) tiene reemplazantes para TODAS sus fechas`)
+      } else {
+        console.log(`ℹ️ Grupo ${request.id_solicitud} NO tiene reemplazantes para todas sus fechas (${fechasSinReemplazantesList.length} sin reemplazantes)`)
+      }
+    } else {
+      // No es grupo, verificar directamente por fechas
+      const fechasSolicitud = request.fechas?.map((f: any) => f.fecha) || []
+      const todasTienenReemplazantes = fechasSolicitud.length > 0 && 
+        fechasSolicitud.every((fecha: string) => fechasConReemplazantes.has(fecha))
+      
+      if (todasTienenReemplazantes) {
+        requestsWithReplacements.value.add(requestId)
+        console.log(`✅ Solicitud ${requestId} tiene reemplazantes para todas sus fechas`)
+      }
+    }
+  })
   
   console.log('✅ ===== VERIFICACIÓN COMPLETA =====')
-  console.log('✅ Solicitudes con reemplazantes:', withReplacements.map(r => `${r.requestId} (${r.count})`))
-  console.log('✅ Total de solicitudes con reemplazantes:', requestsWithReplacements.value.size)
-  console.log('✅ Set completo:', Array.from(requestsWithReplacements.value))
+  console.log('✅ Solicitudes/grupos con reemplazantes:', Array.from(requestsWithReplacements.value))
+  console.log('✅ Total de solicitudes/grupos con reemplazantes:', requestsWithReplacements.value.size)
 }
 
 // Watch para recargar cuando cambia el empId
@@ -1043,6 +1138,7 @@ const groupedProgrammedRequests = computed(() => {
         id_solicitud: `${primera.id_solicitud}_grupo_${i}`, // ID único para cada grupo
         fechas: [], // Limpiar fechas individuales
         fechas_agrupadas: grupos[i],
+        total_dias: String(grupos[i].length), // Calcular días basado en el número de fechas agrupadas
         id_grupo: `${primera.id_solicitud}_grupo_${i}` as any
       })
     }
@@ -1129,14 +1225,74 @@ const getVacationType = (tipo: string) => {
 }
 
 const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('es-ES')
+  // Evitar problemas de zona horaria: parsear la fecha directamente sin conversión
+  // Si la fecha viene como "YYYY-MM-DD", crear la fecha en hora local
+  if (dateString && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [year, month, day] = dateString.split('-').map(Number)
+    // month - 1 porque Date usa meses de 0-11
+    const date = new Date(year, month - 1, day)
+    return date.toLocaleDateString('es-ES')
+  }
+  // Si viene en otro formato, usar el método normal pero con cuidado
+  const date = new Date(dateString)
+  // Verificar que la fecha sea válida
+  if (isNaN(date.getTime())) {
+    return dateString // Devolver el string original si no es válido
+  }
+  return date.toLocaleDateString('es-ES')
+}
+
+// Formatear fechas agrupadas mostrando solo las fechas reales (no rangos)
+const formatFechasAgrupadas = (fechas: string[] | undefined): string => {
+  try {
+    if (!fechas || !Array.isArray(fechas) || fechas.length === 0) return 'No especificado'
+    
+    // Si hay muchas fechas, mostrar rango pero indicar que no son consecutivas
+    if (fechas.length > 5) {
+      const primera = fechas[0]
+      const ultima = fechas[fechas.length - 1]
+      if (primera && ultima) {
+        return `${formatDate(primera)} - ${formatDate(ultima)} (${fechas.length} días)`
+      }
+    }
+    
+    // Si son pocas fechas, mostrarlas todas
+    return fechas.filter(f => f).map(f => formatDate(f)).join(', ')
+  } catch (error) {
+    console.error('Error en formatFechasAgrupadas:', error)
+    return 'Error al formatear fechas'
+  }
+}
+
+// Formatear lista de fechas
+const formatFechasList = (fechas: string[] | undefined): string => {
+  try {
+    if (!fechas || !Array.isArray(fechas) || fechas.length === 0) return 'No especificado'
+    
+    // Ordenar fechas
+    const fechasOrdenadas = [...fechas].filter(f => f).sort()
+    
+    if (fechasOrdenadas.length === 0) return 'No especificado'
+    
+    // Si hay muchas fechas, mostrar rango
+    if (fechasOrdenadas.length > 5) {
+      return `${formatDate(fechasOrdenadas[0])} - ${formatDate(fechasOrdenadas[fechasOrdenadas.length - 1])} (${fechasOrdenadas.length} días)`
+    }
+    
+    // Si son pocas fechas, mostrarlas todas
+    return fechasOrdenadas.map(f => formatDate(f)).join(', ')
+  } catch (error) {
+    console.error('Error en formatFechasList:', error)
+    return 'Error al formatear fechas'
+  }
 }
 
 // Verificar si una solicitud tiene reemplazantes guardados
-const hasReplacements = (request: VacationRequest): boolean => {
-  const requestId = String(request.id_solicitud).split('_grupo_')[0]
+const hasReplacements = (request: VacationRequest | any): boolean => {
+  // Usar el ID completo (incluyendo _grupo_X si existe) para verificar
+  const requestId = String(request.id_solicitud)
   const hasRep = requestsWithReplacements.value.has(requestId)
-  console.log(`🔍 hasReplacements para solicitud ${request.id_solicitud} (${requestId}):`, hasRep)
+  console.log(`🔍 hasReplacements para solicitud ${requestId}:`, hasRep)
   return hasRep
 }
 </script>
