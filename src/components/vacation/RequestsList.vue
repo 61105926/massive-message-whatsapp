@@ -126,6 +126,17 @@
               >
                 Rechazada
               </div>
+              <!-- Si está aprobada, mostrar botón de descargar boleta -->
+              <button
+                v-else-if="request.estado === 'APROBADO'"
+                @click="() => downloadBoleta(request)"
+                class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-green-600 text-white hover:bg-green-700 h-9 px-3 whitespace-nowrap"
+              >
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Descargar Boleta
+              </button>
               <!-- Si es programada y tiene estado PROGRAMADA, mostrar botón "Tomar Vacaciones" -->
               <button
                 v-else-if="request.tipo === 'PROGRAMADA' && request.estado === 'PROGRAMADA'"
@@ -1294,5 +1305,242 @@ const hasReplacements = (request: VacationRequest | any): boolean => {
   const hasRep = requestsWithReplacements.value.has(requestId)
   console.log(`🔍 hasReplacements para solicitud ${requestId}:`, hasRep)
   return hasRep
+}
+
+// Descargar boleta de vacación
+const downloadBoleta = async (request: VacationRequest | any) => {
+  try {
+    console.log('📄 Generando boleta para solicitud:', request.id_solicitud)
+    console.log('📄 Request completo:', request)
+    
+    // Obtener datos del empleado desde la API
+    let employeeData: any = null
+    const empIdToUse = props.empId || request.emp_id
+    console.log('📄 Emp ID a usar:', empIdToUse)
+    
+    try {
+      const empResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${empIdToUse}`)
+      console.log('📄 Respuesta de empleado/info:', empResponse.status, empResponse.statusText)
+      
+      if (empResponse.ok) {
+        const empResult = await empResponse.json()
+        console.log('📄 Resultado de empleado/info:', empResult)
+        
+        if (empResult.status === 'success' && Array.isArray(empResult.data) && empResult.data.length > 0) {
+          employeeData = empResult.data[0]
+          console.log('📄 Datos del empleado obtenidos:', employeeData)
+        }
+      } else {
+        const errorText = await empResponse.text()
+        console.warn('📄 Error al obtener datos del empleado:', empResponse.status, errorText)
+      }
+    } catch (err: any) {
+      console.warn('📄 Excepción al obtener datos del empleado:', err.message)
+    }
+
+    // Obtener fechas de la solicitud
+    const fechas = (request as any).fechas_agrupadas || request.fechas?.map((f: any) => f.fecha) || []
+    console.log('📄 Fechas obtenidas:', fechas)
+    
+    if (fechas.length === 0) {
+      throw new Error('No se encontraron fechas en la solicitud')
+    }
+    
+    // Validar y formatear FechaIngreso
+    let fechaIngreso = employeeData?.fecha_ingreso || employeeData?.FechaIngreso || employeeData?.fecha_ingreso_empleado
+    if (!fechaIngreso || fechaIngreso === 'N/A' || fechaIngreso === '') {
+      // Si no hay fecha de ingreso, usar una fecha por defecto (1 año atrás desde hoy)
+      const fechaDefault = new Date()
+      fechaDefault.setFullYear(fechaDefault.getFullYear() - 1)
+      fechaIngreso = fechaDefault.toISOString().split('T')[0]
+      console.warn('📄 No se encontró fecha de ingreso, usando fecha por defecto:', fechaIngreso)
+    } else {
+      // Asegurar que la fecha esté en formato YYYY-MM-DD
+      try {
+        const fechaParsed = new Date(fechaIngreso)
+        if (isNaN(fechaParsed.getTime())) {
+          throw new Error('Fecha inválida')
+        }
+        fechaIngreso = fechaParsed.toISOString().split('T')[0]
+        console.log('📄 Fecha de ingreso formateada:', fechaIngreso)
+      } catch (e) {
+        // Si no se puede parsear, usar fecha por defecto
+        const fechaDefault = new Date()
+        fechaDefault.setFullYear(fechaDefault.getFullYear() - 1)
+        fechaIngreso = fechaDefault.toISOString().split('T')[0]
+        console.warn('📄 Error al parsear fecha de ingreso, usando fecha por defecto:', fechaIngreso)
+      }
+    }
+    
+    // Construir payload para la boleta
+    const boletaPayload: any = {
+      Codigo: employeeData?.codigo || employeeData?.empID || empIdToUse || 'N/A',
+      Empleado: employeeData?.fullName || employeeData?.nombre || request.emp_nombre || 'Empleado',
+      Cargo: employeeData?.cargo || 'N/A',
+      Departamento: employeeData?.departamento || employeeData?.dept || 'N/A',
+      FechaIngreso: fechaIngreso, // Ahora siempre será una fecha válida
+      FechaSolicitud: request.fecha_solicitud || new Date().toISOString().split('T')[0],
+      Estado: 'Autorizado',
+      Observaciones: request.comentario || 'Vacación aprobada',
+      detalle: []
+    }
+
+    // Agrupar fechas consecutivas en el detalle
+    if (fechas.length > 0) {
+      const fechasOrdenadas = [...fechas].sort()
+      let grupoInicio = fechasOrdenadas[0]
+      let grupoFin = fechasOrdenadas[0]
+
+      for (let i = 1; i < fechasOrdenadas.length; i++) {
+        const fechaActual = new Date(fechasOrdenadas[i] + 'T00:00:00')
+        const fechaAnterior = new Date(fechasOrdenadas[i - 1] + 'T00:00:00')
+        const diferenciaDias = (fechaActual.getTime() - fechaAnterior.getTime()) / (1000 * 60 * 60 * 24)
+
+        if (diferenciaDias === 1) {
+          // Fecha consecutiva, extender el grupo
+          grupoFin = fechasOrdenadas[i]
+        } else {
+          // Nueva secuencia, guardar el grupo anterior
+          const dias = (new Date(grupoFin + 'T00:00:00').getTime() - new Date(grupoInicio + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24) + 1
+          boletaPayload.detalle.push({
+            Desde: grupoInicio,
+            Hasta: grupoFin,
+            Dias: dias,
+            Tipo: request.tipo === 'PROGRAMADA' ? 'Vacación' : request.tipo || 'Vacación'
+          })
+          grupoInicio = fechasOrdenadas[i]
+          grupoFin = fechasOrdenadas[i]
+        }
+      }
+
+      // Agregar el último grupo
+      const dias = (new Date(grupoFin + 'T00:00:00').getTime() - new Date(grupoInicio + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24) + 1
+      boletaPayload.detalle.push({
+        Desde: grupoInicio,
+        Hasta: grupoFin,
+        Dias: dias,
+        Tipo: request.tipo === 'PROGRAMADA' ? 'Vacación' : request.tipo || 'Vacación'
+      })
+    }
+
+    console.log('📄 Payload de boleta completo:', JSON.stringify(boletaPayload, null, 2))
+
+    // Generar PDF usando GET (la API solo acepta GET)
+    console.log('📄 Enviando request a /api/vacacion...')
+    
+    // Construir URL con parámetros individuales (la API puede esperar esto)
+    const params = new URLSearchParams()
+    params.append('Codigo', String(boletaPayload.Codigo))
+    params.append('Empleado', String(boletaPayload.Empleado))
+    params.append('Cargo', String(boletaPayload.Cargo))
+    params.append('Departamento', String(boletaPayload.Departamento))
+    params.append('FechaIngreso', String(boletaPayload.FechaIngreso))
+    params.append('FechaSolicitud', String(boletaPayload.FechaSolicitud))
+    params.append('Estado', String(boletaPayload.Estado))
+    params.append('Observaciones', String(boletaPayload.Observaciones))
+    
+    // Agregar cada elemento del detalle como parámetros separados
+    // Formato: detalle[0][Desde]=...&detalle[0][Hasta]=...&detalle[0][Dias]=...&detalle[0][Tipo]=...
+    boletaPayload.detalle.forEach((item: any, index: number) => {
+      params.append(`detalle[${index}][Desde]`, String(item.Desde))
+      params.append(`detalle[${index}][Hasta]`, String(item.Hasta))
+      params.append(`detalle[${index}][Dias]`, String(item.Dias))
+      params.append(`detalle[${index}][Tipo]`, String(item.Tipo))
+    })
+    
+    const apiUrl = `http://190.171.225.68/api/vacacion?${params.toString()}`
+    console.log('📄 URL completa (primeros 500 chars):', apiUrl.substring(0, 500))
+    console.log('📄 Total de parámetros:', params.toString().split('&').length)
+    
+    let response: Response
+    try {
+      response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/pdf, application/octet-stream, */*',
+        }
+      })
+    } catch (fetchError: any) {
+      console.error('❌ Error de red al hacer fetch:', fetchError)
+      throw new Error(`Error de conexión: ${fetchError.message}`)
+    }
+
+    console.log('📄 Respuesta de /api/vacacion:', response.status, response.statusText)
+    const contentType = response.headers.get('content-type')
+    console.log('📄 Content-Type:', contentType)
+    console.log('📄 Headers completos:', Object.fromEntries(response.headers.entries()))
+
+    if (!response.ok) {
+      // Si hay error, intentar leer el texto de error
+      let errorText = ''
+      try {
+        // Intentar leer como texto primero
+        const responseClone = response.clone()
+        errorText = await responseClone.text()
+        console.error('📄 Error en respuesta (texto):', errorText.substring(0, 500))
+        
+        // Si parece JSON, intentar parsearlo
+        try {
+          const errorJson = JSON.parse(errorText)
+          console.error('📄 Error en respuesta (JSON):', errorJson)
+          errorText = errorJson.message || errorJson.error || JSON.stringify(errorJson)
+        } catch (e) {
+          // No es JSON, usar el texto tal cual
+        }
+      } catch (e: any) {
+        errorText = `Error ${response.status}: ${response.statusText} - ${e.message}`
+      }
+      console.error('📄 Error completo en respuesta:', errorText)
+      throw new Error(`Error al generar boleta (${response.status}): ${errorText.substring(0, 200)}`)
+    }
+
+    // Verificar que sea un PDF (pero no bloquear si no lo especifica, algunos servidores no lo hacen)
+    if (contentType && !contentType.includes('pdf') && !contentType.includes('application/octet-stream') && !contentType.includes('binary')) {
+      console.warn('📄 Content-Type inesperado:', contentType, '- Continuando de todas formas')
+    }
+
+    // Descargar el PDF
+    console.log('📄 Convirtiendo respuesta a blob...')
+    const blob = await response.blob()
+    console.log('📄 Blob creado, tamaño:', blob.size, 'bytes', 'tipo:', blob.type)
+    
+    if (blob.size === 0) {
+      throw new Error('El PDF generado está vacío')
+    }
+    
+    // Verificar que el blob no sea un JSON de error
+    if (blob.type && blob.type.includes('json')) {
+      const text = await blob.text()
+      console.error('📄 Respuesta es JSON (probable error):', text)
+      let errorMessage = 'Error del servidor'
+      try {
+        const errorJson = JSON.parse(text)
+        errorMessage = errorJson.message || errorJson.error || text
+      } catch (e) {
+        errorMessage = text
+      }
+      throw new Error(errorMessage)
+    }
+
+    const blobUrl = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = `Boleta_Vacacion_${request.id_solicitud}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    
+    // Limpiar después de un breve delay
+    setTimeout(() => {
+      window.URL.revokeObjectURL(blobUrl)
+      document.body.removeChild(a)
+    }, 100)
+
+    console.log('✅ Boleta descargada exitosamente')
+  } catch (error: any) {
+    console.error('❌ Error completo al descargar boleta:', error)
+    console.error('❌ Stack trace:', error.stack)
+    const errorMessage = error.message || 'Error desconocido al descargar la boleta'
+    alert(`Error al descargar la boleta: ${errorMessage}\n\nPor favor revisa la consola para más detalles.`)
+  }
 }
 </script>

@@ -965,18 +965,22 @@ const handlePreapprove = (requestId: string) => {
 const confirmPreapprove = async () => {
   if (!selectedRequestId.value) return
 
-  await updateRequestStatus(
-    selectedRequestId.value,
-    'PREAPROBADO',
-    approveComment.value.trim() || 'Solicitud revisada y preaprobada por el jefe'
-  )
+  try {
+    await updateRequestStatus(
+      selectedRequestId.value,
+      'PREAPROBADO',
+      approveComment.value.trim() || 'Solicitud revisada y preaprobada por el jefe'
+    )
 
-  // Cerrar modal
-  showApproveModal.value = false
-  selectedRequestId.value = null
-  selectedRequest.value = null
-  approveComment.value = ''
-  isPreapproving.value = false
+    // Cerrar modal
+    showApproveModal.value = false
+    selectedRequestId.value = null
+    selectedRequest.value = null
+    approveComment.value = ''
+    isPreapproving.value = false
+  } catch (error) {
+    console.error('Error en confirmPreapprove:', error)
+  }
 }
 
 // Función para aprobar solicitud (abre modal)
@@ -1004,8 +1008,6 @@ const handleApprove = async (requestId: string) => {
 const confirmApproveWithReplacements = async () => {
   if (!selectedRequestId.value) return
 
-  isProcessing.value = true
-
   try {
     await updateRequestStatus(
       selectedRequestId.value,
@@ -1019,8 +1021,8 @@ const confirmApproveWithReplacements = async () => {
     selectedRequestId.value = null
     selectedRequest.value = null
     selectedReplacements.value = []
-  } finally {
-    isProcessing.value = false
+  } catch (error) {
+    console.error('Error en confirmApproveWithReplacements:', error)
   }
 }
 
@@ -1034,18 +1036,22 @@ const confirmApprove = async () => {
     return
   }
 
-  await updateRequestStatus(
-    selectedRequestId.value,
-    'APROBADO',
-    approveComment.value.trim() || 'Aprobado por el jefe'
-  )
+  try {
+    await updateRequestStatus(
+      selectedRequestId.value,
+      'APROBADO',
+      approveComment.value.trim() || 'Aprobado por el jefe'
+    )
 
-  // Cerrar modal
-  showApproveModal.value = false
-  selectedRequestId.value = null
-  selectedRequest.value = null
-  approveComment.value = ''
-  isPreapproving.value = false
+    // Cerrar modal
+    showApproveModal.value = false
+    selectedRequestId.value = null
+    selectedRequest.value = null
+    approveComment.value = ''
+    isPreapproving.value = false
+  } catch (error) {
+    console.error('Error en confirmApprove:', error)
+  }
 }
 
 // Cancelar aprobación
@@ -1097,13 +1103,17 @@ const confirmReject = async () => {
     }
   }
 
-  await updateRequestStatus(selectedRequestId.value, 'RECHAZADO', rejectComment.value)
+  try {
+    await updateRequestStatus(selectedRequestId.value, 'RECHAZADO', rejectComment.value)
 
-  // Cerrar modal
-  showRejectModal.value = false
-  selectedRequestId.value = null
-  selectedRequest.value = null
-  rejectComment.value = ''
+    // Cerrar modal
+    showRejectModal.value = false
+    selectedRequestId.value = null
+    selectedRequest.value = null
+    rejectComment.value = ''
+  } catch (error) {
+    console.error('Error en confirmReject:', error)
+  }
 }
 
 // Cancelar rechazo
