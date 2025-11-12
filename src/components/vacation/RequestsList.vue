@@ -126,42 +126,33 @@
               >
                 Rechazada
               </div>
-              <!-- Si está aprobada, SIEMPRE mostrar botón de descargar boleta (sin importar si es programada o no) -->
-              <button
-                v-else-if="request.estado === 'APROBADO'"
-                @click="() => downloadBoleta(request)"
-                class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-green-600 text-white hover:bg-green-700 h-9 px-3 whitespace-nowrap"
-              >
-                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Descargar Boleta
-              </button>
-              <!-- Si es programada y está en proceso/pendiente, mostrar "Esperando aprobación" -->
-              <div
-                v-else-if="request.tipo === 'PROGRAMADA' && (request.estado === 'PROCESO' || request.estado === 'PENDIENTE' || request.estado === 'PREAPROBADO')"
-                class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-300 h-9 px-3 whitespace-nowrap"
-              >
-                <Clock class="h-4 w-4 mr-1" />
-                Esperando aprobación
-              </div>
-              <!-- Si no es programada y no tiene reemplazantes, mostrar botón Tomar para seleccionar reemplazantes -->
-              <button
-                v-else-if="request.tipo !== 'PROGRAMADA' && (request.estado === 'PROCESO' || request.estado === 'PENDIENTE' || request.estado === 'PREAPROBADO')"
-                @click="() => openViewVacationModal(request)"
-                class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-3 whitespace-nowrap"
-              >
-                <Calendar class="h-4 w-4 mr-1" />
-                Tomar
-              </button>
-              <!-- Si no cumple ninguna condición, mostrar "Esperando aprobación" por defecto -->
-              <div
-                v-else
-                class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-300 h-9 px-3 whitespace-nowrap"
-              >
-                <Clock class="h-4 w-4 mr-1" />
-                Esperando aprobación
-              </div>
+            <!-- Si está aprobada, SIEMPRE mostrar botón de descargar boleta (sin importar si es programada o no) -->
+            <button
+              v-if="request.estado === 'APROBADO'"
+              @click="() => downloadBoleta(request)"
+              class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-green-600 text-white hover:bg-green-700 h-9 px-3 whitespace-nowrap"
+            >
+              <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Descargar Boleta
+            </button>
+            <!-- Si está en proceso/pendiente/preaprobado, mostrar "Esperando aprobación" (sin importar el tipo) -->
+            <div
+              v-else-if="request.estado === 'PROCESO' || request.estado === 'PENDIENTE' || request.estado === 'PREAPROBADO'"
+              class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-300 h-9 px-3 whitespace-nowrap"
+            >
+              <Clock class="h-4 w-4 mr-1" />
+              Esperando aprobación
+            </div>
+            <!-- Si no cumple ninguna condición, mostrar "Esperando aprobación" por defecto -->
+            <div
+              v-else
+              class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-300 h-9 px-3 whitespace-nowrap"
+            >
+              <Clock class="h-4 w-4 mr-1" />
+              Esperando aprobación
+            </div>
             </div>
           </div>
         </CardContent>

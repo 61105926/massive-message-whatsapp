@@ -318,7 +318,21 @@
           </div>
 
           <!-- Si está en modo programadas, mostrar solo botón de envío -->
-          <div v-if="programmedVacationsEnabled && selectedDates.length > 0" class="mt-4">
+          <!-- Verificar si ya tiene vacaciones programadas -->
+          <div v-if="programmedVacationsEnabled && hasExistingProgrammedVacations" class="mt-4 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
+            <div class="flex items-start gap-3">
+              <svg class="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <h4 class="font-semibold text-yellow-900 mb-1">Ya programaste tus vacaciones</h4>
+                <p class="text-sm text-yellow-700">
+                  Solo puedes programar tus vacaciones una vez por año. Si necesitas modificar tus fechas programadas, contacta a RRHH o a tu jefe directo.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div v-else-if="programmedVacationsEnabled && selectedDates.length > 0" class="mt-4">
             <Card>
               <CardContent class="pt-6">
                 <div class="flex items-center justify-between">
@@ -667,7 +681,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { CalendarDays, Clock, CheckCircle, User } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
@@ -701,6 +715,20 @@ const notification = ref<{ show: boolean; type: 'success' | 'error' | 'info'; ti
 
 // Modal de confirmación
 const showConfirmModal = ref(false)
+
+// Computed: Verificar si ya tiene vacaciones programadas
+const hasExistingProgrammedVacations = computed(() => {
+  if (!requests.value || requests.value.length === 0) {
+    return false
+  }
+  
+  return requests.value.some((req: any) => {
+    // Verificar si tiene vacaciones programadas en cualquier estado (excepto rechazadas)
+    return req.tipo === 'PROGRAMADA' && 
+           req.estado !== 'RECHAZADO' && 
+           req.estado !== 'rejected'
+  })
+})
 
 // Badge de desarrollador (se muestra por defecto, se puede cerrar)
 const showDeveloperBadge = ref(true)
@@ -933,6 +961,26 @@ const handleRequestSubmit = async (request: any) => {
   if (request.type !== 'programmed' && !request.type) {
     showNotification('error', 'Tipo requerido', 'Debes seleccionar el tipo de vacación.', 3000)
     return
+  }
+
+  // VALIDACIÓN ESPECIAL: Si es vacaciones programadas, verificar que no haya programado antes
+  if (request.type === 'programmed') {
+    const hasProgrammedVacations = requests.value.some((req: any) => {
+      // Verificar si tiene vacaciones programadas en cualquier estado (excepto rechazadas)
+      return req.tipo === 'PROGRAMADA' && 
+             req.estado !== 'RECHAZADO' && 
+             req.estado !== 'rejected'
+    })
+
+    if (hasProgrammedVacations) {
+      showNotification(
+        'error', 
+        'Ya programaste tus vacaciones', 
+        'Solo puedes programar tus vacaciones una vez por año. Si necesitas modificar tus fechas, contacta a RRHH o a tu jefe directo.', 
+        8000
+      )
+      return
+    }
   }
 
   // Validar reemplazantes SOLO si NO es programadas

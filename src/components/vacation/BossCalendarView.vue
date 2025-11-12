@@ -1,5 +1,56 @@
 <template>
   <div class="w-full space-y-4">
+    <!-- Toast Notification -->
+    <div
+      v-if="notification.show"
+      :class="[
+        'fixed top-4 left-4 right-4 md:left-auto md:right-4 md:max-w-md z-[100] rounded-lg shadow-xl p-4 transition-all duration-300 animate-in slide-in-from-top-5',
+        notification.type === 'success' ? 'bg-green-50 border-2 border-green-500' : '',
+        notification.type === 'error' ? 'bg-red-50 border-2 border-red-500' : '',
+        notification.type === 'warning' ? 'bg-yellow-50 border-2 border-yellow-500' : '',
+        notification.type === 'info' ? 'bg-blue-50 border-2 border-blue-500' : ''
+      ]"
+    >
+      <div class="flex items-start gap-3">
+        <div class="flex-shrink-0">
+          <CheckCircle v-if="notification.type === 'success'" class="h-5 w-5 text-green-600" />
+          <AlertCircle v-else-if="notification.type === 'error'" class="h-5 w-5 text-red-600" />
+          <AlertCircle v-else-if="notification.type === 'warning'" class="h-5 w-5 text-yellow-600" />
+          <AlertCircle v-else class="h-5 w-5 text-blue-600" />
+        </div>
+        <div class="flex-1">
+          <h4
+            :class="[
+              'font-semibold text-sm',
+              notification.type === 'success' ? 'text-green-900' : '',
+              notification.type === 'error' ? 'text-red-900' : '',
+              notification.type === 'warning' ? 'text-yellow-900' : '',
+              notification.type === 'info' ? 'text-blue-900' : ''
+            ]"
+          >
+            {{ notification.title }}
+          </h4>
+          <p
+            :class="[
+              'text-sm mt-1 whitespace-pre-line',
+              notification.type === 'success' ? 'text-green-700' : '',
+              notification.type === 'error' ? 'text-red-700' : '',
+              notification.type === 'warning' ? 'text-yellow-700' : '',
+              notification.type === 'info' ? 'text-blue-700' : ''
+            ]"
+          >
+            {{ notification.message }}
+          </p>
+        </div>
+        <button
+          @click="notification.show = false"
+          class="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X class="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+
     <!-- Header con navegación y filtros -->
     <div class="bg-white border rounded-lg p-4">
       <!-- Fila 1: Navegación y Vista -->
@@ -534,12 +585,34 @@
             ¿Deseas sugerirle <span class="font-medium">{{ formatDayMonth(newVacationStartDate) }}</span> a {{ selectedEmployeeForVacation?.name }}?
           </p>
           
+          <!-- Mostrar información de días disponibles -->
+          <div v-if="selectedEmployeeForVacation" class="text-xs text-gray-600 bg-gray-50 p-2 rounded mb-2">
+            <div v-if="canSuggestVacation(selectedEmployeeForVacation.emp_id)">
+              <span class="font-semibold">Días disponibles:</span>
+              {{ (selectedEmployeeForVacation.vacationBalance || selectedEmployeeForVacation.totalDays || 0) - getProgrammedDaysCount(String(selectedEmployeeForVacation.emp_id)) }} de {{ selectedEmployeeForVacation.vacationBalance || selectedEmployeeForVacation.totalDays || 0 }}
+            </div>
+            <div v-else class="text-red-600 font-semibold">
+              ⚠️ Sin días disponibles ({{ getProgrammedDaysCount(String(selectedEmployeeForVacation.emp_id)) }} días ya programados)
+            </div>
+          </div>
+          
           <div class="flex gap-2 pt-2">
             <button
               @click="submitVacationForm"
-              class="w-full px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors font-semibold"
+              :disabled="!canSuggestVacation(selectedEmployeeForVacation?.emp_id)"
+              :class="[
+                'w-full px-3 py-2 text-sm rounded-lg transition-colors font-semibold',
+                canSuggestVacation(selectedEmployeeForVacation?.emp_id)
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+              ]"
             >
-              Confirmar
+              <span v-if="!canSuggestVacation(selectedEmployeeForVacation?.emp_id)">
+                Sin días disponibles
+              </span>
+              <span v-else>
+                Confirmar
+              </span>
             </button>
           </div>
         </div>
@@ -623,7 +696,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, CheckCircle, AlertCircle, X } from 'lucide-vue-next'
 
 interface Employee {
   emp_id: string
@@ -703,6 +776,31 @@ const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Juli
 const teamEmployees = ref<Employee[]>([])
 const vacations = ref<Vacation[]>([])
 const publicHolidays = ref<{ date: string; name: string }[]>([])
+// Almacenar todas las solicitudes originales para contar días programados
+const allRequests = ref<any[]>([])
+
+// Notification state
+const notification = ref({
+  show: false,
+  type: 'info' as 'success' | 'error' | 'warning' | 'info',
+  title: '',
+  message: ''
+})
+
+// Show notification function
+const showNotification = (type: 'success' | 'error' | 'warning' | 'info', title: string, message: string) => {
+  notification.value = {
+    show: true,
+    type,
+    title,
+    message
+  }
+
+  // Auto-hide after 5 seconds
+  setTimeout(() => {
+    notification.value.show = false
+  }, 5000)
+}
 
 const days = computed(() => {
   const year = currentDate.value.getFullYear()
@@ -871,10 +969,157 @@ const getDayVacations = (): Vacation[] => {
   })
 }
 
+// Función para calcular días programados de un empleado
+const getProgrammedDaysCount = (empId: string | number | undefined): number => {
+  if (!empId) return 0
+  
+  // Contar todas las solicitudes PROGRAMADA que no estén rechazadas
+  let totalDays = 0
+  
+  const empIdStr = String(empId)
+  console.log('🔍 Calculando días programados para empId:', empIdStr)
+  console.log('📋 Total de solicitudes en allRequests:', allRequests.value.length)
+  
+  // Buscar en las solicitudes originales (allRequests) que tienen todas las fechas
+  const programmedRequests = allRequests.value.filter(req => {
+    const reqEmpId = String(req.emp_id || '')
+    const reqTipo = String(req.tipo || '').toUpperCase()
+    const reqEstado = String(req.estado || '').toUpperCase()
+    
+    return reqEmpId === empIdStr && 
+           reqTipo === 'PROGRAMADA' &&
+           reqEstado !== 'RECHAZADO' &&
+           reqEstado !== 'REJECTED'
+  })
+  
+  console.log('📊 Solicitudes PROGRAMADA encontradas para', empIdStr, ':', programmedRequests.length)
+  
+  // Contar todas las fechas de cada solicitud programada
+  programmedRequests.forEach((req, index) => {
+    let daysInRequest = 0
+    
+    if (req.fechas && Array.isArray(req.fechas) && req.fechas.length > 0) {
+      // Contar cada fecha en el array de fechas
+      daysInRequest = req.fechas.length
+      console.log(`  📅 Solicitud ${index + 1} (${req.id_solicitud}): ${daysInRequest} días (desde array fechas)`)
+    } else if (req.fechas_agrupadas && Array.isArray(req.fechas_agrupadas) && req.fechas_agrupadas.length > 0) {
+      // Si tiene fechas_agrupadas, contar esas
+      daysInRequest = req.fechas_agrupadas.length
+      console.log(`  📅 Solicitud ${index + 1} (${req.id_solicitud}): ${daysInRequest} días (desde fechas_agrupadas)`)
+    } else if (req.start_date && req.end_date) {
+      // Si tiene start_date y end_date, calcular la diferencia
+      const start = new Date(req.start_date)
+      const end = new Date(req.end_date)
+      const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      daysInRequest = daysDiff
+      console.log(`  📅 Solicitud ${index + 1} (${req.id_solicitud}): ${daysInRequest} días (desde start_date/end_date)`)
+    } else {
+      console.warn(`  ⚠️ Solicitud ${index + 1} (${req.id_solicitud}) sin fechas válidas:`, req)
+    }
+    
+    totalDays += daysInRequest
+  })
+  
+  console.log('✅ Total días programados para', empIdStr, ':', totalDays)
+  
+  // Validación adicional: si no encontramos solicitudes pero el array está vacío, retornar 0
+  if (programmedRequests.length === 0 && allRequests.value.length > 0) {
+    console.warn('⚠️ No se encontraron solicitudes PROGRAMADA para', empIdStr, 'pero hay', allRequests.value.length, 'solicitudes en total')
+    // Mostrar un ejemplo de las primeras solicitudes para debug
+    const sampleRequests = allRequests.value.slice(0, 3).map((req: any) => ({
+      emp_id: req.emp_id,
+      tipo: req.tipo,
+      estado: req.estado
+    }))
+    console.log('📋 Ejemplo de solicitudes en allRequests:', sampleRequests)
+  }
+  
+  return totalDays
+}
+
+// Función helper para verificar si se puede sugerir vacación
+const canSuggestVacation = (empId: string | number | undefined): boolean => {
+  if (!empId) {
+    console.log('❌ canSuggestVacation: empId no proporcionado')
+    return false
+  }
+  
+  const empIdStr = String(empId)
+  const employee = teamEmployees.value.find(emp => String(emp.emp_id) === empIdStr)
+  
+  if (!employee) {
+    console.warn('⚠️ Empleado no encontrado para canSuggestVacation:', empIdStr)
+    return false
+  }
+  
+  // Priorizar vacationBalance sobre totalDays porque es más preciso
+  const totalDays = employee.vacationBalance || employee.totalDays || 0
+  
+  if (totalDays === 0) {
+    console.warn('⚠️ El empleado no tiene días de vacaciones configurados:', employee)
+    return false
+  }
+  
+  const programmedDays = getProgrammedDaysCount(empIdStr)
+  const daysRemaining = totalDays - programmedDays
+  
+  console.log('🔍 canSuggestVacation:', {
+    empId: empIdStr,
+    employeeName: employee.name,
+    totalDays,
+    programmedDays,
+    daysRemaining,
+    canSuggest: daysRemaining > 0
+  })
+  
+  return daysRemaining > 0
+}
+
 const openVacationModal = (empId: string, date: Date) => {
   // No permitir sugerir días feriados
   if (isHoliday(date)) {
-    alert('No se pueden sugerir vacaciones en días feriados.')
+    showNotification('warning', 'Día Feriado', 'No se pueden sugerir vacaciones en días feriados.')
+    return
+  }
+  
+  // Verificar si el empleado ya programó todos sus días
+  const empIdStr = String(empId)
+  const employee = teamEmployees.value.find(emp => String(emp.emp_id) === empIdStr)
+  
+  if (!employee) {
+    console.warn('⚠️ Empleado no encontrado en teamEmployees para empId:', empIdStr)
+    showNotification('error', 'Error', 'No se pudo verificar la información del empleado. Por favor, recarga la página.')
+    return
+  }
+  
+  // Obtener el total de días del empleado (priorizar totalDays sobre vacationBalance)
+  // Priorizar vacationBalance sobre totalDays porque es más preciso
+  const totalDays = employee.vacationBalance || employee.totalDays || 0
+  
+  if (totalDays === 0) {
+    console.warn('⚠️ El empleado no tiene días de vacaciones configurados:', employee)
+    showNotification('warning', 'Información Incompleta', 'No se pudo determinar el total de días de vacaciones del empleado.')
+    return
+  }
+  
+  const programmedDays = getProgrammedDaysCount(empIdStr)
+  const daysRemaining = totalDays - programmedDays
+  
+  console.log('🔍 Validación de días programados en openVacationModal:', {
+    empId: empIdStr,
+    employeeName: employee.name,
+    totalDays,
+    programmedDays,
+    daysRemaining,
+    allRequestsCount: allRequests.value.length
+  })
+  
+  if (daysRemaining <= 0) {
+    showNotification(
+      'warning',
+      'Sin Días Disponibles',
+      `${employee.name} ya programó todos sus ${totalDays} días de vacaciones (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.`
+    )
     return
   }
   
@@ -890,7 +1135,6 @@ const openVacationModal = (empId: string, date: Date) => {
     showSuggestModal.value = true
   } else {
     // Si no hay vacación, mostrar modal de creación
-    const employee = teamEmployees.value.find(emp => emp.emp_id === empId)
     selectedEmployeeForVacation.value = employee || null
     selectedDateForVacation.value = date
     
@@ -1288,7 +1532,7 @@ const rejectVacationDay = async (empId: string, date: Date) => {
         window.dispatchEvent(event)
       } else {
         console.error('❌ Error al rechazar en la API')
-        alert('Error al rechazar la solicitud. Por favor intenta nuevamente.')
+        showNotification('error', 'Error', 'Error al rechazar la solicitud. Por favor intenta nuevamente.')
       }
       
       contextMenu.value.show = false
@@ -1328,7 +1572,7 @@ const preapproveVacationYear = async (empId: string) => {
     })))
     
     if (yearVacations.length === 0) {
-      alert('No hay vacaciones para este empleado en el año seleccionado.')
+      showNotification('info', 'Sin Vacaciones', 'No hay vacaciones para este empleado en el año seleccionado.')
       contextMenu.value.show = false
       return
     }
@@ -1339,7 +1583,7 @@ const preapproveVacationYear = async (empId: string) => {
     console.log(`📅 IDs de vacaciones pendientes:`, pendingVacations.map(v => v.id))
     
     if (pendingVacations.length === 0) {
-      alert('No hay solicitudes pendientes para preaprobar. Todas las solicitudes ya fueron procesadas.')
+      showNotification('info', 'Sin Solicitudes Pendientes', 'No hay solicitudes pendientes para preaprobar. Todas las solicitudes ya fueron procesadas.')
       contextMenu.value.show = false
       return
     }
@@ -1368,7 +1612,7 @@ const preapproveVacationYear = async (empId: string) => {
     console.log(`📅 IDs válidos después de validación:`, validRequestIds)
     
     if (validRequestIds.length === 0) {
-      alert('No se encontraron IDs de solicitud válidos. Verifica la consola para más detalles.')
+      showNotification('error', 'Error', 'No se encontraron IDs de solicitud válidos. Verifica la consola para más detalles.')
       contextMenu.value.show = false
       showProgressModal.value = false
       return
@@ -1543,11 +1787,11 @@ const preapproveVacationYear = async (empId: string) => {
         console.warn('⚠️ Excepción al enviar mensaje consolidado:', notifError)
       }
       
-      const message = `✅ ${successCount} solicitud(es) preaprobada(s) exitosamente para el año ${year}${errorCount > 0 ? `\n\n⚠️ ${errorCount} solicitud(es) con errores:\n${errors.slice(0, 3).join('\n')}${errors.length > 3 ? '\n...' : ''}` : ''}`
-      alert(message)
+      const message = `${successCount} solicitud(es) preaprobada(s) exitosamente para el año ${year}${errorCount > 0 ? `\n\n${errorCount} solicitud(es) con errores:\n${errors.slice(0, 3).join('\n')}${errors.length > 3 ? '\n...' : ''}` : ''}`
+      showNotification('success', 'Preaprobación Exitosa', message)
     } else {
-      const message = `❌ No se pudo preaprobar ninguna solicitud.\n\nErrores:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}\n\nRevisa la consola (F12) para más detalles.`
-      alert(message)
+      const message = `No se pudo preaprobar ninguna solicitud.\n\nErrores:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}\n\nRevisa la consola (F12) para más detalles.`
+      showNotification('error', 'Error en Preaprobación', message)
       return // No recargar si no hubo éxitos
     }
     
@@ -1575,7 +1819,7 @@ const preapproveVacationYear = async (empId: string) => {
   } catch (error) {
     console.error('❌ Error general al preaprobar año:', error)
     showProgressModal.value = false
-    alert(`Error al preaprobar las vacaciones: ${error instanceof Error ? error.message : 'Error desconocido'}\n\nRevisa la consola (F12) para más detalles.`)
+    showNotification('error', 'Error', `Error al preaprobar las vacaciones: ${error instanceof Error ? error.message : 'Error desconocido'}\n\nRevisa la consola (F12) para más detalles.`)
     contextMenu.value.show = false
   }
 }
@@ -1650,6 +1894,47 @@ const confirmSuggestion = async () => {
       return
     }
     
+    // Verificar si el empleado ya programó todos sus días antes de sugerir
+    const empId = String(suggestionData.value.emp_id)
+    const employee = teamEmployees.value.find(emp => String(emp.emp_id) === empId)
+    
+    if (employee) {
+      // Priorizar vacationBalance sobre totalDays porque es más preciso
+  const totalDays = employee.vacationBalance || employee.totalDays || 0
+      const programmedDays = getProgrammedDaysCount(empId)
+      const daysRemaining = totalDays - programmedDays
+      const datesToSuggest = selectedAlternateDates.value.length
+      
+      console.log('🔍 Validación en confirmSuggestion:', {
+        empId,
+        employeeName: employee.name,
+        totalDays,
+        programmedDays,
+        daysRemaining,
+        datesToSuggest
+      })
+      
+      if (daysRemaining <= 0) {
+        showNotification(
+          'warning',
+          'Sin Días Disponibles',
+          `${employee.name} ya programó todos sus ${totalDays} días de vacaciones (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.`
+        )
+        return
+      }
+      
+      if (datesToSuggest > daysRemaining) {
+        showNotification(
+          'warning',
+          'Días Insuficientes',
+          `${employee.name} solo tiene ${daysRemaining} día(s) disponible(s) de ${totalDays} totales (ya tiene ${programmedDays} días programados).\n\nEstás intentando sugerir ${datesToSuggest} día(s). Por favor, reduce la cantidad de días a sugerir.`
+        )
+        return
+      }
+    } else {
+      console.warn('⚠️ Empleado no encontrado en teamEmployees para empId:', empId)
+    }
+    
     const suggestedDates = selectedAlternateDates.value.map(d => d.toISOString().split('T')[0])
     
     console.log('💡 Enviando sugerencia con fechas alternativas:', suggestedDates)
@@ -1697,7 +1982,7 @@ const confirmSuggestion = async () => {
     await loadData()
   } catch (error) {
     console.error('Error al enviar sugerencia:', error)
-    alert('Error al enviar la sugerencia. Intenta nuevamente.')
+    showNotification('error', 'Error', 'Error al enviar la sugerencia. Intenta nuevamente.')
   }
 }
 
@@ -1745,6 +2030,26 @@ const handleIndicatorScroll = (event: Event) => {
 }
 
 const submitVacationForm = () => {
+  // Verificar ANTES de ejecutar si se puede sugerir
+  if (!selectedEmployeeForVacation.value) {
+    showNotification('warning', 'Empleado No Seleccionado', 'No se ha seleccionado un empleado.')
+    return
+  }
+  
+  const empId = String(selectedEmployeeForVacation.value.emp_id)
+  if (!canSuggestVacation(empId)) {
+    const employee = selectedEmployeeForVacation.value
+    // Priorizar vacationBalance sobre totalDays porque es más preciso
+    const totalDays = employee.vacationBalance || employee.totalDays || 0
+    const programmedDays = getProgrammedDaysCount(empId)
+    showNotification(
+      'warning',
+      'Sin Días Disponibles',
+      `${employee.name} ya programó todos sus ${totalDays} días de vacaciones (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.`
+    )
+    return
+  }
+  
   // Ejecutar directamente sin modal de confirmación
   createVacation()
 }
@@ -1755,16 +2060,54 @@ const createVacation = async () => {
       return
     }
     
-    console.log('📝 Creando vacación:', {
-      employee: selectedEmployeeForVacation.value,
-      start_date: newVacationStartDate.value,
-      end_date: newVacationEndDate.value,
-      note: newVacationNote.value
+    // Verificar si el empleado ya programó todos sus días
+    const empId = String(selectedEmployeeForVacation.value.emp_id)
+    const totalDays = selectedEmployeeForVacation.value.totalDays || selectedEmployeeForVacation.value.vacationBalance || 0
+    const programmedDays = getProgrammedDaysCount(empId)
+    const daysRemaining = totalDays - programmedDays
+    
+    console.log('🔍 Validación en createVacation:', {
+      empId,
+      employeeName: selectedEmployeeForVacation.value.name,
+      totalDays,
+      programmedDays,
+      daysRemaining
     })
     
-    // Convertir fechas a formato YYYY-MM-DD
+    // Calcular días que se están sugiriendo
     const startDate = newVacationStartDate.value || ''
     const endDate = newVacationEndDate.value || startDate
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const daysToSuggest = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    
+    if (daysRemaining <= 0) {
+      showNotification(
+        'warning',
+        'Sin Días Disponibles',
+        `${selectedEmployeeForVacation.value.name} ya programó todos sus ${totalDays} días de vacaciones (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.`
+      )
+      showCreateModal.value = false
+      return
+    }
+    
+    if (daysToSuggest > daysRemaining) {
+      showNotification(
+        'warning',
+        'Días Insuficientes',
+        `${selectedEmployeeForVacation.value.name} solo tiene ${daysRemaining} día(s) disponible(s) de ${totalDays} totales (ya tiene ${programmedDays} días programados).\n\nEstás intentando sugerir ${daysToSuggest} día(s). Por favor, selecciona menos días.`
+      )
+      return
+    }
+    
+    console.log('📝 Creando vacación:', {
+      employee: selectedEmployeeForVacation.value,
+      start_date: startDate,
+      end_date: endDate,
+      note: newVacationNote.value,
+      daysRemaining,
+      daysToSuggest
+    })
     
     const payload = {
       emp_id: selectedEmployeeForVacation.value.emp_id,
@@ -1806,7 +2149,7 @@ const createVacation = async () => {
     await loadData()
   } catch (error) {
     console.error('❌ Error al crear vacación:', error)
-    alert('Error al crear la vacación. Intenta nuevamente.')
+    showNotification('error', 'Error', 'Error al crear la vacación. Intenta nuevamente.')
     showCreateModal.value = false
   }
 }
@@ -1858,6 +2201,25 @@ const loadData = async () => {
         console.log('📦 Respuesta de solicitudes del manager:', data)
         
         if (data.success && Array.isArray(data.data)) {
+          // Guardar todas las solicitudes para poder contar días programados
+          allRequests.value = data.data
+          console.log('✅ allRequests cargado con', allRequests.value.length, 'solicitudes')
+          
+          // Log de las primeras solicitudes PROGRAMADA para debug
+          const programadas = allRequests.value.filter((req: any) => req.tipo === 'PROGRAMADA')
+          console.log('📊 Solicitudes PROGRAMADA encontradas:', programadas.length)
+          if (programadas.length > 0) {
+            console.log('📋 Ejemplo de solicitud PROGRAMADA:', {
+              id: programadas[0].id_solicitud,
+              emp_id: programadas[0].emp_id,
+              tipo: programadas[0].tipo,
+              estado: programadas[0].estado,
+              fechas_count: programadas[0].fechas?.length || 0,
+              fechas_agrupadas_count: programadas[0].fechas_agrupadas?.length || 0,
+              fechas_sample: programadas[0].fechas?.slice(0, 3) || 'N/A'
+            })
+          }
+          
           // Extraer empleados únicos de las solicitudes
           const uniqueEmployees = new Map<string, any>()
           
@@ -1891,15 +2253,48 @@ const loadData = async () => {
                     if (empleadoInfo.vacation) {
                       const vacationInfo = empleadoInfo.vacation
                       const available = parseFloat(vacationInfo.available || '0')
-                      const total = parseFloat(vacationInfo.total || '0')
                       const taken = parseFloat(vacationInfo.taken || '0')
+                      const totalFromAPI = parseFloat(vacationInfo.total || '0')
+                      
+                      // El total de días debe ser el máximo entre:
+                      // 1. available + taken (días disponibles + días ya usados)
+                      // 2. El valor de vacationBalance si es mayor (porque puede incluir días programados)
+                      // 3. El total de la API si es razonable (menor o igual a available + taken + margen)
+                      // Priorizar: si available es el saldo real y representa el total correcto, usarlo
+                      // Si available + taken da un total razonable (<= 30), usarlo
+                      // Si no, usar el total de la API solo si es razonable
+                      let total = available + taken
+                      
+                      // Si el total calculado es mayor a 30, probablemente hay un error
+                      // En ese caso, usar el valor de available como referencia (si es razonable)
+                      if (total > 30 && available > 0 && available <= 30) {
+                        // Si available parece ser el total correcto (ej: 15), usarlo
+                        total = available
+                        console.warn('⚠️ Total calculado muy alto, usando available como total:', {
+                          emp_id: solicitud.emp_id,
+                          available,
+                          taken,
+                          total_calculado: available + taken,
+                          total_usado: total
+                        })
+                      }
+                      
+                      console.log('📊 Información de vacaciones del empleado:', {
+                        emp_id: solicitud.emp_id,
+                        nombre,
+                        available,
+                        taken,
+                        total_calculado: available + taken,
+                        total_api: totalFromAPI,
+                        total_final: total
+                      })
                       
                       uniqueEmployees.set(solicitud.emp_id, {
                         emp_id: solicitud.emp_id,
                         name: nombre,
                         department: cargo,
                         vacationBalance: available,
-                        totalDays: total,
+                        totalDays: total, // Usar el total calculado o corregido
                         usagePercentage: total > 0 ? Math.round((taken / total) * 100) : 0,
                         daysRemaining: available
                       })
