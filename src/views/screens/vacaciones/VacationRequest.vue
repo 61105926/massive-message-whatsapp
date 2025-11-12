@@ -249,30 +249,8 @@
 
       <!-- Calendar View -->
       <div v-if="activeView === 'calendar'" class="space-y-4 pb-20">
-        <!-- Toggle entre Solicitar y Programadas -->
-        <div class="flex gap-2 border-b">
-          <button
-            @click="showScheduledVacations = false"
-            :class="[
-              'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
-              !showScheduledVacations ? 'border-primary text-primary' : 'border-transparent text-gray-600 hover:text-gray-900'
-            ]"
-          >
-            Solicitar Vacaciones
-          </button>
-          <button
-            @click="showScheduledVacations = true"
-            :class="[
-              'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
-              showScheduledVacations ? 'border-primary text-primary' : 'border-transparent text-gray-600 hover:text-gray-900'
-            ]"
-          >
-            Vacaciones Programadas
-          </button>
-        </div>
-
-        <!-- Vista: Solicitar (o Programadas según configuración) -->
-        <div v-if="!showScheduledVacations" class="space-y-4">
+        <!-- Vista: Solicitar -->
+        <div class="space-y-4">
           <!-- Loading State -->
           <Card v-if="isLoadingData">
             <CardContent class="py-12">
@@ -365,102 +343,61 @@
             </Card>
           </div>
           
-          <!-- Banner de desarrollador -->
-          <div v-if="showDeveloperBadge" class="mt-8">
-            <div class="bg-gradient-to-r from-green-50 via-emerald-50 to-green-50 border border-green-200/50 rounded-xl p-4 shadow-sm">
-              <div class="flex items-center justify-between gap-4">
-                <div class="flex items-center gap-3 flex-1 min-w-0">
-                  <div class="flex-shrink-0">
-                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-md ring-2 ring-white/50">
-                      <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                      </svg>
+          <!-- Banner de desarrollador con efecto WhatsApp -->
+          <Transition name="whatsapp-badge">
+            <div v-if="showDeveloperBadge" class="mt-8">
+              <div 
+                :class="{ 'whatsapp-badge-exit': badgeAnimated }"
+                class="bg-gradient-to-r from-green-50 via-emerald-50 to-green-50 border border-green-200/50 rounded-xl p-4 shadow-lg relative overflow-hidden whatsapp-badge-container"
+              >
+                <!-- Efecto de ondas de WhatsApp -->
+                <div class="absolute inset-0 pointer-events-none overflow-hidden">
+                  <div class="whatsapp-wave whatsapp-wave-1"></div>
+                  <div class="whatsapp-wave whatsapp-wave-2"></div>
+                  <div class="whatsapp-wave whatsapp-wave-3"></div>
+                </div>
+                
+                <div class="flex items-center justify-between gap-4 relative z-10">
+                  <div class="flex items-center gap-3 flex-1 min-w-0">
+                    <div class="flex-shrink-0">
+                      <div class="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 via-emerald-500 to-green-600 flex items-center justify-center shadow-lg ring-2 ring-green-300/50 whatsapp-icon-pulse">
+                        <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                        </svg>
+                      </div>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-xs text-gray-600 font-medium">Desarrollado por</p>
+                      <a 
+                        href="https://wa.me/61105926" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        class="text-sm font-bold text-green-700 hover:text-green-800 transition-colors inline-flex items-center gap-1.5 group whatsapp-number"
+                      >
+                        <span class="transition-all duration-300">61105926</span>
+                        <svg class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
                     </div>
                   </div>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-xs text-gray-600 font-medium">Desarrollado por</p>
-                    <a 
-                      href="https://wa.me/61105926" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      class="text-sm font-bold text-green-700 hover:text-green-800 transition-colors inline-flex items-center gap-1.5 group"
-                    >
-                      <span>61105926</span>
-                      <svg class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
-                  </div>
+                  <button
+                    @click="showDeveloperBadge = false"
+                    class="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors p-1.5 rounded-lg hover:bg-white/50"
+                    aria-label="Cerrar"
+                  >
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
-                <button
-                  @click="showDeveloperBadge = false"
-                  class="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors p-1.5 rounded-lg hover:bg-white/50"
-                  aria-label="Cerrar"
-                >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
               </div>
             </div>
-          </div>
+          </Transition>
 
         </div>
 
-        <!-- Vista: Programadas -->
-        <div v-else class="space-y-4">
-          <Card>
-            <CardHeader class="pb-3">
-              <h3 class="text-lg font-semibold leading-none tracking-tight">Vacaciones Programadas</h3>
-              <p class="text-sm text-muted-foreground">
-                Consulta quién ya está de vacaciones en el equipo.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <VacationCalendarView :manager-id="employeeData?.empID || currentUser.id" />
-            </CardContent>
-          </Card>
-          
-          <!-- Banner de desarrollador -->
-          <div v-if="showDeveloperBadge" class="mt-8">
-            <div class="bg-gradient-to-r from-green-50 via-emerald-50 to-green-50 border border-green-200/50 rounded-xl p-4 shadow-sm">
-              <div class="flex items-center justify-between gap-4">
-                <div class="flex items-center gap-3 flex-1 min-w-0">
-                  <div class="flex-shrink-0">
-                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-md ring-2 ring-white/50">
-                      <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                      </svg>
-                    </div>
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-xs text-gray-600 font-medium">Desarrollado por</p>
-                    <a 
-                      href="https://wa.me/61105926" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      class="text-sm font-bold text-green-700 hover:text-green-800 transition-colors inline-flex items-center gap-1.5 group"
-                    >
-                      <span>61105926</span>
-                      <svg class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
-                  </div>
-                </div>
-                <button
-                  @click="showDeveloperBadge = false"
-                  class="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors p-1.5 rounded-lg hover:bg-white/50"
-                  aria-label="Cerrar"
-                >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <!-- Vista: Programadas - Eliminada, ya no es necesaria -->
       </div>
 
       <!-- Requests View -->
@@ -740,7 +677,6 @@ import VacationCalendar from '@/components/vacation/VacationCalendar.vue'
 import VacationRequestForm from '@/components/vacation/VacationRequestForm.vue'
 import RequestsList from '@/components/vacation/RequestsList.vue'
 import BossApprovalPanel from '@/components/vacation/BossApprovalPanel.vue'
-import VacationCalendarView from '@/components/vacation/VacationCalendarView.vue'
 import BossCalendarView from '@/components/vacation/BossCalendarView.vue'
 
 // Router
@@ -752,7 +688,6 @@ const daySelections = ref<any[]>([])
 const requests = ref<any[]>([])
 const showForm = ref(false)
 const activeView = ref<'calendar' | 'requests' | 'profile' | 'boss'>('calendar')
-const showScheduledVacations = ref(false) // Toggle entre solicitar y programadas
 const employeeData = ref<any>(null)
 const programmedVacationsEnabled = ref(true)
 const isLoadingData = ref(false)
@@ -769,6 +704,20 @@ const showConfirmModal = ref(false)
 
 // Badge de desarrollador (se muestra por defecto, se puede cerrar)
 const showDeveloperBadge = ref(true)
+const badgeAnimated = ref(false)
+
+// Auto-ocultar el badge después de 10 segundos con animación bonita
+const autoHideBadge = () => {
+  setTimeout(() => {
+    if (showDeveloperBadge.value) {
+      badgeAnimated.value = true
+      // Ocultar después de la animación
+      setTimeout(() => {
+        showDeveloperBadge.value = false
+      }, 1000) // 1 segundo para la animación de salida
+    }
+  }, 10000) // 10 segundos de visibilidad
+}
 
 const currentUser = ref({
   id: 'user-1',
@@ -844,7 +793,12 @@ const fetchEmployeeData = async (base64Data: string) => {
 
     employeeData.value = parsedData
 
-    // 3. Actualizar datos del usuario actual con los datos recibidos
+    // 3. Cargar solicitudes de vacaciones del empleado después de obtener sus datos
+    if (parsedData.empID) {
+      await fetchEmployeeVacationRequests(parsedData.empID)
+    }
+
+    // 4. Actualizar datos del usuario actual con los datos recibidos
     if (parsedData) {
       // Priorizar datos de vacation object si existen
       const vacationTotal = parsedData.vacation?.total
@@ -1021,10 +975,10 @@ const handleRequestSubmit = async (request: any) => {
 
     // Si es vacaciones programadas, enviar UNA solicitud por fecha
     if (request.type === 'programmed') {
-      console.log('📅 Enviando vacaciones programadas - una solicitud por fecha')
+      console.log('📅 Enviando vacaciones programadas - una solicitud por fecha (en paralelo)')
       
-      // Enviar cada fecha como una solicitud separada
-      for (const selection of daySelections.value) {
+      // Preparar todas las solicitudes
+      const solicitudes = daySelections.value.map(selection => {
         let turno = 'COMPLETO'
         if (selection.type === 'morning') turno = 'MAÑANA'
         else if (selection.type === 'afternoon') turno = 'TARDE'
@@ -1045,37 +999,153 @@ const handleRequestSubmit = async (request: any) => {
           reemplazantes: []
         }
 
+        return { fechaStr, payload }
+      })
+
+      console.log(`📦 Preparando ${solicitudes.length} solicitudes para enviar en paralelo`)
+
+      // Enviar todas las solicitudes en paralelo
+      const promesas = solicitudes.map(async ({ fechaStr, payload }) => {
         console.log(`📅 Enviando solicitud para ${fechaStr}:`, payload)
 
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 30000)
+        try {
+          const controller = new AbortController()
+          // Timeout de 60 segundos para cada solicitud
+          const timeoutId = setTimeout(() => controller.abort(), 60000)
 
-        const response = await fetch('http://190.171.225.68/api/store-vacation', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-          signal: controller.signal
-        })
+          // 1️⃣ PRIMERO: Enviar a Laravel para guardar en BD
+          console.log(`🌐 [${fechaStr}] Enviando a Laravel para guardar en BD...`)
+          const laravelUrl = 'http://190.171.225.68/api/store-vacation'
+          
+          const laravelResponse = await fetch(laravelUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          }).catch((fetchError: any) => {
+            console.error(`❌ [${fechaStr}] Error de red al conectar con Laravel:`, fetchError)
+            if (fetchError.name === 'TypeError' && fetchError.message.includes('fetch')) {
+              throw { 
+                fechaStr, 
+                error: new Error(`No se pudo conectar al servidor Laravel. Verifica que el servidor esté corriendo en ${laravelUrl}`), 
+                tipo: 'network_error',
+                originalError: fetchError.message
+              }
+            }
+            throw { fechaStr, error: fetchError, tipo: 'network_error' }
+          })
 
-        clearTimeout(timeoutId)
+          if (!laravelResponse.ok) {
+            let errorData: any = {}
+            try {
+              errorData = await laravelResponse.json()
+            } catch (e) {
+              errorData = { message: `Error HTTP ${laravelResponse.status}: ${laravelResponse.statusText}` }
+            }
+            const errorMessage = errorData.message || `Error al guardar solicitud en BD para ${fechaStr} (${laravelResponse.status})`
+            console.error(`❌ [${fechaStr}] Error HTTP de Laravel:`, errorMessage)
+            throw { fechaStr, error: new Error(errorMessage), tipo: 'http_error', status: laravelResponse.status }
+          }
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(errorData.message || `Error al enviar solicitud para ${fechaStr}`)
+          const laravelResult = await laravelResponse.json().catch(() => ({}))
+          console.log(`✅ [${fechaStr}] Solicitud guardada en BD:`, laravelResult)
+
+          // 2️⃣ SEGUNDO: Enviar notificación al bot de WhatsApp (no bloquea si falla)
+          try {
+            const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+            const botUrl = `${BOT_URL}/api/store-vacation`
+            
+            console.log(`📱 [${fechaStr}] Enviando notificación de WhatsApp...`)
+            await fetch(botUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(payload),
+              signal: controller.signal
+            })
+            console.log(`✅ [${fechaStr}] Notificación de WhatsApp enviada`)
+          } catch (botError: any) {
+            console.warn(`⚠️ [${fechaStr}] No se pudo enviar notificación de WhatsApp:`, botError)
+            // No fallar la operación si las notificaciones fallan
+          }
+
+          clearTimeout(timeoutId)
+          return { fechaStr, success: true, result: laravelResult }
+        } catch (error: any) {
+          console.error(`❌ Error al enviar solicitud para ${fechaStr}:`, error)
+          // Si es un error de aborto, dar más información
+          if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+            throw { fechaStr, error: new Error(`Timeout: El servidor tardó demasiado en responder para ${fechaStr}`), tipo: 'timeout' }
+          }
+          // Si ya tiene fechaStr, mantenerlo
+          if (error.fechaStr) {
+            throw error
+          }
+          throw { fechaStr, error, tipo: 'unknown' }
         }
+      })
 
-        console.log(`✅ Solicitud enviada para ${fechaStr}`)
+      // Esperar a que todas las solicitudes se completen
+      const resultados = await Promise.allSettled(promesas)
+      
+      // Separar éxitos y errores
+      const exitosos = resultados.filter(r => r.status === 'fulfilled')
+      const errores = resultados.filter(r => r.status === 'rejected')
+      
+      console.log(`📊 Resultados: ${exitosos.length} exitosos, ${errores.length} con errores`)
+      
+      // Si hay errores, mostrar información detallada
+      if (errores.length > 0) {
+        const detallesErrores = errores.map(e => {
+          if (e.status === 'rejected') {
+            const reason = e.reason
+            const fechaStr = reason?.fechaStr || 'fecha desconocida'
+            const mensaje = reason?.error?.message || reason?.message || 'Error desconocido'
+            console.error(`❌ Error en ${fechaStr}:`, mensaje)
+            return `${fechaStr} (${mensaje})`
+          }
+        }).filter(Boolean)
+        
+        // Si todas fallaron, lanzar error
+        if (errores.length === solicitudes.length) {
+          throw new Error(`Todas las solicitudes fallaron. Errores: ${detallesErrores.join('; ')}`)
+        }
+        
+        // Si algunas fallaron, mostrar advertencia pero continuar
+        console.warn(`⚠️ ${errores.length} solicitud(es) fallaron:`, detallesErrores)
+        showNotification(
+          'info',
+          'Algunas solicitudes fallaron',
+          `${exitosos.length} solicitud(es) enviada(s) exitosamente, pero ${errores.length} fallaron. Revisa la consola para más detalles.`,
+          10000
+        )
       }
-
-      // Todas las solicitudes fueron enviadas, mostrar notificación de éxito
-      showNotification(
-        'success', 
-        '¡Solicitudes enviadas exitosamente!', 
-        `${daySelections.value.length} solicitud(es) de vacaciones programadas enviada(s). Tu jefe recibirá la notificación para revisarlas.`, 
-        8000
-      )
+      
+      if (exitosos.length > 0) {
+        console.log(`✅ ${exitosos.length} solicitud(es) fueron enviadas exitosamente`)
+        
+        // Recargar solicitudes del empleado para actualizar el calendario
+        if (employeeData.value?.empID) {
+          await fetchEmployeeVacationRequests(employeeData.value.empID)
+        }
+        
+        // Mostrar notificación de éxito solo si hay éxitos
+        if (errores.length === 0) {
+          // Todas fueron exitosas
+          showNotification(
+            'success', 
+            '¡Solicitudes enviadas exitosamente!', 
+            `${exitosos.length} solicitud(es) de vacaciones programadas enviada(s). Tu jefe recibirá la notificación para revisarlas.`, 
+            8000
+          )
+        } else {
+          // Algunas fueron exitosas, ya se mostró la advertencia arriba
+          console.log(`✅ ${exitosos.length} solicitud(es) exitosas, ${errores.length} fallaron`)
+        }
+      }
       
       // Resetear formulario
       showForm.value = false
@@ -1175,6 +1245,11 @@ const handleRequestSubmit = async (request: any) => {
       } catch (botError) {
         console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', botError)
         // No fallar la operación si las notificaciones fallan
+      }
+
+      // Recargar solicitudes del empleado para actualizar el calendario
+      if (employeeData.value?.empID) {
+        await fetchEmployeeVacationRequests(employeeData.value.empID)
       }
 
       // 3. Guardar en localStorage para el historial local
@@ -1299,6 +1374,9 @@ const loadVacationConfig = async () => {
 onMounted(async () => {
   // Cargar configuración desde backend SIEMPRE (sin bypass)
   await loadVacationConfig()
+  
+  // Auto-ocultar el badge después de 10 segundos
+  autoHideBadge()
 
   // Si viene desde el bot, cargar datos del empleado
   const dataParam = route.query.data as string
@@ -1361,12 +1439,74 @@ onMounted(async () => {
     }
   }
 
-  // Cargar solicitudes guardadas
+  // Cargar solicitudes guardadas desde localStorage (fallback)
   const savedRequests = localStorage.getItem('vacation-requests')
   if (savedRequests) {
     requests.value = JSON.parse(savedRequests)
   }
+
+  // Cargar solicitudes del empleado desde la API si tenemos empID
+  if (employeeData.value?.empID) {
+    await fetchEmployeeVacationRequests(employeeData.value.empID)
+  } else if (currentUser.value.id && currentUser.value.id !== 'user-1') {
+    // Si no es el usuario por defecto, intentar cargar
+    await fetchEmployeeVacationRequests(currentUser.value.id)
+  }
 })
+
+// Función para cargar las solicitudes de vacaciones del empleado desde la API
+const fetchEmployeeVacationRequests = async (empId: string) => {
+  try {
+    console.log('📡 Cargando solicitudes de vacaciones del empleado:', empId)
+    const url = `http://190.171.225.68/api/vacacion-data-empleado?emp_id=${empId}`
+    
+    const response = await fetch(url)
+    
+    if (!response.ok) {
+      console.warn('⚠️ Error al cargar solicitudes del empleado:', response.status)
+      return
+    }
+
+    const data = await response.json()
+    
+    if (data.success && Array.isArray(data.data)) {
+      // Formatear las solicitudes para que el calendario las entienda
+      const formattedRequests = data.data.map((req: any) => {
+        // Si tiene fechas array, asegurarse de que esté en el formato correcto
+        let fechas: any[] = []
+        if (req.fechas && Array.isArray(req.fechas)) {
+          fechas = req.fechas.map((f: any) => {
+            if (typeof f === 'string') {
+              return { fecha: f, turno: 'COMPLETO' }
+            }
+            return f
+          })
+        } else if (req.fechas_agrupadas && Array.isArray(req.fechas_agrupadas)) {
+          fechas = req.fechas_agrupadas.map((f: string) => ({
+            fecha: f,
+            turno: 'COMPLETO'
+          }))
+        }
+        
+        return {
+          ...req,
+          fechas: fechas,
+          tipo: req.tipo || 'A_CUENTA',
+          estado: req.estado || 'PROCESO'
+        }
+      })
+      
+      requests.value = formattedRequests
+      console.log('✅ Solicitudes del empleado cargadas:', formattedRequests.length)
+      console.log('📋 Solicitudes:', formattedRequests)
+      
+      // También actualizar localStorage como respaldo
+      localStorage.setItem('vacation-requests', JSON.stringify(formattedRequests))
+    }
+  } catch (error) {
+    console.error('❌ Error al cargar solicitudes del empleado:', error)
+  }
+}
 
 // Watch para el parámetro tab de la URL
 watch(() => route.query.tab, async (newTab) => {
@@ -1436,6 +1576,105 @@ watch(() => route.query.tab, async (newTab) => {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Efectos de WhatsApp */
+@keyframes whatsapp-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes whatsapp-wave {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+@keyframes whatsapp-badge-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes whatsapp-badge-exit {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+}
+
+.whatsapp-icon-pulse {
+  animation: whatsapp-pulse 2s ease-in-out infinite;
+}
+
+.whatsapp-wave {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, rgba(16, 185, 129, 0) 70%);
+  pointer-events: none;
+}
+
+.whatsapp-wave-1 {
+  animation: whatsapp-wave 2s ease-out infinite;
+}
+
+.whatsapp-wave-2 {
+  animation: whatsapp-wave 2s ease-out infinite 0.5s;
+}
+
+.whatsapp-wave-3 {
+  animation: whatsapp-wave 2s ease-out infinite 1s;
+}
+
+.whatsapp-badge-container {
+  transition: all 0.3s ease;
+}
+
+.whatsapp-badge-exit {
+  animation: whatsapp-badge-exit 1s ease-out forwards;
+}
+
+.whatsapp-number {
+  position: relative;
+}
+
+.whatsapp-number:hover span {
+  color: #059669;
+  transform: scale(1.05);
+}
+
+/* Transición para el badge completo */
+.whatsapp-badge-enter-active {
+  animation: whatsapp-badge-enter 0.5s ease-out;
+}
+
+.whatsapp-badge-leave-active {
+  animation: whatsapp-badge-exit 1s ease-out;
 }
 
 .animate-slide-up {

@@ -647,6 +647,8 @@ interface VacationRequest {
   empleado?: {
     nombre: string
     cargo: string
+    departamento?: string
+    dept?: string
   }
   reemplazante?: Array<{ // Changed from reemplazantes to reemplazante (singular)
     emp_id: string;
@@ -659,6 +661,9 @@ interface EmployeeCache {
   [empId: string]: {
     nombre: string
     cargo: string
+    replacements?: any[]
+    departamento?: string
+    dept?: string
   }
 }
 
@@ -1535,6 +1540,14 @@ const cancelReject = () => {
 
 // Función principal para actualizar el estado en el backend
 const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECHAZADO' | 'PREAPROBADO', comentario: string, reemplazantes?: string[]) => {
+  console.log('🚀🚀🚀 INICIANDO updateRequestStatus 🚀🚀🚀', {
+    requestId,
+    estado,
+    comentario,
+    reemplazantes,
+    isProcessing: isProcessing.value
+  })
+  
   if (isProcessing.value) {
     showNotification('info', 'Operación en proceso', 'Ya hay una operación en proceso. Por favor espera.')
     return
@@ -1579,253 +1592,55 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
       solicitudesAActualizar = [request]
     }
 
-    // El backend espera 'PRE-APROBADO' (con guión) en lugar de 'PREAPROBADO'
-    const estadoBackend = estado === 'PREAPROBADO' ? 'PRE-APROBADO' : estado
+    // Obtener requestData ANTES de actualizar la BD para preparar la notificación
+    const requestData = esGrupo 
+      ? pendingRequests.value.find(r => String(r.id_solicitud) === String(requestId))
+      : requests.value.find(req => String(req.id_solicitud) === String(requestId))
     
-    // Actualizar cada solicitud
-    const actualizaciones = solicitudesAActualizar.map(req => {
-      const payload: any = {
-        id_solicitud: parseInt(String(req.id_solicitud)),
-        estado: estadoBackend,
-        comentario: comentario || (estado === 'APROBADO' ? 'Aprobado por el jefe' : '')
-      }
-      
-      if (reemplazantes && reemplazantes.length > 0) {
-        payload.reemplazantes = reemplazantes
-      }
-      
-      return fetch('http://190.171.225.68/api/vacaciones/state', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      })
+    console.log('🔍 Buscando requestData para notificación (ANTES de actualizar BD):', {
+      es_grupo: esGrupo,
+      requestId,
+      encontrado: !!requestData,
+      requestData_tipo: requestData?.tipo,
+      requestData_estado: requestData?.estado,
+      requestData_emp_id: requestData?.emp_id
+    })
+
+    // 🔔 PRIMERO: ENVIAR NOTIFICACIONES DE WHATSAPP (ANTES de actualizar la BD)
+    // Solo enviar notificaciones si:
+    // - Es APROBADO y todas las fechas están aprobadas (no quedan pendientes)
+    // - Es RECHAZADO (siempre notificar)
+    // - NO enviar si es PREAPROBADO (se enviará cuando todas estén aprobadas)
+
+    console.log('🔔🔔🔔 VERIFICANDO SI ENVIAR NOTIFICACIÓN (ANTES DE ACTUALIZAR BD) 🔔🔔🔔', {
+      tiene_requestData: !!requestData,
+      estado,
+      es_grupo: esGrupo,
+      requestId,
+      requestData_tipo: requestData?.tipo,
+      requestData_estado: requestData?.estado,
+      requestData_emp_id: requestData?.emp_id,
+      requestData_empleado: requestData?.empleado?.nombre
     })
     
-    const responses = await Promise.all(actualizaciones)
-    
-    // Verificar que todas las respuestas sean exitosas
-    const response = responses[0] // Usar la primera para el flujo de notificaciones
-    const todasExitosas = responses.every(r => r.ok)
-    
-    if (!todasExitosas) {
-      const errores = responses.filter(r => !r.ok)
-      const errorData = await errores[0].json().catch(() => null)
-      throw new Error(errorData?.message || `Error al actualizar algunas solicitudes`)
+    // Log crítico para PROGRAMADA
+    if (requestData?.tipo === 'PROGRAMADA' && estado === 'APROBADO') {
+      console.log('🚨🚨🚨 VACACIÓN PROGRAMADA APROBADA - ENVIANDO NOTIFICACIÓN PRIMERO 🚨🚨🚨', {
+        requestId,
+        emp_id: requestData.emp_id,
+        emp_nombre: requestData.empleado?.nombre,
+        estado_original: requestData.estado,
+        tiene_reemplazantes_param: reemplazantes && reemplazantes.length > 0
+      })
     }
 
-    const result = await response.json()
+    // Variable para almacenar la promesa de notificación
+    let notificacionPromise: Promise<void> | null = null
 
-    if (result.status === 'success' || response.ok) {
-      console.log('✅ Solicitud(es) actualizada(s) exitosamente')
-
-      // Actualizar localmente todas las solicitudes que se actualizaron
-      const idsActualizados = new Set(solicitudesAActualizar.map(req => String(req.id_solicitud)))
-      requests.value = requests.value.map(req => {
-        if (idsActualizados.has(String(req.id_solicitud))) {
-          return {
-            ...req,
-            estado: estado
-          }
-        }
-        return req
-      })
-
-      // 🚀 GUARDAR EN API EXTERNA
-      // Después de actualizar el estado, guardar en la API externa
-      // Usar la primera solicitud actualizada como referencia
-      const requestData = esGrupo 
-        ? pendingRequests.value.find(r => String(r.id_solicitud) === String(requestId))
-        : requests.value.find(req => String(req.id_solicitud) === String(requestId))
-      
-      if (requestData) {
-        try {
-          // Solo guardar en API externa si el estado es APROBADO o RECHAZADO (no PREAPROBADO)
-          if (estado === 'APROBADO' || estado === 'RECHAZADO') {
-            console.log('📤 Guardando vacación en API externa...')
-            
-            const vacationPayload: SaveVacationPayload = {
-              emp_id: requestData.emp_id,
-              emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
-              manager_id: String(props.managerId || ''), // ID del manager que está aprobando
-              manager_nombre: 'Manager', // TODO: Obtener nombre real del manager
-              tipo: requestData.tipo,
-              estado: estado as 'APROBADO' | 'RECHAZADO',
-              comentario: comentario,
-              fechas: requestData.fechas.map((f: any) => ({
-                fecha: f.fecha,
-                tipo_dia: f.turno || 'COMPLETO'
-              })),
-              branch: 1, // TODO: Obtener branch real
-              dept: 10    // TODO: Obtener departamento real
-            }
-
-            const apiResult = await saveVacationToExternalAPI(vacationPayload)
-            console.log('✅ Vacación guardada exitosamente en API externa:', apiResult)
-          } else {
-            console.log('⏸️ Estado PREAPROBADO: No se guarda en API externa todavía')
-          }
-          
-        } catch (apiError: any) {
-          console.error('❌ Error al guardar en API externa:', apiError)
-          // No fallar la operación principal si falla la API externa
-          showNotification('info', 'Advertencia', 
-            'La solicitud fue procesada pero hubo un problema al guardar en el sistema externo. Contacta al administrador.')
-        }
-      }
-
-      // 🔔 ENVIAR NOTIFICACIONES DE WHATSAPP
-      // Solo enviar notificaciones si:
-      // - Es APROBADO y todas las fechas están aprobadas (no quedan pendientes)
-      // - Es RECHAZADO (siempre notificar)
-      // - NO enviar si es PREAPROBADO (se enviará cuando todas estén aprobadas)
-
-      if (requestData) {
-        // Si es PREAPROBADO, verificar si todas las fechas están preaprobadas
-        if (estado === 'PREAPROBADO') {
-          try {
-            // Verificar si hay otras solicitudes del mismo empleado que estén pendientes
-            // Recargar las solicitudes para verificar el estado actual
-            const checkResponse = await fetch(`http://190.171.225.68/api/vacacion-data-manager?manager=${props.managerId}`)
-            if (checkResponse.ok) {
-              const checkData = await checkResponse.json()
-              if (checkData.success && Array.isArray(checkData.data)) {
-                // Buscar todas las solicitudes del mismo empleado
-                const solicitudesEmpleado = checkData.data.filter((req: any) => 
-                  req.emp_id === requestData.emp_id && 
-                  req.tipo === requestData.tipo &&
-                  req.fecha_solicitud === requestData.fecha_solicitud
-                )
-
-                // Verificar si hay alguna pendiente (no preaprobada ni aprobada)
-                const hayPendientes = solicitudesEmpleado.some((req: any) => 
-                  req.estado === 'PENDIENTE' || 
-                  req.estado === 'PROCESO'
-                )
-
-                // Si hay pendientes, NO enviar notificación todavía
-                if (hayPendientes) {
-                  console.log('⏸️ Preaprobación parcial: Aún hay fechas pendientes. No se envía notificación todavía.')
-                } else {
-                  // Todas las fechas están preaprobadas (o aprobadas), enviar notificación
-                  console.log('✅ Todas las fechas están preaprobadas. Enviando notificación de confirmación.')
-
-                  // Usar los datos de reemplazantes que ya vienen en requestData
-                  let reemplazantesCompletos = []
-                  
-                  if (requestData.reemplazante && requestData.reemplazante.length > 0) {
-                    reemplazantesCompletos = requestData.reemplazante.map((rep: any) => ({
-                      emp_id: rep.emp_id,
-                      nombre: rep.nombre,
-                      telefono: rep.telefono || '77711124'
-                    }))
-                  } else {
-                    try {
-                      const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}`)
-                      if (reemplazanteResponse.ok) {
-                        const reemplazanteData = await reemplazanteResponse.json()
-                        if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
-                          reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
-                            emp_id: rep.EMP_ID,
-                            nombre: rep.NOMBRE,
-                            telefono: rep.TELEFONO
-                          }))
-                        }
-                      }
-                    } catch (apiError) {
-                      console.warn('⚠️ Error al obtener reemplazantes:', apiError)
-                      reemplazantesCompletos = [
-                        {
-                          emp_id: '493',
-                          nombre: 'Charvel Santiago',
-                          telefono: '78003551'
-                        }
-                      ]
-                    }
-                  }
-
-                  // Obtener todas las fechas preaprobadas de todas las solicitudes del empleado
-                  const todasFechas = solicitudesEmpleado
-                    .filter((req: any) => req.estado === 'PREAPROBADO' || req.estado === 'PRE-APROBADO' || req.estado === 'APROBADO')
-                    .flatMap((req: any) => req.fechas.map((f: any) => `${f.fecha} (${f.turno})`))
-
-                  // Preparar payload para notificaciones
-                  const notificationPayload = {
-                    id_solicitud: requestId,
-                    emp_id: requestData.emp_id,
-                    emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
-                    estado: 'PREAPROBADO',
-                    comentario: comentario || 'Todas tus fechas han sido preaprobadas',
-                    tipo: requestData.tipo,
-                    dias_solicitados: todasFechas.length,
-                    fechas: todasFechas,
-                    reemplazantes: reemplazantesCompletos.map((rep: any) => ({
-                      emp_id: rep.emp_id,
-                      nombre: rep.nombre,
-                      telefono: rep.telefono
-                    }))
-                  }
-
-                  const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
-                  await fetch(`${BOT_URL}/api/vacation-notification`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(notificationPayload)
-                  }).catch(err => {
-                    console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
-                  })
-
-                  console.log('✅ Notificación de preaprobación completa enviada')
-                }
-              }
-            }
-          } catch (notifError) {
-            console.warn('⚠️ Error al verificar y enviar notificaciones de preaprobación:', notifError)
-          }
-        } 
-        // Si es RECHAZADO, siempre notificar
-        else if (estado === 'RECHAZADO') {
-          try {
-            // Preparar payload para notificaciones de rechazo
-            const notificationPayload = {
-              id_solicitud: requestId,
-              emp_id: requestData.emp_id,
-              emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
-              estado: estado,
-              comentario: comentario,
-              tipo: requestData.tipo,
-              dias_solicitados: parseInt(requestData.total_dias),
-              fechas: requestData.fechas.map((f: any) => `${f.fecha} (${f.turno})`)
-            }
-
-            const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
-            await fetch(`${BOT_URL}/api/vacation-notification`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(notificationPayload)
-            }).catch(err => {
-              console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
-            })
-
-            console.log('✅ Notificación de rechazo enviada')
-          } catch (notifError) {
-            console.warn('⚠️ Error al enviar notificación de rechazo:', notifError)
-          }
-        }
-        // Si es APROBADO, verificar si estaba preaprobada para enviar resumen o individual
-        else if (estado === 'APROBADO') {
-          console.log('🔔 Iniciando proceso de notificación para APROBADO', {
-            requestId,
-            requestData_estado: requestData.estado,
-            requestData_tipo: requestData.tipo,
-            tiene_reemplazantes_param: reemplazantes && reemplazantes.length > 0
-          })
-          
+    if (requestData && (estado === 'APROBADO' || estado === 'RECHAZADO')) {
+      // Si es APROBADO, enviar notificación
+      if (estado === 'APROBADO') {
+        notificacionPromise = (async () => {
           try {
             // Verificar si esta solicitud estaba preaprobada antes de aprobar
             const estabaPreaprobada = requestData.estado === 'PREAPROBADO' || requestData.estado === 'PRE-APROBADO'
@@ -1920,7 +1735,8 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                       }))
                     }
 
-                    const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+                    // Usar variable de entorno o localhost para desarrollo
+                    const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
                     await fetch(`${BOT_URL}/api/vacation-notification`, {
                       method: 'POST',
                       headers: {
@@ -1943,8 +1759,18 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                 requestId,
                 emp_id: requestData.emp_id,
                 tipo: requestData.tipo,
+                es_programada: requestData.tipo === 'PROGRAMADA',
                 reemplazantes_param: reemplazantes
               })
+              
+              // Log crítico para PROGRAMADA
+              if (requestData.tipo === 'PROGRAMADA') {
+                console.log('🚨🚨🚨 APROBANDO VACACIÓN PROGRAMADA - Iniciando notificación 🚨🚨🚨', {
+                  requestId,
+                  emp_id: requestData.emp_id,
+                  tiene_reemplazantes_param: reemplazantes && reemplazantes.length > 0
+                })
+              }
 
               // Usar los reemplazantes que se pasaron como parámetro (si existen)
               let reemplazantesCompletos: any[] = []
@@ -2065,18 +1891,30 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                 }))
               }
 
-              const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+              // Usar variable de entorno o localhost para desarrollo
+              const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
               console.log('📤 Enviando notificación de aprobación a:', `${BOT_URL}/api/vacation-notification`)
               console.log('📦 Payload completo:', JSON.stringify(notificationPayload, null, 2))
+              console.log('🔍 Tipo de vacación:', notificationPayload.tipo, '| Es PROGRAMADA:', notificationPayload.tipo === 'PROGRAMADA')
+              console.log('🔍 Reemplazantes:', reemplazantesCompletos.length, '| Array:', reemplazantesCompletos)
               
+              // Enviar notificación de forma asíncrona pero esperar a que se complete
+              // Usar Promise.race con timeout para evitar que se quede colgado
               try {
-                const notifResponse = await fetch(`${BOT_URL}/api/vacation-notification`, {
+                const notifPromise = fetch(`${BOT_URL}/api/vacation-notification`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
                   },
                   body: JSON.stringify(notificationPayload)
                 })
+                
+                // Timeout de 30 segundos para dar más tiempo a la notificación (WhatsApp puede tardar)
+                const timeoutPromise = new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Timeout al enviar notificación')), 30000)
+                )
+                
+                const notifResponse = await Promise.race([notifPromise, timeoutPromise]) as Response
                 
                 console.log('📡 Respuesta del servidor:', {
                   status: notifResponse.status,
@@ -2086,7 +1924,16 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                 
                 if (notifResponse.ok) {
                   const notifResult = await notifResponse.json()
-                  console.log('✅ Respuesta de notificación exitosa:', notifResult)
+                  console.log('✅✅✅ NOTIFICACIÓN ENVIADA EXITOSAMENTE ✅✅✅', notifResult)
+                  
+                  // Log específico para PROGRAMADA
+                  if (notificationPayload.tipo === 'PROGRAMADA') {
+                    console.log('✅✅✅ NOTIFICACIÓN PROGRAMADA ENVIADA EXITOSAMENTE ✅✅✅', {
+                      id_solicitud: notificationPayload.id_solicitud,
+                      emp_id: notificationPayload.emp_id,
+                      emp_nombre: notificationPayload.emp_nombre
+                    })
+                  }
                 } else {
                   const errorText = await notifResponse.text()
                   console.error('❌ Error en respuesta de notificación:', {
@@ -2099,9 +1946,21 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                 console.error('❌ Error al hacer fetch a la API de notificación:', {
                   error: fetchError.message,
                   stack: fetchError.stack,
-                  url: `${BOT_URL}/api/vacation-notification`
+                  url: `${BOT_URL}/api/vacation-notification`,
+                  es_programada: notificationPayload.tipo === 'PROGRAMADA'
                 })
-                throw fetchError // Re-lanzar para que se capture en el catch externo
+                
+                // Log específico para PROGRAMADA
+                if (notificationPayload.tipo === 'PROGRAMADA') {
+                  console.error('🚨🚨🚨 ERROR AL ENVIAR NOTIFICACIÓN PROGRAMADA 🚨🚨🚨', {
+                    error: fetchError.message,
+                    id_solicitud: notificationPayload.id_solicitud,
+                    emp_id: notificationPayload.emp_id
+                  })
+                }
+                
+                // NO re-lanzar el error para que no interrumpa el flujo
+                // La notificación es importante pero no debe bloquear la aprobación
               }
             }
           } catch (notifError: any) {
@@ -2110,12 +1969,176 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
               stack: notifError.stack,
               requestId,
               estado,
-              tipo: requestData?.tipo
+              tipo: requestData?.tipo,
+              es_programada: requestData?.tipo === 'PROGRAMADA'
             })
+            
+            // Log crítico para PROGRAMADA
+            if (requestData?.tipo === 'PROGRAMADA') {
+              console.error('🚨🚨🚨 ERROR AL ENVIAR NOTIFICACIÓN PROGRAMADA 🚨🚨🚨', {
+                error: notifError.message,
+                requestId,
+                emp_id: requestData?.emp_id
+              })
+            }
             // Continuar aunque fallen las notificaciones
+          } finally {
+            // Asegurar que la promesa se resuelva siempre
+            console.log('🔚 Finalizando promesa de notificación')
+          }
+        })()
+      }
+      // Si es RECHAZADO, enviar notificación
+      else if (estado === 'RECHAZADO') {
+        notificacionPromise = (async () => {
+          try {
+            // Preparar payload para notificaciones de rechazo
+            const notificationPayload = {
+              id_solicitud: requestId,
+              emp_id: requestData.emp_id,
+              emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
+              estado: estado,
+              comentario: comentario,
+              tipo: requestData.tipo,
+              dias_solicitados: parseInt(requestData.total_dias || '0'),
+              fechas: requestData.fechas.map((f: any) => `${f.fecha} (${f.turno})`)
+            }
+
+            // Usar variable de entorno o localhost para desarrollo
+            const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
+            await fetch(`${BOT_URL}/api/vacation-notification`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(notificationPayload)
+            }).catch(err => {
+              console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
+            })
+
+            console.log('✅ Notificación de rechazo enviada')
+          } catch (notifError) {
+            console.warn('⚠️ Error al enviar notificación de rechazo:', notifError)
+          }
+        })()
+      }
+    }
+
+    // CRÍTICO: Esperar a que se complete el envío de la notificación ANTES de actualizar la BD
+    if (notificacionPromise) {
+      console.log('⏳⏳⏳ ESPERANDO A QUE SE COMPLETE EL ENVÍO DE NOTIFICACIÓN (ANTES DE BD)... ⏳⏳⏳')
+      try {
+        await notificacionPromise
+        console.log('✅✅✅ PROCESO DE NOTIFICACIÓN COMPLETADO - AHORA ACTUALIZANDO BD ✅✅✅')
+      } catch (notifWaitError) {
+        console.error('❌ Error al esperar notificación:', notifWaitError)
+        // Esperar un poco más para dar tiempo a que se complete
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        console.log('⏳ Esperado 2 segundos adicionales después del error')
+      }
+    }
+
+    // SEGUNDO: AHORA SÍ ACTUALIZAR EN LA BASE DE DATOS
+    console.log('💾💾💾 ACTUALIZANDO EN BASE DE DATOS 💾💾💾')
+    
+    // El backend espera 'PRE-APROBADO' (con guión) en lugar de 'PREAPROBADO'
+    const estadoBackend = estado === 'PREAPROBADO' ? 'PRE-APROBADO' : estado
+    
+    // Actualizar todas las solicitudes SIMULTÁNEAMENTE en paralelo
+    console.log(`📤 Enviando ${solicitudesAActualizar.length} solicitudes simultáneamente...`)
+    
+    const promises = solicitudesAActualizar.map((req, index) => {
+      const payload: any = {
+        id_solicitud: parseInt(String(req.id_solicitud)),
+        estado: estadoBackend,
+        comentario: comentario || (estado === 'APROBADO' ? 'Aprobado por el jefe' : '')
+      }
+      
+      if (reemplazantes && reemplazantes.length > 0) {
+        payload.reemplazantes = reemplazantes
+      }
+      
+      console.log(`📤 Preparando solicitud ${index + 1}/${solicitudesAActualizar.length} para id_solicitud: ${req.id_solicitud}`)
+      
+      return fetch('http://190.171.225.68/api/vacaciones/state', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      })
+    })
+    
+    // Esperar a que todas las solicitudes se completen
+    const responses = await Promise.all(promises)
+    
+    // Verificar que todas las respuestas sean exitosas
+    const response = responses[0] // Usar la primera para el flujo de notificaciones
+    const todasExitosas = responses.every(r => r.ok)
+    
+    if (!todasExitosas) {
+      const errores = responses.filter(r => !r.ok)
+      const errorData = await errores[0].json().catch(() => null)
+      throw new Error(errorData?.message || `Error al actualizar algunas solicitudes`)
+    }
+
+    const result = await response.json()
+
+    if (result.status === 'success' || response.ok) {
+      console.log('✅ Solicitud(es) actualizada(s) exitosamente en BD')
+
+      // Actualizar localmente todas las solicitudes que se actualizaron
+      const idsActualizados = new Set(solicitudesAActualizar.map(req => String(req.id_solicitud)))
+      requests.value = requests.value.map(req => {
+        if (idsActualizados.has(String(req.id_solicitud))) {
+          return {
+            ...req,
+            estado: estado
           }
         }
+        return req
+      })
+
+      // 🚀 GUARDAR EN API EXTERNA
+      // Después de actualizar el estado, guardar en la API externa
+      if (requestData) {
+        try {
+          // Solo guardar en API externa si el estado es APROBADO o RECHAZADO (no PREAPROBADO)
+          if (estado === 'APROBADO' || estado === 'RECHAZADO') {
+            console.log('📤 Guardando vacación en API externa...')
+            
+            const vacationPayload: SaveVacationPayload = {
+              emp_id: requestData.emp_id,
+              emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
+              manager_id: String(props.managerId || ''), // ID del manager que está aprobando
+              manager_nombre: 'Manager', // TODO: Obtener nombre real del manager
+              tipo: requestData.tipo,
+              estado: estado as 'APROBADO' | 'RECHAZADO',
+              comentario: comentario,
+              fechas: requestData.fechas.map((f: any) => ({
+                fecha: f.fecha,
+                tipo_dia: f.turno || 'COMPLETO'
+              })),
+              branch: 1, // TODO: Obtener branch real
+              dept: 10    // TODO: Obtener departamento real
+            }
+
+            const apiResult = await saveVacationToExternalAPI(vacationPayload)
+            console.log('✅ Vacación guardada exitosamente en API externa:', apiResult)
+          } else {
+            console.log('⏸️ Estado PREAPROBADO: No se guarda en API externa todavía')
+          }
+          
+        } catch (apiError: any) {
+          console.error('❌ Error al guardar en API externa:', apiError)
+          // No fallar la operación principal si falla la API externa
+          showNotification('info', 'Advertencia', 
+            'La solicitud fue procesada pero hubo un problema al guardar en el sistema externo. Contacta al administrador.')
+        }
       }
+
+      // Las notificaciones ya se completaron arriba, solo mostrar mensaje de éxito
+      console.log('✅ Todas las notificaciones completadas, mostrando mensaje de éxito')
 
       // Mostrar mensaje de éxito con toast notification
       if (estado === 'APROBADO') {
@@ -2164,8 +2187,19 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
         )
       }
 
+      // CRÍTICO: Las notificaciones ya se completaron arriba (await notificacionPromise)
+      // Ahora podemos recargar las solicitudes de forma segura
+      console.log('🔄 Recargando solicitudes después de que las notificaciones se completaron...')
+      
       // Recargar solicitudes para actualizar la lista y el calendario
-      await fetchManagerRequests()
+      // Esto se hace DESPUÉS de que se completen las notificaciones
+      // IMPORTANTE: No usar await aquí si causa problemas, pero sí asegurar que las notificaciones se completaron
+      try {
+        await fetchManagerRequests()
+        console.log('✅ Solicitudes recargadas después de completar notificaciones')
+      } catch (reloadError) {
+        console.warn('⚠️ Error al recargar solicitudes (no crítico):', reloadError)
+      }
       
       // Emitir evento para actualizar el calendario en tiempo real
       const event = new CustomEvent('vacation-status-changed', {

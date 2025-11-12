@@ -643,6 +643,8 @@ interface Vacation {
   start_date: string
   end_date: string
   status: 'pending' | 'preapproved' | 'approved' | 'rejected'
+  tipo?: string
+  es_programada?: boolean
 }
 
 const props = defineProps<{
@@ -802,23 +804,31 @@ const getVacationBlockClasses = (empId: string, date: Date): string => {
   const classes = []
   
   // Colores por estado con mejores gradientes
+  // Si es programada, usar color morado distintivo
+  const esProgramada = (vacation as any).es_programada || (vacation as any).tipo === 'PROGRAMADA'
+  
   if (vacation.status === 'approved') {
+    // Todas las vacaciones aprobadas (programadas o no) se muestran en verde
     classes.push('bg-gradient-to-br from-green-500 via-green-600 to-emerald-600 hover:from-green-600 hover:via-green-700 hover:to-emerald-700')
-    classes.push('min-h-[50px]')
     classes.push('ring-2 ring-green-300/50')
+    classes.push('min-h-[50px]')
   } else if (vacation.status === 'preapproved') {
+    // Todas las vacaciones preaprobadas (revisadas) se muestran en amarillo/naranja
     classes.push('bg-gradient-to-br from-yellow-400 via-yellow-500 to-amber-500 hover:from-yellow-500 hover:via-yellow-600 hover:to-amber-600')
-    classes.push('min-h-[48px]')
     classes.push('ring-2 ring-yellow-300/50')
     classes.push('border-2 border-yellow-400/60')
+    classes.push('min-h-[48px]')
   } else if (vacation.status === 'pending') {
+    // Todas las vacaciones pendientes se muestran en azul
     classes.push('bg-gradient-to-br from-blue-400 via-blue-500 to-indigo-500 hover:from-blue-500 hover:via-blue-600 hover:to-indigo-600')
-    classes.push('min-h-[45px]')
     classes.push('ring-2 ring-blue-300/50')
+    classes.push('min-h-[45px]')
   } else if (vacation.status === 'rejected') {
+    // Rechazadas siempre en rojo, sin importar el tipo
     classes.push('bg-gradient-to-br from-red-500 via-red-600 to-rose-600 hover:from-red-600 hover:via-red-700 hover:to-rose-700')
     classes.push('min-h-[40px]')
     classes.push('ring-2 ring-red-300/50')
+    classes.push('border-2 border-red-500/60')
   } else {
     classes.push('bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 hover:from-blue-600 hover:via-indigo-700 hover:to-purple-700')
     classes.push('min-h-[50px]')
@@ -836,6 +846,7 @@ const getVacationStatusShort = (empId: string, date: Date): string => {
   
   if (!vacation) return ''
   
+  // Usar el estado real, no el tipo, para determinar el texto
   if (vacation.status === 'approved') return '✓ OK'
   if (vacation.status === 'preapproved') return '✓ REV'
   if (vacation.status === 'pending') return '⏳ PEN'
@@ -1947,6 +1958,8 @@ const loadData = async () => {
                   id: `${solicitud.id_solicitud}_${fecha.fecha}`,
                   emp_id: solicitud.emp_id,
                   employee_name: nombre,
+                  tipo: solicitud.tipo || 'VACACION',
+                  es_programada: solicitud.tipo === 'PROGRAMADA',
                   department: departamento,
                   start_date: fecha.fecha,
                   end_date: fecha.fecha,
@@ -2090,7 +2103,9 @@ onMounted(() => {
           status: req.estado === 'APROBADO' ? 'approved' as const :
                   req.estado === 'PREAPROBADO' || req.estado === 'PRE-APROBADO' ? 'preapproved' as const :
                   req.estado === 'RECHAZADO' ? 'rejected' as const :
-                  'pending' as const // PROCESO y PENDIENTE son ambos pending
+                  'pending' as const, // PROCESO y PENDIENTE son ambos pending
+          tipo: req.tipo || 'VACACION', // Agregar tipo para identificar programadas
+          es_programada: req.tipo === 'PROGRAMADA'
         })
       }
     }

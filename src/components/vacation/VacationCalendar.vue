@@ -41,8 +41,12 @@
         <span>Disponible</span>
       </div>
       <div class="flex items-center gap-1">
-        <div class="w-3 h-3 bg-red-500 rounded"></div>
-        <span>Ocupado</span>
+        <div class="w-3 h-3 bg-purple-400 rounded border-2 border-purple-600"></div>
+        <span>Programada</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <div class="w-3 h-3 bg-red-500 rounded border-2 border-red-700"></div>
+        <span>Rechazada</span>
       </div>
       <div class="flex items-center gap-1">
         <div class="w-3 h-3 bg-blue-500 rounded"></div>
@@ -71,7 +75,10 @@
           class="w-full aspect-square md:min-h-[60px] lg:min-h-[80px] p-2 md:p-3 text-sm md:text-base rounded-md transition-colors flex flex-col items-center justify-center relative touch-manipulation hover:scale-105 md:hover:scale-110 transform"
         >
           <span class="font-medium">{{ date.getDate() }}</span>
-          <div v-if="isDateSelected(date) && getDayType(date)" class="text-xs md:text-sm mt-1">
+          <div v-if="getDateLabel(date)" class="text-xs font-semibold mt-1 hidden md:block">
+            {{ getDateLabel(date) }}
+          </div>
+          <div v-else-if="isDateSelected(date) && getDayType(date)" class="text-xs md:text-sm mt-1">
             {{ getDayTypeEmoji(getDayType(date)) }}
           </div>
         </button>
@@ -249,13 +256,46 @@ const getDateStatus = (date: Date) => {
   const isHoliday = publicHolidays.value.some(holiday => holiday.date === dateString)
   if (isHoliday) return 'holiday'
 
-  const hasRequest = props.existingRequests.some((request) => {
-    const startDate = new Date(request.startDate)
-    const endDate = new Date(request.endDate)
-    return date >= startDate && date <= endDate
+  // Verificar solicitudes existentes
+  const dateRequest = props.existingRequests.find((request) => {
+    // Si la solicitud tiene fechas array, verificar cada fecha
+    if (request.fechas && Array.isArray(request.fechas)) {
+      return request.fechas.some((f: any) => {
+        const fechaStr = typeof f === 'string' ? f : (f.fecha || f)
+        // Normalizar formato de fecha (YYYY-MM-DD)
+        const normalizedDateStr = fechaStr.split('T')[0]
+        return normalizedDateStr === dateString
+      })
+    }
+    // Si tiene fechas_agrupadas (formato alternativo)
+    if (request.fechas_agrupadas && Array.isArray(request.fechas_agrupadas)) {
+      return request.fechas_agrupadas.some((f: string) => {
+        const normalizedDateStr = f.split('T')[0]
+        return normalizedDateStr === dateString
+      })
+    }
+    // Si tiene startDate y endDate (formato antiguo)
+    if (request.startDate && request.endDate) {
+      const startDate = new Date(request.startDate)
+      const endDate = new Date(request.endDate)
+      return date >= startDate && date <= endDate
+    }
+    return false
   })
 
-  if (hasRequest) return 'occupied'
+  if (dateRequest) {
+    // Si está rechazada, mostrar como rechazada
+    if (dateRequest.estado === 'RECHAZADO' || dateRequest.estado === 'rejected') {
+      return 'rejected'
+    }
+    // Si es programada, mostrar como programada
+    if (dateRequest.tipo === 'PROGRAMADA' || dateRequest.tipo === 'programmed') {
+      return 'programmed'
+    }
+    // Para otros tipos aprobados/preaprobados, no mostrar nada (disponible)
+    // Solo mostrar rechazadas y programadas
+    return 'available'
+  }
 
   // Todos los demás días (incluyendo sábados) son disponibles
   return 'available'
@@ -267,7 +307,7 @@ const isDateSelected = (date: Date) => {
 
 const isClickable = (date: Date) => {
   const status = getDateStatus(date)
-  return status !== 'past' && status !== 'occupied' && status !== 'sunday' && status !== 'holiday'
+  return status !== 'past' && status !== 'rejected' && status !== 'programmed' && status !== 'sunday' && status !== 'holiday'
 }
 
 const getDateClasses = (date: Date) => {
@@ -278,12 +318,20 @@ const getDateClasses = (date: Date) => {
     {
       'bg-green-100 text-green-800 hover:bg-green-200': status === 'available' && !isSelected,
       'bg-blue-500 text-white': isSelected,
-      'bg-red-100 text-red-800 cursor-not-allowed': status === 'occupied',
+      'bg-red-200 text-red-900 cursor-not-allowed border-2 border-red-500': status === 'rejected',
+      'bg-purple-100 text-purple-800 cursor-not-allowed border-2 border-purple-400': status === 'programmed',
       'bg-gray-100 text-gray-400 cursor-not-allowed': status === 'past',
       'bg-gray-200 text-gray-500 cursor-not-allowed': status === 'sunday',
       'bg-orange-100 text-orange-800 cursor-not-allowed': status === 'holiday',
     }
   ]
+}
+
+const getDateLabel = (date: Date) => {
+  const status = getDateStatus(date)
+  if (status === 'rejected') return 'Rechazada'
+  if (status === 'programmed') return 'Programada'
+  return ''
 }
 
 const getDayType = (date: Date) => {
@@ -300,7 +348,7 @@ const getDayTypeEmoji = (type: string | undefined) => {
 
 const handleDateClick = (date: Date) => {
   const status = getDateStatus(date)
-  if (status === 'past' || status === 'occupied' || status === 'sunday' || status === 'holiday') return
+  if (status === 'past' || status === 'rejected' || status === 'programmed' || status === 'sunday' || status === 'holiday') return
 
   const existingSelection = daySelections.value.find((sel) => sel.date.toDateString() === date.toDateString())
 

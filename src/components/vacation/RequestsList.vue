@@ -126,15 +126,7 @@
               >
                 Rechazada
               </div>
-              <!-- Si es programada y está aprobada pero sin reemplazantes guardados, mostrar "Esperando aprobación" -->
-              <div
-                v-else-if="request.estado === 'APROBADO' && request.tipo === 'PROGRAMADA' && !hasReplacements(request)"
-                class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-300 h-9 px-3 whitespace-nowrap"
-              >
-                <Clock class="h-4 w-4 mr-1" />
-                Esperando aprobación
-              </div>
-              <!-- Si está aprobada (y no es programada o ya tiene reemplazantes), mostrar botón de descargar boleta -->
+              <!-- Si está aprobada, SIEMPRE mostrar botón de descargar boleta (sin importar si es programada o no) -->
               <button
                 v-else-if="request.estado === 'APROBADO'"
                 @click="() => downloadBoleta(request)"
@@ -145,27 +137,17 @@
                 </svg>
                 Descargar Boleta
               </button>
-              <!-- Si es programada (cualquier estado excepto RECHAZADO y APROBADO con reemplazantes), mostrar "Esperando aprobación" -->
-              <!-- El empleado ya programó, solo espera aprobación del jefe -->
+              <!-- Si es programada y está en proceso/pendiente, mostrar "Esperando aprobación" -->
               <div
-                v-else-if="request.tipo === 'PROGRAMADA' && request.estado !== 'RECHAZADO'"
-                class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-300 h-9 px-3 whitespace-nowrap"
-              >
-                <Clock class="h-4 w-4 mr-1" />
-                Esperando aprobación
-              </div>
-              <!-- Si ya tiene reemplazantes guardados, mostrar "Esperando aprobación" -->
-              <div
-                v-else-if="hasReplacements(request)"
+                v-else-if="request.tipo === 'PROGRAMADA' && (request.estado === 'PROCESO' || request.estado === 'PENDIENTE' || request.estado === 'PREAPROBADO')"
                 class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-300 h-9 px-3 whitespace-nowrap"
               >
                 <Clock class="h-4 w-4 mr-1" />
                 Esperando aprobación
               </div>
               <!-- Si no es programada y no tiene reemplazantes, mostrar botón Tomar para seleccionar reemplazantes -->
-              <!-- Solo para vacaciones no programadas que necesitan seleccionar reemplazantes -->
               <button
-                v-else-if="request.tipo !== 'PROGRAMADA'"
+                v-else-if="request.tipo !== 'PROGRAMADA' && (request.estado === 'PROCESO' || request.estado === 'PENDIENTE' || request.estado === 'PREAPROBADO')"
                 @click="() => openViewVacationModal(request)"
                 class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-3 whitespace-nowrap"
               >
