@@ -222,7 +222,7 @@
                     <!-- Header del menú -->
                     <div class="px-4 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
                       <div class="text-xs font-semibold text-gray-700">Acciones Rápidas</div>
-                      <div class="text-[10px] text-gray-500 mt-0.5">{{ formatDate(day) }}</div>
+                      <div class="text-[10px] text-gray-500 mt-0.5">{{ formatDate(day.toISOString()) }}</div>
                     </div>
                     
                     <!-- Acciones principales -->
@@ -952,10 +952,6 @@ const preapproveVacationDay = async (empId: string, date: Date) => {
       // Extraer el id_solicitud del id de la vacación (formato: id_solicitud_fecha)
       const id_solicitud = vacation.id.split('_')[0]
       
-      // Obtener datos completos de la solicitud para la notificación
-      const employee = teamEmployees.value.find(e => e.emp_id === empId)
-      const employeeName = employee?.name || vacation.employee_name
-      
       // Llamar a la API para actualizar en la base de datos
       // El backend ahora acepta 'PRE-APROBADO' (con guión)
       const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
@@ -986,6 +982,8 @@ const preapproveVacationDay = async (empId: string, date: Date) => {
   }
 }
 
+// Función no utilizada - comentada para evitar error de TypeScript
+/*
 const approveVacationDay = async (empId: string, date: Date) => {
   try {
     const dateStr = date.toISOString().split('T')[0]
@@ -1023,7 +1021,7 @@ const approveVacationDay = async (empId: string, date: Date) => {
         console.log('✅ Vacación aprobada en la base de datos')
         
         // Verificar si estaba preaprobada para enviar resumen o individual
-        const estabaPreaprobada = estadoOriginal === 'preapproved' || estadoOriginal === 'pre-approved'
+        const estabaPreaprobada = estadoOriginal === 'preapproved'
         
         if (estabaPreaprobada) {
           // Si estaba preaprobada, verificar si todas las fechas preaprobadas están ahora aprobadas
@@ -1162,6 +1160,7 @@ const approveVacationDay = async (empId: string, date: Date) => {
     console.error('Error al aprobar vacación:', error)
   }
 }
+*/
 
 // Función para preaprobar desde el modal
 const preapproveVacationFromModal = async (vacation: Vacation) => {
@@ -1224,7 +1223,7 @@ const rejectVacationDay = async (empId: string, date: Date) => {
     if (vacation) {
       // Pedir confirmación antes de rechazar
       const employee = teamEmployees.value.find(e => e.emp_id === empId)
-      const employeeName = employee?.name || vacation.employee_name
+      const employeeName = employee?.name || vacation.employee_name || `Empleado #${empId}`
       const fechaFormateada = new Date(dateStr).toLocaleDateString('es-ES', { 
         weekday: 'long', 
         year: 'numeric', 
@@ -1570,6 +1569,8 @@ const preapproveVacationYear = async (empId: string) => {
   }
 }
 
+// Función no utilizada - comentada para evitar error de TypeScript
+/*
 const suggestVacationMonth = async (empId: string, date: Date) => {
   try {
     const year = date.getFullYear()
@@ -1612,6 +1613,7 @@ const suggestVacationMonth = async (empId: string, date: Date) => {
     console.error('Error al sugerir:', error)
   }
 }
+*/
 
 const toggleAlternateDate = (date: Date) => {
   const index = selectedAlternateDates.value.findIndex(d => d.toDateString() === date.toDateString())
@@ -1858,9 +1860,40 @@ const loadData = async () => {
                 const empInfoResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${solicitud.emp_id}`)
                 if (empInfoResponse.ok) {
                   const empInfoData = await empInfoResponse.json()
-                  if (empInfoData.status === 'success' && Array.isArray(empInfoData.data) && empInfoData.data.length > 0) {
-                    nombre = empInfoData.data[0].fullName || nombre
-                    cargo = empInfoData.data[0].cargo || cargo
+                  
+                  // La API ahora devuelve directamente un array o un objeto con status
+                  let empleadoInfo: any = null
+                  
+                  if (Array.isArray(empInfoData) && empInfoData.length > 0) {
+                    // Nuevo formato: array directo
+                    empleadoInfo = empInfoData[0]
+                  } else if (empInfoData.status === 'success' && Array.isArray(empInfoData.data) && empInfoData.data.length > 0) {
+                    // Formato antiguo: objeto con status y data
+                    empleadoInfo = empInfoData.data[0]
+                  }
+                  
+                  if (empleadoInfo) {
+                    nombre = empleadoInfo.fullName || nombre
+                    cargo = empleadoInfo.cargo || cargo
+                    
+                    // También cargar información de vacaciones si está disponible
+                    if (empleadoInfo.vacation) {
+                      const vacationInfo = empleadoInfo.vacation
+                      const available = parseFloat(vacationInfo.available || '0')
+                      const total = parseFloat(vacationInfo.total || '0')
+                      const taken = parseFloat(vacationInfo.taken || '0')
+                      
+                      uniqueEmployees.set(solicitud.emp_id, {
+                        emp_id: solicitud.emp_id,
+                        name: nombre,
+                        department: cargo,
+                        vacationBalance: available,
+                        totalDays: total,
+                        usagePercentage: total > 0 ? Math.round((taken / total) * 100) : 0,
+                        daysRemaining: available
+                      })
+                      continue // Ya se agregó al map, continuar con el siguiente
+                    }
                   }
                 }
               } catch (err) {
@@ -2067,6 +2100,13 @@ onMounted(() => {
     // Agregar al array de vacaciones
     vacations.value = [...vacations.value, ...nuevasVacaciones]
     console.log('📅 BossCalendarView - Vacaciones totales:', vacations.value.length)
+  })
+  
+  // Escuchar evento de cambio de estado de vacación para recargar datos
+  window.addEventListener('vacation-status-changed', async (event: any) => {
+    console.log('📢 BossCalendarView - Evento vacation-status-changed recibido:', event.detail)
+    // Recargar todos los datos del calendario
+    await loadData()
   })
 })
 </script>

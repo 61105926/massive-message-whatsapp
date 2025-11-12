@@ -49,8 +49,40 @@
 
     <Card>
       <CardHeader>
-        <h3 class="text-lg font-semibold leading-none tracking-tight">Panel de Aprobación</h3>
-        <p class="text-sm text-muted-foreground">Solicitudes pendientes de aprobación</p>
+        <div class="flex flex-col gap-4">
+          <div>
+            <h3 class="text-lg font-semibold leading-none tracking-tight">Panel de Aprobación</h3>
+            <p class="text-sm text-muted-foreground">Solicitudes pendientes de aprobación</p>
+          </div>
+          
+          <!-- Filtros -->
+          <div class="flex flex-col sm:flex-row gap-3 pt-2 border-t">
+            <!-- Filtro por empleado -->
+            <div class="flex-1">
+              <label class="text-xs font-medium text-gray-700 mb-1.5 block">Filtrar por empleado</label>
+              <select
+                v-model="selectedEmployeeFilter"
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary bg-white"
+              >
+                <option value="">Todos los empleados</option>
+                <option
+                  v-for="employee in uniqueEmployees"
+                  :key="employee.emp_id"
+                  :value="employee.emp_id"
+                >
+                  {{ employee.nombre }} ({{ employee.cargo }})
+                </option>
+              </select>
+            </div>
+            
+            <!-- Información de filtro de fecha -->
+            <div class="flex items-end">
+              <div class="px-3 py-2 text-xs bg-blue-50 border border-blue-200 rounded-md text-blue-700">
+                <span class="font-medium">Mostrando:</span> Mes actual y siguiente ({{ currentMonthRange }})
+              </div>
+            </div>
+          </div>
+        </div>
       </CardHeader>
     </Card>
 
@@ -116,11 +148,11 @@
               <div>
                 <p class="text-muted-foreground">Período</p>
                 <p class="font-medium">
-                  <span v-if="request.fechas && request.fechas.length > 0">
-                    {{ formatDate(request.fechas[0].fecha) }} - {{ formatDate(request.fechas[request.fechas.length - 1].fecha) }}
+                  <span v-if="(request as any).fechas_agrupadas && (request as any).fechas_agrupadas.length > 0">
+                    {{ formatDate((request as any).fechas_agrupadas[0]) }} - {{ formatDate((request as any).fechas_agrupadas[(request as any).fechas_agrupadas.length - 1]) }} ({{ (request as any).fechas_agrupadas.length }} días)
                   </span>
-                  <span v-else-if="(request as any).fechas_agrupadas && (request as any).fechas_agrupadas.length > 0">
-                    {{ formatDate((request as any).fechas_agrupadas[0]) }} - {{ formatDate((request as any).fechas_agrupadas[(request as any).fechas_agrupadas.length - 1]) }}
+                  <span v-else-if="request.fechas && request.fechas.length > 0">
+                    {{ formatDate(getSortedFechas(request.fechas)[0].fecha) }} - {{ formatDate(getSortedFechas(request.fechas)[getSortedFechas(request.fechas).length - 1].fecha) }} ({{ getSortedFechas(request.fechas).length }} días)
                   </span>
                   <span v-else>N/A</span>
                 </p>
@@ -134,7 +166,7 @@
               </div>
               <div>
                 <p class="text-muted-foreground">Tipo</p>
-                <p class="font-medium">{{ getVacationType(request.tipo) }}</p>
+                <p class="font-medium">{{ getVacationType(request.tipo || 'PROGRAMADA') }}</p>
               </div>
               <div>
                 <p class="text-muted-foreground">Estado</p>
@@ -655,32 +687,208 @@ const availableReplacements = ref<any[]>([])
 const selectedReplacements = ref<string[]>([])
 const isPreapproving = ref(false)
 
+// Filtros
+const selectedEmployeeFilter = ref<string>('')
+
 // Cargar reemplazantes disponibles desde la API
 const loadAvailableReplacements = async (empId: string) => {
   try {
     console.log('🔍 Cargando reemplazantes para empId:', empId)
+    availableReplacements.value = []
     
-    const response = await fetch(`http://190.171.225.68/api/recomendar-reemplazante?empId=${empId}`)
+    const allReplacements: any[] = []
     
-    if (response.ok) {
-      const data = await response.json()
-      if (data.reemplazantes && Array.isArray(data.reemplazantes)) {
-        availableReplacements.value = data.reemplazantes.map((rep: any) => ({
-          id: rep.REEMPLAZANTE_EMP_ID || rep.emp_id,
-          name: rep.REEMPLAZANTE_NOMBRE || rep.nombre,
-          department: rep.CARGO || rep.cargo || 'N/A'
+    // 1. PRIMERO: Cargar desde /api/empleado/info que tiene los replacements en el campo replacements
+    try {
+      // Intentar desde el cache primero
+      if (employeeCache.value[empId] && employeeCache.value[empId].replacements && Array.isArray(employeeCache.value[empId].replacements) && employeeCache.value[empId].replacements.length > 0) {
+        const replacementsFromCache = employeeCache.value[empId].replacements.map((rep: any) => ({
+          id: rep.id || rep.EMP_ID || rep.emp_id,
+          name: rep.name || rep.NOMBRE || rep.nombre,
+          department: rep.cargo || rep.CARGO || 'N/A',
+          phone: rep.phone || rep.TELEFONO || '',
+          isRecommended: true
         }))
-        console.log('✅ Reemplazantes cargados para el jefe:', availableReplacements.value.length)
+        allReplacements.push(...replacementsFromCache)
+        console.log('✅ Reemplazantes encontrados en cache del empleado:', replacementsFromCache.length)
       } else {
-        availableReplacements.value = []
-        console.warn('⚠️ No se encontraron reemplazantes en la respuesta')
+        // Si no está en cache, cargar desde API
+        const empResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${empId}`)
+        if (empResponse.ok) {
+          const empData = await empResponse.json()
+          
+          // La API ahora devuelve directamente un array o un objeto con status
+          let empleadoInfo: any = null
+          
+          if (Array.isArray(empData) && empData.length > 0) {
+            // Nuevo formato: array directo
+            empleadoInfo = empData[0]
+          } else if (empData.status === 'success' && Array.isArray(empData.data) && empData.data.length > 0) {
+            // Formato antiguo: objeto con status y data
+            empleadoInfo = empData.data[0]
+          }
+          
+          if (empleadoInfo) {
+            // Guardar en cache con los replacements
+            employeeCache.value[empId] = {
+              nombre: empleadoInfo.fullName || `Empleado #${empId}`,
+              cargo: empleadoInfo.cargo || 'N/A',
+              replacements: empleadoInfo.replacements || []
+            }
+            
+            // Si el empleado tiene reemplazantes en la respuesta, agregarlos
+            if (empleadoInfo.replacements && Array.isArray(empleadoInfo.replacements) && empleadoInfo.replacements.length > 0) {
+              const replacementsFromEmployee = empleadoInfo.replacements.map((rep: any) => ({
+                id: rep.id || rep.EMP_ID || rep.emp_id,
+                name: rep.name || rep.NOMBRE || rep.nombre,
+                department: rep.cargo || rep.CARGO || 'N/A',
+                phone: rep.phone || rep.TELEFONO || '',
+                isRecommended: true
+              }))
+              allReplacements.push(...replacementsFromEmployee)
+              console.log('✅ Reemplazantes encontrados en /api/empleado/info:', replacementsFromEmployee.length)
+            }
+          }
+        }
       }
+    } catch (error) {
+      console.warn('⚠️ Error al cargar reemplazantes desde /api/empleado/info:', error)
+    }
+    
+    // 2. Si aún no hay reemplazantes, intentar desde la API de recomendaciones como fallback
+    if (allReplacements.length === 0) {
+      try {
+        const response = await fetch(`http://190.171.225.68/api/recomendar-reemplazante?empId=${empId}`)
+        
+        if (response.ok) {
+          const data = await response.json()
+          if (data.reemplazantes && Array.isArray(data.reemplazantes) && data.reemplazantes.length > 0) {
+            const recommended = data.reemplazantes.map((rep: any) => ({
+              id: rep.REEMPLAZANTE_EMP_ID || rep.emp_id,
+              name: rep.REEMPLAZANTE_NOMBRE || rep.nombre,
+              department: rep.CARGO || rep.cargo || 'N/A',
+              phone: rep.TELEFONO || '',
+              isRecommended: true
+            }))
+            allReplacements.push(...recommended)
+            console.log('✅ Reemplazantes recomendados cargados (fallback):', recommended.length)
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Error al cargar reemplazantes recomendados:', error)
+      }
+    }
+    
+    // 3. Si aún no hay reemplazantes, intentar obtener empleados del mismo departamento desde las solicitudes
+    if (allReplacements.length === 0) {
+      try {
+        // Obtener información del empleado para buscar del mismo departamento
+        let empleadoInfo: any = null
+        let departamento: string | null = null
+        
+        // Intentar desde el cache primero
+        if (employeeCache.value[empId]) {
+          empleadoInfo = employeeCache.value[empId]
+          departamento = empleadoInfo.cargo || empleadoInfo.departamento
+        } else {
+          // Si no está en cache, cargar desde API
+          const empResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${empId}`)
+          if (empResponse.ok) {
+            const empData = await empResponse.json()
+            
+            // La API ahora devuelve directamente un array o un objeto con status
+            if (Array.isArray(empData) && empData.length > 0) {
+              empleadoInfo = empData[0]
+              departamento = empleadoInfo.dept || empleadoInfo.departamento || empleadoInfo.DEPT || empleadoInfo.cargo
+            } else if (empData.status === 'success' && Array.isArray(empData.data) && empData.data.length > 0) {
+              empleadoInfo = empData.data[0]
+              departamento = empleadoInfo.dept || empleadoInfo.departamento || empleadoInfo.DEPT || empleadoInfo.cargo
+            }
+          }
+        }
+        
+        console.log('🔍 Información del empleado:', {
+          emp_id: empId,
+          empleado: empleadoInfo,
+          departamento: departamento
+        })
+        
+        // Obtener otros empleados desde las solicitudes del manager (excluyendo al empleado actual)
+        const otrosEmpleados = requests.value
+          .filter((req: VacationRequest) => {
+            const diferenteEmpleado = String(req.emp_id) !== String(empId)
+            if (!diferenteEmpleado) return false
+            
+            // Si tenemos departamento, filtrar por mismo departamento
+            if (departamento) {
+              const reqEmpleado = req.empleado || employeeCache.value[req.emp_id]
+              const reqDept = reqEmpleado?.cargo || reqEmpleado?.departamento || reqEmpleado?.dept
+              return reqDept === departamento || reqDept === empleadoInfo?.cargo
+            }
+            
+            // Si no hay departamento, incluir todos los demás empleados del manager
+            return true
+          })
+          .map((req: VacationRequest) => {
+            const reqEmpleado = req.empleado || employeeCache.value[req.emp_id]
+            return {
+              id: req.emp_id,
+              name: reqEmpleado?.nombre || `Empleado #${req.emp_id}`,
+              department: reqEmpleado?.cargo || reqEmpleado?.departamento || 'N/A',
+              phone: '',
+              isRecommended: false
+            }
+          })
+        
+        // Eliminar duplicados por ID
+        const empleadosUnicos = otrosEmpleados.filter((emp, index, self) => 
+          index === self.findIndex(e => e.id === emp.id)
+        )
+        
+        if (empleadosUnicos.length > 0) {
+          allReplacements.push(...empleadosUnicos)
+          console.log('✅ Empleados encontrados en solicitudes del manager:', empleadosUnicos.length)
+        } else {
+          console.warn('⚠️ No se encontraron otros empleados en las solicitudes del manager')
+        }
+      } catch (empError) {
+        console.warn('⚠️ Error al cargar información del empleado:', empError)
+      }
+    }
+    
+    // 4. Si aún no hay reemplazantes, intentar cargar desde reemplazantes guardados de la solicitud
+    if (allReplacements.length === 0 && selectedRequest.value) {
+      try {
+        const requestId = String(selectedRequest.value.id_solicitud).split('_grupo_')[0]
+        const savedResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?id_solicitud=${requestId}`)
+        if (savedResponse.ok) {
+          const savedData = await savedResponse.json()
+          if (savedData.success && Array.isArray(savedData.data) && savedData.data.length > 0) {
+            const saved = savedData.data.map((rep: any) => ({
+              id: rep.EMP_ID || rep.emp_id,
+              name: rep.NOMBRE || rep.nombre,
+              department: rep.CARGO || rep.cargo || 'N/A',
+              phone: rep.TELEFONO || '',
+              isRecommended: false
+            }))
+            allReplacements.push(...saved)
+            console.log('✅ Reemplazantes guardados cargados:', saved.length)
+          }
+        }
+      } catch (savedError) {
+        console.warn('⚠️ Error al cargar reemplazantes guardados:', savedError)
+      }
+    }
+    
+    availableReplacements.value = allReplacements
+    
+    if (availableReplacements.value.length === 0) {
+      console.warn('⚠️ No se encontraron reemplazantes disponibles desde ninguna fuente')
     } else {
-      console.warn('⚠️ No se pudieron cargar reemplazantes desde la API')
-      availableReplacements.value = []
+      console.log('✅ Total de reemplazantes disponibles:', availableReplacements.value.length)
     }
   } catch (error) {
-    console.error('Error al cargar reemplazantes:', error)
+    console.error('❌ Error al cargar reemplazantes:', error)
     availableReplacements.value = []
   }
 }
@@ -724,11 +932,24 @@ const fetchEmployeeInfo = async (empId: string) => {
 
     const result = await response.json()
 
-    if (result.status === 'success' && Array.isArray(result.data) && result.data.length > 0) {
-      const employeeData = result.data[0]
+    // La API ahora devuelve directamente un array o un objeto con status
+    let employeeData: any = null
+    
+    if (Array.isArray(result) && result.length > 0) {
+      // Nuevo formato: array directo
+      employeeData = result[0]
+    } else if (result.status === 'success' && Array.isArray(result.data) && result.data.length > 0) {
+      // Formato antiguo: objeto con status y data
+      employeeData = result.data[0]
+    } else {
+      throw new Error('No se encontró información del empleado')
+    }
+
+    if (employeeData) {
       const employeeInfo = {
         nombre: employeeData.fullName || `Empleado #${empId}`,
-        cargo: employeeData.cargo || 'N/A'
+        cargo: employeeData.cargo || 'N/A',
+        replacements: employeeData.replacements || [] // Guardar también los reemplazantes
       }
 
       // Guardar en cache
@@ -870,10 +1091,11 @@ const processedProgrammedRequests = computed(() => {
   
   const resultado: any[] = []
   
-  // Agrupar por empleado y fecha de solicitud
+  // Agrupar por empleado y fecha de solicitud (todas las solicitudes del mismo empleado con la misma fecha_solicitud van juntas)
   const porEmpleado = new Map<string, any[]>()
   
   for (const req of programadas) {
+    // Solo agrupar por emp_id y fecha_solicitud para que todas las fechas de la misma solicitud vayan juntas
     const key = `${req.emp_id}_${req.fecha_solicitud}`
     if (!porEmpleado.has(key)) {
       porEmpleado.set(key, [])
@@ -881,16 +1103,56 @@ const processedProgrammedRequests = computed(() => {
     porEmpleado.get(key)!.push(req)
   }
   
+  console.log('📊 Solicitudes programadas encontradas:', programadas.length)
+  console.log('📊 Grupos por empleado:', porEmpleado.size)
+  
   // Para cada empleado, procesar sus fechas
-  for (const [key, solicitudes] of porEmpleado.entries()) {
+  for (const [, solicitudes] of porEmpleado.entries()) {
     const primera = solicitudes[0]
     
     // Obtener todas las fechas de todas las solicitudes del mismo empleado
-    const todasFechas = solicitudes.flatMap(s => s.fechas.map(f => f.fecha))
+    const todasFechas = solicitudes.flatMap(s => s.fechas.map((f: any) => f.fecha))
     const fechasUnicas = [...new Set(todasFechas)].sort()
     
-    // Agrupar fechas que están muy cerca (1-2 días)
-    const gruposFechas = agruparFechasCercanas(fechasUnicas)
+    console.log('🔍 Procesando solicitudes agrupadas:', {
+      emp_id: primera.emp_id,
+      fecha_solicitud: primera.fecha_solicitud,
+      total_solicitudes: solicitudes.length,
+      todas_fechas: todasFechas,
+      fechas_unicas: fechasUnicas,
+      ids_solicitudes: solicitudes.map(s => s.id_solicitud)
+    })
+    
+    // Verificar si hay fechas que están muy separadas (más de 2 días)
+    // Si hay una brecha grande, podría ser que se estén mezclando solicitudes diferentes
+    const fechasConBrechas: string[][] = []
+    let grupoActual: string[] = [fechasUnicas[0]]
+    
+    for (let i = 1; i < fechasUnicas.length; i++) {
+      const fechaActual = new Date(fechasUnicas[i] + 'T00:00:00')
+      const fechaAnterior = new Date(fechasUnicas[i - 1] + 'T00:00:00')
+      const diferenciaDias = (fechaActual.getTime() - fechaAnterior.getTime()) / (1000 * 60 * 60 * 24)
+      
+      if (diferenciaDias > 2) {
+        // Hay una brecha grande, separar en grupos
+        fechasConBrechas.push([...grupoActual])
+        grupoActual = [fechasUnicas[i]]
+      } else {
+        grupoActual.push(fechasUnicas[i])
+      }
+    }
+    fechasConBrechas.push(grupoActual)
+    
+    console.log('📅 Fechas agrupadas por brechas:', fechasConBrechas)
+    
+    // Agrupar fechas que están muy cerca (1-2 días) dentro de cada grupo sin brechas
+    const gruposFechas: string[][] = []
+    for (const grupoSinBrecha of fechasConBrechas) {
+      const subGrupos = agruparFechasCercanas(grupoSinBrecha)
+      gruposFechas.push(...subGrupos)
+    }
+    
+    console.log('📅 Grupos de fechas generados:', gruposFechas)
     
     // Crear una solicitud por cada grupo de fechas cercanas
     for (let i = 0; i < gruposFechas.length; i++) {
@@ -902,18 +1164,149 @@ const processedProgrammedRequests = computed(() => {
         .filter(f => grupoFechas.includes(f.fecha))
         .sort((a, b) => a.fecha.localeCompare(b.fecha))
       
+      // Asegurar que grupoFechas esté ordenado
+      const grupoFechasOrdenado = [...grupoFechas].sort()
+      
+      console.log(`📋 Grupo ${i}:`, {
+        grupo_fechas: grupoFechasOrdenado,
+        fechas_completas: fechasCompletas.map(f => f.fecha),
+        primera_fecha: grupoFechasOrdenado[0],
+        ultima_fecha: grupoFechasOrdenado[grupoFechasOrdenado.length - 1],
+        total_fechas: grupoFechasOrdenado.length
+      })
+      
+      // Validar que grupoFechasOrdenado y fechasCompletas tengan las mismas fechas
+      const fechasEnGrupo = new Set(grupoFechasOrdenado)
+      const fechasEnCompletas = new Set(fechasCompletas.map(f => f.fecha))
+      const fechasFaltantes = grupoFechasOrdenado.filter(f => !fechasEnCompletas.has(f))
+      const fechasExtras = Array.from(fechasEnCompletas).filter(f => !fechasEnGrupo.has(f))
+      
+      if (fechasFaltantes.length > 0 || fechasExtras.length > 0) {
+        console.warn(`⚠️ Inconsistencia en grupo ${i}:`, {
+          fechas_faltantes: fechasFaltantes,
+          fechas_extras: fechasExtras
+        })
+      }
+      
       resultado.push({
         ...primera,
         id_solicitud: `${primera.id_solicitud}_grupo_${i}`,
+        tipo: primera.tipo || 'PROGRAMADA', // Asegurar que el tipo se preserve
         fechas: fechasCompletas,
-        total_dias: grupoFechas.length,
-        es_grupo: grupoFechas.length > 1
+        total_dias: grupoFechasOrdenado.length,
+        es_grupo: grupoFechasOrdenado.length > 1,
+        fechas_agrupadas: grupoFechasOrdenado // Agregar fechas_agrupadas ordenadas para compatibilidad
       })
     }
   }
   
   return resultado
 })
+
+// Obtener empleados únicos para el filtro
+const uniqueEmployees = computed(() => {
+  const employeesMap = new Map<string, { emp_id: string; nombre: string; cargo: string }>()
+  
+  requests.value.forEach(req => {
+    if (req.empleado && !employeesMap.has(req.emp_id)) {
+      employeesMap.set(req.emp_id, {
+        emp_id: req.emp_id,
+        nombre: req.empleado.nombre,
+        cargo: req.empleado.cargo
+      })
+    }
+  })
+  
+  return Array.from(employeesMap.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+})
+
+// Obtener la fecha más próxima de todas las solicitudes
+const getEarliestDate = (): Date | null => {
+  let earliestDate: Date | null = null
+  
+  // Buscar en todas las solicitudes (programadas y no programadas)
+  const allRequests = [
+    ...requests.value.filter(req => 
+      req.tipo !== 'PROGRAMADA' &&
+      (req.estado === 'PROCESO' || 
+       req.estado === 'PENDIENTE' || 
+       req.estado === 'PREAPROBADO' || 
+       req.estado === 'PRE-APROBADO')
+    ),
+    ...processedProgrammedRequests.value
+  ]
+  
+  for (const req of allRequests) {
+    const firstDate = getFirstDate(req)
+    if (firstDate) {
+      try {
+        const date = new Date(firstDate)
+        if (!earliestDate || date < earliestDate) {
+          earliestDate = date
+        }
+      } catch {
+        // Ignorar fechas inválidas
+      }
+    }
+  }
+  
+  return earliestDate
+}
+
+// Obtener rango de meses basado en la fecha más próxima
+const currentMonthRange = computed(() => {
+  const earliestDate = getEarliestDate()
+  
+  if (!earliestDate) {
+    const now = new Date()
+    const currentMonth = now.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    const nextMonthStr = nextMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+    return `${currentMonth} - ${nextMonthStr}`
+  }
+  
+  const firstMonth = earliestDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+  const secondMonth = new Date(earliestDate.getFullYear(), earliestDate.getMonth() + 1, 1)
+  const secondMonthStr = secondMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+  
+  return `${firstMonth} - ${secondMonthStr}`
+})
+
+// Función para verificar si una fecha está dentro del rango de 2 meses desde la fecha más próxima
+const isDateInRange = (dateString: string): boolean => {
+  try {
+    const date = new Date(dateString)
+    const earliestDate = getEarliestDate()
+    
+    if (!earliestDate) {
+      // Si no hay fecha más próxima, usar el mes actual
+      const now = new Date()
+      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+      const twoMonthsEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0)
+      return date >= currentMonthStart && date <= twoMonthsEnd
+    }
+    
+    // Usar la fecha más próxima como base
+    const rangeStart = new Date(earliestDate.getFullYear(), earliestDate.getMonth(), 1)
+    const rangeEnd = new Date(earliestDate.getFullYear(), earliestDate.getMonth() + 2, 0) // Último día del mes siguiente
+    
+    return date >= rangeStart && date <= rangeEnd
+  } catch {
+    return false
+  }
+}
+
+// Función para obtener la primera fecha de una solicitud
+const getFirstDate = (request: any): string | null => {
+  if ((request as any).fechas_agrupadas && (request as any).fechas_agrupadas.length > 0) {
+    return (request as any).fechas_agrupadas[0]
+  }
+  if (request.fechas && request.fechas.length > 0) {
+    const sortedFechas = getSortedFechas(request.fechas)
+    return sortedFechas[0].fecha
+  }
+  return null
+}
 
 const pendingRequests = computed(() => {
   // Separar vacaciones programadas y no programadas
@@ -929,7 +1322,23 @@ const pendingRequests = computed(() => {
   const programadas = processedProgrammedRequests.value
   
   // Combinar ambas listas
-  return [...noProgramadas, ...programadas]
+  let allRequests = [...noProgramadas, ...programadas]
+  
+  // Aplicar filtro de fecha: solo mostrar solicitudes del mes actual y siguiente (máximo 2 meses)
+  allRequests = allRequests.filter(req => {
+    const firstDate = getFirstDate(req)
+    if (!firstDate) return false
+    return isDateInRange(firstDate)
+  })
+  
+  // Aplicar filtro de empleado
+  if (selectedEmployeeFilter.value) {
+    allRequests = allRequests.filter(req => 
+      String(req.emp_id) === String(selectedEmployeeFilter.value)
+    )
+  }
+  
+  return allRequests
 })
 
 const pendingCount = computed(() => {
@@ -1232,26 +1641,31 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
       
       if (requestData) {
         try {
-          console.log('📤 Guardando vacación en API externa...')
-          
-          const vacationPayload: SaveVacationPayload = {
-            emp_id: requestData.emp_id,
-            emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
-            manager_id: String(props.managerId || ''), // ID del manager que está aprobando
-            manager_nombre: 'Manager', // TODO: Obtener nombre real del manager
-            tipo: requestData.tipo,
-            estado: estado,
-            comentario: comentario,
-            fechas: requestData.fechas.map(f => ({
-              fecha: f.fecha,
-              tipo_dia: f.turno || 'COMPLETO'
-            })),
-            branch: 1, // TODO: Obtener branch real
-            dept: 10    // TODO: Obtener departamento real
-          }
+          // Solo guardar en API externa si el estado es APROBADO o RECHAZADO (no PREAPROBADO)
+          if (estado === 'APROBADO' || estado === 'RECHAZADO') {
+            console.log('📤 Guardando vacación en API externa...')
+            
+            const vacationPayload: SaveVacationPayload = {
+              emp_id: requestData.emp_id,
+              emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
+              manager_id: String(props.managerId || ''), // ID del manager que está aprobando
+              manager_nombre: 'Manager', // TODO: Obtener nombre real del manager
+              tipo: requestData.tipo,
+              estado: estado as 'APROBADO' | 'RECHAZADO',
+              comentario: comentario,
+              fechas: requestData.fechas.map((f: any) => ({
+                fecha: f.fecha,
+                tipo_dia: f.turno || 'COMPLETO'
+              })),
+              branch: 1, // TODO: Obtener branch real
+              dept: 10    // TODO: Obtener departamento real
+            }
 
-          const apiResult = await saveVacationToExternalAPI(vacationPayload)
-          console.log('✅ Vacación guardada exitosamente en API externa:', apiResult)
+            const apiResult = await saveVacationToExternalAPI(vacationPayload)
+            console.log('✅ Vacación guardada exitosamente en API externa:', apiResult)
+          } else {
+            console.log('⏸️ Estado PREAPROBADO: No se guarda en API externa todavía')
+          }
           
         } catch (apiError: any) {
           console.error('❌ Error al guardar en API externa:', apiError)
@@ -1405,9 +1819,22 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
         }
         // Si es APROBADO, verificar si estaba preaprobada para enviar resumen o individual
         else if (estado === 'APROBADO') {
+          console.log('🔔 Iniciando proceso de notificación para APROBADO', {
+            requestId,
+            requestData_estado: requestData.estado,
+            requestData_tipo: requestData.tipo,
+            tiene_reemplazantes_param: reemplazantes && reemplazantes.length > 0
+          })
+          
           try {
             // Verificar si esta solicitud estaba preaprobada antes de aprobar
             const estabaPreaprobada = requestData.estado === 'PREAPROBADO' || requestData.estado === 'PRE-APROBADO'
+            
+            console.log('🔍 Verificación de preaprobación:', {
+              estabaPreaprobada,
+              estado_original: requestData.estado,
+              tipo: requestData.tipo
+            })
             
             if (estabaPreaprobada) {
               // Si estaba preaprobada, verificar si todas las fechas preaprobadas están ahora aprobadas
@@ -1473,9 +1900,12 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                       .filter((req: any) => req.estado === 'APROBADO')
                       .flatMap((req: any) => req.fechas.map((f: any) => `${f.fecha} (${f.turno})`))
 
+                    // Extraer el id_solicitud base (sin _grupo_) para la notificación
+                    const idSolicitudBase = String(requestId).split('_grupo_')[0]
+
                     // Preparar payload para notificación de resumen
                     const notificationPayload = {
-                      id_solicitud: requestId,
+                      id_solicitud: idSolicitudBase,
                       emp_id: requestData.emp_id,
                       emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
                       estado: 'APROBADO',
@@ -1509,23 +1939,87 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
               }
             } else {
               // Si NO estaba preaprobada, enviar notificación individual inmediatamente
-              console.log('✅ Aprobación directa (no preaprobada): Enviando notificación individual inmediata.')
+              console.log('✅ Aprobación directa (no preaprobada): Enviando notificación individual inmediata.', {
+                requestId,
+                emp_id: requestData.emp_id,
+                tipo: requestData.tipo,
+                reemplazantes_param: reemplazantes
+              })
 
-              // Usar los datos de reemplazantes que ya vienen en requestData
-              let reemplazantesCompletos = []
+              // Usar los reemplazantes que se pasaron como parámetro (si existen)
+              let reemplazantesCompletos: any[] = []
               
-              if (requestData.reemplazante && requestData.reemplazante.length > 0) {
+              // PRIMERO: Intentar usar los reemplazantes pasados como parámetro
+              if (reemplazantes && reemplazantes.length > 0) {
+                console.log('📋 Usando reemplazantes del parámetro:', reemplazantes)
+                // Los reemplazantes vienen como IDs, necesitamos obtener sus datos
+                try {
+                  // Obtener información de los reemplazantes desde availableReplacements o desde la API
+                  const reemplazantesInfo = await Promise.all(
+                    reemplazantes.map(async (repId: string) => {
+                      // Buscar en availableReplacements primero
+                      const repEnCache = availableReplacements.value.find((r: any) => String(r.id) === String(repId))
+                      if (repEnCache) {
+                        return {
+                          emp_id: repEnCache.id,
+                          nombre: repEnCache.name,
+                          telefono: repEnCache.phone || '77711124'
+                        }
+                      }
+                      // Si no está en cache, intentar obtener desde la API
+                      try {
+                        const empResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${repId}`)
+                        if (empResponse.ok) {
+                          const empData = await empResponse.json()
+                          let empleadoInfo: any = null
+                          if (Array.isArray(empData) && empData.length > 0) {
+                            empleadoInfo = empData[0]
+                          } else if (empData.status === 'success' && Array.isArray(empData.data) && empData.data.length > 0) {
+                            empleadoInfo = empData.data[0]
+                          }
+                          if (empleadoInfo) {
+                            return {
+                              emp_id: repId,
+                              nombre: empleadoInfo.fullName || `Empleado ${repId}`,
+                              telefono: empleadoInfo.phone || '77711124'
+                            }
+                          }
+                        }
+                      } catch (err) {
+                        console.warn(`⚠️ Error al obtener info del reemplazante ${repId}:`, err)
+                      }
+                      // Fallback: usar solo el ID
+                      return {
+                        emp_id: repId,
+                        nombre: `Empleado ${repId}`,
+                        telefono: '77711124'
+                      }
+                    })
+                  )
+                  reemplazantesCompletos = reemplazantesInfo.filter(rep => rep !== null)
+                } catch (error) {
+                  console.warn('⚠️ Error al obtener datos de reemplazantes:', error)
+                }
+              }
+              
+              // SEGUNDO: Si no hay reemplazantes del parámetro, intentar desde requestData
+              if (reemplazantesCompletos.length === 0 && requestData.reemplazante && requestData.reemplazante.length > 0) {
+                console.log('📋 Usando reemplazantes de requestData')
                 reemplazantesCompletos = requestData.reemplazante.map((rep: any) => ({
                   emp_id: rep.emp_id,
                   nombre: rep.nombre,
                   telefono: rep.telefono || '77711124'
                 }))
-              } else {
+              }
+              
+              // TERCERO: Si aún no hay reemplazantes, intentar desde la API
+              if (reemplazantesCompletos.length === 0) {
                 try {
                   const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}`)
                   if (reemplazanteResponse.ok) {
                     const reemplazanteData = await reemplazanteResponse.json()
                     if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
+                      console.log('📋 Usando reemplazantes de la API')
                       reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
                         emp_id: rep.EMP_ID,
                         nombre: rep.NOMBRE,
@@ -1534,23 +2028,29 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                     }
                   }
                 } catch (apiError) {
-                  console.warn('⚠️ Error al obtener reemplazantes:', apiError)
-                  reemplazantesCompletos = [
-                    {
-                      emp_id: '493',
-                      nombre: 'Charvel Santiago',
-                      telefono: '78003551'
-                    }
-                  ]
+                  console.warn('⚠️ Error al obtener reemplazantes desde API:', apiError)
                 }
               }
+              
+              console.log('✅ Reemplazantes finales para notificación:', reemplazantesCompletos)
 
               // Obtener solo las fechas de esta solicitud específica (aprobación individual)
-              const fechasAprobadas = requestData.fechas.map((f: any) => `${f.fecha} (${f.turno})`)
+              // Si es un grupo, obtener todas las fechas del grupo
+              let fechasAprobadas: string[] = []
+              if (esGrupo && (requestData as any).fechas_agrupadas) {
+                // Si es grupo, usar fechas_agrupadas
+                fechasAprobadas = (requestData as any).fechas_agrupadas.map((fecha: string) => `${fecha} (COMPLETO)`)
+              } else {
+                // Si no es grupo, usar las fechas normales
+                fechasAprobadas = requestData.fechas.map((f: any) => `${f.fecha} (${f.turno})`)
+              }
+
+              // Extraer el id_solicitud base (sin _grupo_) para la notificación
+              const idSolicitudBase = String(requestId).split('_grupo_')[0]
 
               // Preparar payload para notificaciones individuales
               const notificationPayload = {
-                id_solicitud: requestId,
+                id_solicitud: idSolicitudBase,
                 emp_id: requestData.emp_id,
                 emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
                 estado: 'APROBADO',
@@ -1566,20 +2066,52 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
               }
 
               const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
-              await fetch(`${BOT_URL}/api/vacation-notification`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(notificationPayload)
-              }).catch(err => {
-                console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
-              })
-
-              console.log('✅ Notificación de aprobación individual enviada')
+              console.log('📤 Enviando notificación de aprobación a:', `${BOT_URL}/api/vacation-notification`)
+              console.log('📦 Payload completo:', JSON.stringify(notificationPayload, null, 2))
+              
+              try {
+                const notifResponse = await fetch(`${BOT_URL}/api/vacation-notification`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify(notificationPayload)
+                })
+                
+                console.log('📡 Respuesta del servidor:', {
+                  status: notifResponse.status,
+                  statusText: notifResponse.statusText,
+                  ok: notifResponse.ok
+                })
+                
+                if (notifResponse.ok) {
+                  const notifResult = await notifResponse.json()
+                  console.log('✅ Respuesta de notificación exitosa:', notifResult)
+                } else {
+                  const errorText = await notifResponse.text()
+                  console.error('❌ Error en respuesta de notificación:', {
+                    status: notifResponse.status,
+                    statusText: notifResponse.statusText,
+                    error: errorText
+                  })
+                }
+              } catch (fetchError: any) {
+                console.error('❌ Error al hacer fetch a la API de notificación:', {
+                  error: fetchError.message,
+                  stack: fetchError.stack,
+                  url: `${BOT_URL}/api/vacation-notification`
+                })
+                throw fetchError // Re-lanzar para que se capture en el catch externo
+              }
             }
-          } catch (notifError) {
-            console.warn('⚠️ Error al enviar notificación de aprobación:', notifError)
+          } catch (notifError: any) {
+            console.error('❌ Error completo al enviar notificación de aprobación:', {
+              error: notifError.message,
+              stack: notifError.stack,
+              requestId,
+              estado,
+              tipo: requestData?.tipo
+            })
             // Continuar aunque fallen las notificaciones
           }
         }
@@ -1632,8 +2164,19 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
         )
       }
 
-      // Recargar solicitudes para actualizar la lista
+      // Recargar solicitudes para actualizar la lista y el calendario
       await fetchManagerRequests()
+      
+      // Emitir evento para actualizar el calendario en tiempo real
+      const event = new CustomEvent('vacation-status-changed', {
+        detail: { 
+          action: estado.toLowerCase(),
+          id_solicitud: String(requestId).split('_grupo_')[0],
+          emp_id: requestData?.emp_id
+        }
+      })
+      window.dispatchEvent(event)
+      console.log('📢 Evento vacation-status-changed emitido para actualizar calendario')
     } else {
       throw new Error(result.message || 'Error al actualizar la solicitud')
     }
@@ -1669,6 +2212,25 @@ const getVacationType = (tipo: string) => {
 }
 
 const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('es-ES')
+  // Evitar problemas de zona horaria: parsear la fecha directamente sin conversión
+  // Si la fecha viene como "YYYY-MM-DD", crear la fecha en hora local
+  if (dateString && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [year, month, day] = dateString.split('-').map(Number)
+    // month - 1 porque Date usa meses de 0-11
+    const date = new Date(year, month - 1, day)
+    return date.toLocaleDateString('es-ES')
+  }
+  // Si viene en otro formato, usar el método normal pero con cuidado
+  const date = new Date(dateString)
+  // Verificar que la fecha sea válida
+  if (isNaN(date.getTime())) {
+    return dateString // Devolver el string original si no es válido
+  }
+  return date.toLocaleDateString('es-ES')
+}
+
+// Función auxiliar para ordenar fechas correctamente
+const getSortedFechas = (fechas: any[]) => {
+  return [...fechas].sort((a, b) => a.fecha.localeCompare(b.fecha))
 }
 </script>

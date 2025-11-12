@@ -126,7 +126,15 @@
               >
                 Rechazada
               </div>
-              <!-- Si está aprobada, mostrar botón de descargar boleta -->
+              <!-- Si es programada y está aprobada pero sin reemplazantes guardados, mostrar "Esperando aprobación" -->
+              <div
+                v-else-if="request.estado === 'APROBADO' && request.tipo === 'PROGRAMADA' && !hasReplacements(request)"
+                class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-300 h-9 px-3 whitespace-nowrap"
+              >
+                <Clock class="h-4 w-4 mr-1" />
+                Esperando aprobación
+              </div>
+              <!-- Si está aprobada (y no es programada o ya tiene reemplazantes), mostrar botón de descargar boleta -->
               <button
                 v-else-if="request.estado === 'APROBADO'"
                 @click="() => downloadBoleta(request)"
@@ -137,15 +145,15 @@
                 </svg>
                 Descargar Boleta
               </button>
-              <!-- Si es programada y tiene estado PROGRAMADA, mostrar botón "Tomar Vacaciones" -->
-              <button
-                v-else-if="request.tipo === 'PROGRAMADA' && request.estado === 'PROGRAMADA'"
-                @click="() => openTakeVacationModal(request)"
-                class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-3 whitespace-nowrap"
+              <!-- Si es programada (cualquier estado excepto RECHAZADO y APROBADO con reemplazantes), mostrar "Esperando aprobación" -->
+              <!-- El empleado ya programó, solo espera aprobación del jefe -->
+              <div
+                v-else-if="request.tipo === 'PROGRAMADA' && request.estado !== 'RECHAZADO'"
+                class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-300 h-9 px-3 whitespace-nowrap"
               >
-                <Calendar class="h-4 w-4 mr-1" />
-                Tomar Vacaciones
-              </button>
+                <Clock class="h-4 w-4 mr-1" />
+                Esperando aprobación
+              </div>
               <!-- Si ya tiene reemplazantes guardados, mostrar "Esperando aprobación" -->
               <div
                 v-else-if="hasReplacements(request)"
@@ -154,15 +162,24 @@
                 <Clock class="h-4 w-4 mr-1" />
                 Esperando aprobación
               </div>
-              <!-- Si no, mostrar botón Tomar para seleccionar reemplazantes -->
+              <!-- Si no es programada y no tiene reemplazantes, mostrar botón Tomar para seleccionar reemplazantes -->
+              <!-- Solo para vacaciones no programadas que necesitan seleccionar reemplazantes -->
               <button
-                v-else
+                v-else-if="request.tipo !== 'PROGRAMADA'"
                 @click="() => openViewVacationModal(request)"
                 class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-3 whitespace-nowrap"
               >
                 <Calendar class="h-4 w-4 mr-1" />
                 Tomar
               </button>
+              <!-- Si no cumple ninguna condición, mostrar "Esperando aprobación" por defecto -->
+              <div
+                v-else
+                class="inline-flex items-center justify-center rounded-md text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-300 h-9 px-3 whitespace-nowrap"
+              >
+                <Clock class="h-4 w-4 mr-1" />
+                Esperando aprobación
+              </div>
             </div>
           </div>
         </CardContent>
@@ -393,7 +410,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Calendar, Eye, AlertCircle, Sparkles, Clock } from 'lucide-vue-next'
+import { Calendar, AlertCircle, Sparkles, Clock } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import CardHeader from '@/components/ui/CardHeader.vue'
 import CardContent from '@/components/ui/CardContent.vue'
@@ -457,13 +474,13 @@ const isLoadingViewVacation = ref(false)
 const isLoadingReplacements = ref(false)
 const recommendedReplacements = ref<ReemplazanteRecomendado[]>([])
 
-// Abrir modal de tomar vacaciones
-const openTakeVacationModal = (request: VacationRequest) => {
-  currentTakeVacationRequest.value = request
-  selectedReplacements.value = []
-  showTakeVacationModal.value = true
-  loadAvailableReplacements()
-}
+// Función no utilizada - comentada porque ya no se muestra el botón "Tomar Vacaciones" para estado PROGRAMADA
+// const openTakeVacationModal = (request: VacationRequest) => {
+//   currentTakeVacationRequest.value = request
+//   selectedReplacements.value = []
+//   showTakeVacationModal.value = true
+//   loadAvailableReplacements()
+// }
 
 // Abrir modal de tomar vacaciones programadas (para seleccionar reemplazantes)
 const openViewVacationModal = async (request: VacationRequest) => {
@@ -677,39 +694,40 @@ const loadRecommendedReplacements = async (empId?: string) => {
   }
 }
 
+// Función no utilizada - comentada porque solo se usaba en openTakeVacationModal que ya no se usa
 // Cargar reemplazantes disponibles desde la API (para modal de tomar vacaciones)
-const loadAvailableReplacements = async () => {
-  try {
-    if (!props.empId) {
-      console.warn('⚠️ No hay empId para cargar reemplazantes')
-      availableReplacements.value = []
-      return
-    }
-    
-    // Cargar reemplazantes recomendados desde la API
-    const response = await fetch(`http://190.171.225.68/api/recomendar-reemplazante?empId=${props.empId}`)
-    
-    if (response.ok) {
-      const data = await response.json()
-      if (data.reemplazantes && Array.isArray(data.reemplazantes)) {
-        availableReplacements.value = data.reemplazantes.map((rep: any) => ({
-          id: rep.REEMPLAZANTE_EMP_ID || rep.emp_id,
-          name: rep.REEMPLAZANTE_NOMBRE || rep.nombre,
-          department: rep.CARGO || rep.cargo || 'N/A'
-        }))
-        console.log('✅ Reemplazantes cargados:', availableReplacements.value.length)
-      } else {
-        availableReplacements.value = []
-      }
-    } else {
-      console.warn('⚠️ No se pudieron cargar reemplazantes desde la API')
-      availableReplacements.value = []
-    }
-  } catch (error) {
-    console.error('Error al cargar reemplazantes:', error)
-    availableReplacements.value = []
-  }
-}
+// const loadAvailableReplacements = async () => {
+//   try {
+//     if (!props.empId) {
+//       console.warn('⚠️ No hay empId para cargar reemplazantes')
+//       availableReplacements.value = []
+//       return
+//     }
+//     
+//     // Cargar reemplazantes recomendados desde la API
+//     const response = await fetch(`http://190.171.225.68/api/recomendar-reemplazante?empId=${props.empId}`)
+//     
+//     if (response.ok) {
+//       const data = await response.json()
+//       if (data.reemplazantes && Array.isArray(data.reemplazantes)) {
+//         availableReplacements.value = data.reemplazantes.map((rep: any) => ({
+//           id: rep.REEMPLAZANTE_EMP_ID || rep.emp_id,
+//           name: rep.REEMPLAZANTE_NOMBRE || rep.nombre,
+//           department: rep.CARGO || rep.cargo || 'N/A'
+//         }))
+//         console.log('✅ Reemplazantes cargados:', availableReplacements.value.length)
+//       } else {
+//         availableReplacements.value = []
+//       }
+//     } else {
+//       console.warn('⚠️ No se pudieron cargar reemplazantes desde la API')
+//       availableReplacements.value = []
+//     }
+//   } catch (error) {
+//     console.error('Error al cargar reemplazantes:', error)
+//     availableReplacements.value = []
+//   }
+// }
 
 // Confirmar tomar vacaciones
 const confirmTakeVacation = async () => {
