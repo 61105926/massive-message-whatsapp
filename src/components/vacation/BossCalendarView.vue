@@ -902,9 +902,6 @@ const getVacationBlockClasses = (empId: string, date: Date): string => {
   const classes = []
   
   // Colores por estado con mejores gradientes
-  // Si es programada, usar color morado distintivo
-  const esProgramada = (vacation as any).es_programada || (vacation as any).tipo === 'PROGRAMADA'
-  
   if (vacation.status === 'approved') {
     // Todas las vacaciones aprobadas (programadas o no) se muestran en verde
     classes.push('bg-gradient-to-br from-green-500 via-green-600 to-emerald-600 hover:from-green-600 hover:via-green-700 hover:to-emerald-700')

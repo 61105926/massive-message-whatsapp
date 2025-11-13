@@ -387,7 +387,8 @@ import { Calendar, AlertCircle, Sparkles, Clock } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import CardHeader from '@/components/ui/CardHeader.vue'
 import CardContent from '@/components/ui/CardContent.vue'
-import { getReemplazantesRecomendados, type ReemplazanteRecomendado } from '@/services/recommendationAPI'
+// Import eliminado: getReemplazantesRecomendados - no se usa
+// import { getReemplazantesRecomendados, type ReemplazanteRecomendado } from '@/services/recommendationAPI'
 
 interface VacationRequest {
   id_solicitud: string
@@ -445,7 +446,8 @@ const currentViewVacationRequest = ref<VacationRequest | null>(null)
 const selectedViewReplacements = ref<string[]>([])
 const isLoadingViewVacation = ref(false)
 const isLoadingReplacements = ref(false)
-const recommendedReplacements = ref<ReemplazanteRecomendado[]>([])
+// Variable eliminada: recommendedReplacements - no se usa
+// const recommendedReplacements = ref<ReemplazanteRecomendado[]>([])
 
 // Función no utilizada - comentada porque ya no se muestra el botón "Tomar Vacaciones" para estado PROGRAMADA
 // const openTakeVacationModal = (request: VacationRequest) => {
@@ -455,217 +457,8 @@ const recommendedReplacements = ref<ReemplazanteRecomendado[]>([])
 //   loadAvailableReplacements()
 // }
 
-// Abrir modal de tomar vacaciones programadas (para seleccionar reemplazantes)
-const openViewVacationModal = async (request: VacationRequest) => {
-  console.log('🔍 openViewVacationModal - request:', request)
-  console.log('🔍 openViewVacationModal - props.empId:', props.empId)
-  console.log('🔍 openViewVacationModal - request.emp_id:', request.emp_id)
-  
-  currentViewVacationRequest.value = request
-  selectedViewReplacements.value = []
-  availableReplacements.value = []
-  recommendedReplacements.value = []
-  showViewVacationModal.value = true
-  
-  // Usar el emp_id de la solicitud si props.empId no está disponible
-  const empIdToUse = props.empId || request.emp_id
-  console.log('🔍 openViewVacationModal - empIdToUse:', empIdToUse)
-  
-  await loadRecommendedReplacements(empIdToUse)
-}
 
-// Cargar reemplazantes recomendados y pre-seleccionarlos
-const loadRecommendedReplacements = async (empId?: string) => {
-  isLoadingReplacements.value = true
-  availableReplacements.value = []
-  recommendedReplacements.value = []
-  
-  try {
-    // Usar el empId pasado como parámetro, o el de props, o el de la solicitud actual
-    const empIdToUse = empId || props.empId || currentViewVacationRequest.value?.emp_id
-    
-    console.log('🔍 ===== INICIANDO CARGA DE REEMPLAZANTES =====')
-    console.log('🔍 empId parámetro:', empId)
-    console.log('🔍 props.empId:', props.empId)
-    console.log('🔍 currentViewVacationRequest.value?.emp_id:', currentViewVacationRequest.value?.emp_id)
-    console.log('🔍 empIdToUse final:', empIdToUse)
-    
-    if (!empIdToUse || !currentViewVacationRequest.value) {
-      console.error('❌ No hay empId o solicitud para cargar reemplazantes')
-      availableReplacements.value = []
-      recommendedReplacements.value = []
-      return
-    }
-    
-    // Extraer el id_solicitud real (sin _grupo_X si existe)
-    const requestId = currentViewVacationRequest.value.id_solicitud || ''
-    const realRequestId = requestId.split('_grupo_')[0]
-    
-    const allReplacements: any[] = []
-    const savedReplacements: any[] = []
-    
-    // 1. Primero cargar los reemplazantes ya guardados desde /api/reemplazante-vacation
-    try {
-      const savedUrl = `http://190.171.225.68/api/reemplazante-vacation?id_solicitud=${realRequestId}`
-      console.log('📡 Llamando API de reemplazantes guardados:', savedUrl)
-      
-      const savedResponse = await fetch(savedUrl)
-      
-      if (savedResponse.ok) {
-        const savedData = await savedResponse.json()
-        console.log('📦 Reemplazantes guardados recibidos:', savedData)
-        
-        // Procesar reemplazantes guardados
-        if (savedData.reemplazantes && Array.isArray(savedData.reemplazantes)) {
-          savedReplacements.push(...savedData.reemplazantes.map((rep: any) => ({
-            id: rep.emp_id || rep.REEMPLAZANTE_EMP_ID || String(rep.emp_id || rep.REEMPLAZANTE_EMP_ID),
-            name: rep.nombre || rep.REEMPLAZANTE_NOMBRE || 'Sin nombre',
-            department: rep.cargo || rep.CARGO || 'N/A',
-            phone: rep.telefono || rep.TELEFONO || '',
-            isRecommended: false,
-            isSaved: true
-          })))
-          console.log('✅ Reemplazantes guardados cargados:', savedReplacements.length)
-        }
-      } else {
-        console.log('ℹ️ No hay reemplazantes guardados para esta solicitud')
-      }
-    } catch (savedError) {
-      console.warn('⚠️ Error al cargar reemplazantes guardados:', savedError)
-    }
-    
-    // 2. Luego cargar los reemplazantes recomendados usando el mismo servicio que "vacación a cuenta"
-    try {
-      console.log('📡 ===== CARGANDO REEMPLAZANTES RECOMENDADOS =====')
-      console.log('📡 Usando getReemplazantesRecomendados para empId:', empIdToUse)
-      
-      const response = await getReemplazantesRecomendados(String(empIdToUse))
-      console.log('📦 Respuesta completa de getReemplazantesRecomendados:', response)
-      
-      const recommendedData = response.reemplazantes || []
-      
-      console.log('📦 Reemplazantes recomendados recibidos:', recommendedData)
-      console.log('📋 Total de reemplazantes recomendados:', recommendedData.length)
-      console.log('📋 Tipo de recommendedData:', Array.isArray(recommendedData))
-      
-      if (recommendedData.length > 0) {
-        // Mapear recomendados y evitar duplicados con los guardados
-        const savedIds = new Set(savedReplacements.map(r => r.id))
-        console.log('📋 IDs de reemplazantes guardados (para filtrar duplicados):', Array.from(savedIds))
-        
-        // Usar la misma lógica de mapeo que VacationRequestForm
-        const filteredRecommended = recommendedData.filter((rec: ReemplazanteRecomendado) => {
-          const recId = rec.REEMPLAZANTE_EMP_ID
-          const isDuplicate = savedIds.has(recId)
-          if (isDuplicate) {
-            console.log('⚠️ Reemplazante duplicado filtrado:', recId, rec.REEMPLAZANTE_NOMBRE)
-          }
-          return !isDuplicate
-        })
-        
-        console.log('📋 Reemplazantes recomendados después de filtrar duplicados:', filteredRecommended.length)
-        
-        // Guardar los datos originales para el computed
-        recommendedReplacements.value = filteredRecommended
-        
-        console.log('✅ Reemplazantes recomendados guardados en ref:', recommendedReplacements.value.length)
-      } else {
-        console.warn('⚠️ No se recibieron reemplazantes recomendados de la API')
-        recommendedReplacements.value = []
-      }
-    } catch (recommendedError: any) {
-      console.error('❌ Error al cargar reemplazantes recomendados:', recommendedError)
-      console.error('❌ Detalles del error:', {
-        message: recommendedError.message,
-        stack: recommendedError.stack,
-        response: recommendedError.response?.data
-      })
-      recommendedReplacements.value = []
-    }
-    
-    // 3. Combinar ambos usando la misma lógica que VacationRequestForm
-    // Primero agregar recomendados (mapeados igual que en VacationRequestForm)
-    if (recommendedReplacements.value.length > 0) {
-      const recommended = recommendedReplacements.value.map((rec: ReemplazanteRecomendado) => ({
-        id: rec.REEMPLAZANTE_EMP_ID,
-        name: rec.REEMPLAZANTE_NOMBRE,
-        department: rec.CARGO,
-        phone: rec.TELEFONO,
-        type: rec.TIPO,
-        empID: rec.REEMPLAZANTE_EMP_ID,
-        isRecommended: true,
-      }));
-      allReplacements.push(...recommended);
-    }
-    
-    // Luego agregar los guardados (evitando duplicados)
-    if (savedReplacements.length > 0) {
-      const savedIds = new Set(allReplacements.map(r => r.id));
-      const uniqueSaved = savedReplacements.filter(rep => !savedIds.has(rep.id));
-      allReplacements.push(...uniqueSaved);
-    }
-    
-    // Finalmente agregar los reemplazantes del empleado (de employeeData.replacements)
-    // Esto es lo que hace que funcione en "vacación a cuenta"
-    if (props.employeeReplacements && props.employeeReplacements.length > 0) {
-      const existingIds = new Set(allReplacements.map(r => r.id));
-      const regularReplacements = props.employeeReplacements
-        .filter((rep: any) => {
-          // Evitar duplicados con las recomendaciones y guardados
-          const repId = rep.id || String(rep.empID || '');
-          return !existingIds.has(repId) && 
-                 !recommendedReplacements.value.some(rec => rec.REEMPLAZANTE_EMP_ID === repId);
-        })
-        .map((rep: any) => ({
-          id: rep.id || String(rep.empID || ''),
-          name: rep.name,
-          department: rep.cargo,
-          phone: rep.phone || '',
-          type: rep.type || '',
-          empID: rep.id || rep.empID,
-          isRecommended: false,
-        }));
-      allReplacements.push(...regularReplacements);
-      console.log('✅ Reemplazantes del empleado agregados:', regularReplacements.length)
-    }
-    
-    availableReplacements.value = allReplacements
-    
-    // 4. Pre-seleccionar automáticamente los recomendados
-    if (recommendedReplacements.value.length > 0) {
-      const recommendedIds = recommendedReplacements.value.map((rec: ReemplazanteRecomendado) => rec.REEMPLAZANTE_EMP_ID);
-      selectedViewReplacements.value = [...new Set([...selectedViewReplacements.value, ...recommendedIds])];
-    }
-    
-    // Si hay reemplazantes guardados, también pre-seleccionarlos
-    if (savedReplacements.length > 0) {
-      selectedViewReplacements.value = [...new Set([...selectedViewReplacements.value, ...savedReplacements.map(rep => rep.id)])];
-    }
-    
-    console.log('✅ ===== RESUMEN FINAL =====')
-    console.log('✅ Total de reemplazantes disponibles:', availableReplacements.value.length)
-    console.log('✅ Reemplazantes guardados:', savedReplacements.length)
-    console.log('✅ Reemplazantes recomendados:', recommendedReplacements.value.length)
-    console.log('✅ IDs pre-seleccionados:', selectedViewReplacements.value)
-    console.log('✅ AvailableReplacements completo:', JSON.stringify(availableReplacements.value, null, 2))
-    
-    if (availableReplacements.value.length === 0) {
-      console.error('❌ PROBLEMA: No hay reemplazantes disponibles después de cargar')
-      console.error('❌ Verificar:')
-      console.error('   - ¿El empId es correcto?', empIdToUse)
-      console.error('   - ¿La API respondió correctamente?')
-      console.error('   - ¿Hay reemplazantes guardados?', savedReplacements.length)
-      console.error('   - ¿Hay reemplazantes recomendados?', recommendedReplacements.value.length)
-    }
-    
-  } catch (error) {
-    console.error('❌ Error al cargar reemplazantes:', error)
-    availableReplacements.value = []
-    recommendedReplacements.value = []
-  } finally {
-    isLoadingReplacements.value = false
-  }
-}
+// Función eliminada: loadRecommendedReplacements - no se usa
 
 // Función no utilizada - comentada porque solo se usaba en openTakeVacationModal que ya no se usa
 // Cargar reemplazantes disponibles desde la API (para modal de tomar vacaciones)
@@ -1289,14 +1082,6 @@ const formatFechasList = (fechas: string[] | undefined): string => {
   }
 }
 
-// Verificar si una solicitud tiene reemplazantes guardados
-const hasReplacements = (request: VacationRequest | any): boolean => {
-  // Usar el ID completo (incluyendo _grupo_X si existe) para verificar
-  const requestId = String(request.id_solicitud)
-  const hasRep = requestsWithReplacements.value.has(requestId)
-  console.log(`🔍 hasReplacements para solicitud ${requestId}:`, hasRep)
-  return hasRep
-}
 
 // Descargar boleta de vacación
 const downloadBoleta = async (request: VacationRequest | any) => {

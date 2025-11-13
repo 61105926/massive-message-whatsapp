@@ -53,34 +53,22 @@ export interface SaveVacationPayload {
 
 /**
  * Formatea fechas a DD-MM-YYYY para la API externa
+ * Parsea directamente desde el string para evitar problemas de zona horaria
+ * El formato de entrada esperado es: "YYYY-MM-DD"
  */
 const formatDateForAPI = (dateString: string): string => {
-  const date = new Date(dateString);
+  // Si el formato es YYYY-MM-DD, parsear directamente sin usar Date para evitar problemas de zona horaria
+  if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [year, month, day] = dateString.split('-');
+    return `${day}-${month}-${year}`;
+  }
+  
+  // Fallback: usar Date pero con métodos UTC para evitar conversión de zona horaria
+  const date = new Date(dateString + 'T12:00:00'); // Usar mediodía para evitar problemas de zona horaria
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = date.getFullYear();
   return `${day}-${month}-${year}`;
-};
-
-/**
- * Mapea el estado de la vacación a los valores de la API externa
- */
-const mapVacationStatus = (estado: 'APROBADO' | 'RECHAZADO'): string => {
-  return estado === 'APROBADO' ? 'AP' : 'RE';
-};
-
-/**
- * Mapea el tipo de vacación a los valores de la API externa
- */
-const mapVacationType = (tipo: string): string => {
-  switch (tipo.toUpperCase()) {
-    case 'VACACION':
-      return 'A';
-    case 'A_CUENTA':
-      return 'C';
-    default:
-      return 'A';
-  }
 };
 
 /**
@@ -120,37 +108,59 @@ export async function saveVacationToExternalAPI(payload: SaveVacationPayload): P
 
     // Construir objeto de datos para la API externa
     const vacationAPIData = {
-      DOCVAC: docVac,
-      FECHA: fechaActual,
-      HORA: horaActual,
+      FECHA: `${fechaActual} 0:00:00.0`,
+      HORA: horaActual || 0,
       EMPID: parseInt(payload.emp_id),
       COMMENT: payload.comentario || '',
-      FROMDATE: fechaInicio,
-      TODATE: fechaFin,
+      AUTOR: '0', // default
+      FROMDATE: `${fechaInicio} 0:00:00.0`,
+      TODATE: `${fechaFin} 0:00:00.0`,
       NUMDIAS: payload.fechas.length,
-      TIPO: mapVacationType(payload.tipo),
-      AUTORIZA: payload.estado === 'APROBADO' ? 'Y' : 'N',
-      ANIO: new Date(fechasOrdenadas[0].fecha).getFullYear().toString(),
+      TIPO: 'V',
+      AUTORIZA: payload.manager_id || 0, // ID del manager que aprobó
+      // Calcular ANIO parseando directamente desde el string para evitar problemas de zona horaria
+      ANIO: (() => {
+        const fechaStr = fechasOrdenadas[0].fecha;
+        if (fechaStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [year] = fechaStr.split('-');
+          return year;
+        }
+        return new Date(fechaStr + 'T12:00:00').getFullYear().toString();
+      })(),
       BRANCH: payload.branch || 1,
       DEPT: payload.dept || 10,
       NAMEEMP: payload.emp_nombre,
-      NAMECREA: payload.emp_nombre, // Asumimos que el empleado crea su propia solicitud
+      NAMECREA: payload.emp_nombre,
       NAMEAUTORIZ: payload.manager_nombre,
-      ESTADO: mapVacationStatus(payload.estado),
-      STARTDATE: Math.floor(new Date(fechasOrdenadas[0].fecha).getTime() / (1000 * 60 * 60 * 24)) + 25569, // Fecha serial de Excel
+      ESTADO: payload.estado === 'APROBADO' ? 'A' : 'R', // <-- forzamos A o R
+      // Calcular STARTDATE usando la fecha directamente sin conversión de zona horaria
+      STARTDATE: (() => {
+        const fechaStr = fechasOrdenadas[0].fecha;
+        if (fechaStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [year, month, day] = fechaStr.split('-').map(Number);
+          // Fecha serial de Excel: días desde 1900-01-01
+          const excelEpoch = new Date(1900, 0, 1);
+          const targetDate = new Date(year, month - 1, day);
+          const daysDiff = Math.floor((targetDate.getTime() - excelEpoch.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          return daysDiff + 25569;
+        }
+        // Fallback
+        return Math.floor(new Date(fechasOrdenadas[0].fecha + 'T12:00:00').getTime() / (1000 * 60 * 60 * 24)) + 25569;
+      })(),
       NUMDIAS1: diasData[0]?.numDias || 0,
       NUMDIAS2: diasData[1]?.numDias || 0,
       NUMDIAS3: diasData[2]?.numDias || 0,
       NUMDIAS4: diasData[3]?.numDias || 0,
-      FROMDATE1: diasData[0]?.fromDate || '',
-      TODATE1: diasData[0]?.toDate || '',
-      FROMDATE2: diasData[1]?.fromDate || '',
-      TODATE2: diasData[1]?.toDate || '',
-      FROMDATE3: diasData[2]?.fromDate || '',
-      TODATE3: diasData[2]?.toDate || '',
-      FROMDATE4: diasData[3]?.fromDate || '',
-      TODATE4: diasData[3]?.toDate || ''
+      FROMDATE1: diasData[0]?.fromDate ? `${diasData[0].fromDate} 0:00:00.0` : null,
+      TODATE1: diasData[0]?.toDate ? `${diasData[0].toDate} 0:00:00.0` : null,
+      FROMDATE2: diasData[1]?.fromDate ? `${diasData[1].fromDate} 0:00:00.0` : null,
+      TODATE2: diasData[1]?.toDate ? `${diasData[1].toDate} 0:00:00.0` : null,
+      FROMDATE3: diasData[2]?.fromDate ? `${diasData[2].fromDate} 0:00:00.0` : null,
+      TODATE3: diasData[2]?.toDate ? `${diasData[2].toDate} 0:00:00.0` : null,
+      FROMDATE4: diasData[3]?.fromDate ? `${diasData[3].fromDate} 0:00:00.0` : null,
+      TODATE4: diasData[3]?.toDate ? `${diasData[3].toDate} 0:00:00.0` : null
     };
+    
 
     console.log('Datos preparados para API externa:', vacationAPIData);
 
