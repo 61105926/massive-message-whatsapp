@@ -99,12 +99,27 @@ export async function saveVacationToExternalAPI(payload: SaveVacationPayload): P
     const fechaInicio = formatDateForAPI(fechasOrdenadas[0].fecha);
     const fechaFin = formatDateForAPI(fechasOrdenadas[fechasOrdenadas.length - 1].fecha);
 
+    // Función helper para calcular días según el tipo (medio día = 0.5, día completo = 1)
+    const getDaysForType = (tipo: string): number => {
+      if (tipo === 'MAÑANA' || tipo === 'TARDE') return 0.5;
+      return 1; // COMPLETO o cualquier otro
+    };
+
+    // Calcular el total de días considerando medio día = 0.5
+    const totalDays = payload.fechas.reduce((total, dia) => {
+      const tipo = dia.tipo_dia || 'COMPLETO';
+      return total + getDaysForType(tipo);
+    }, 0);
+
     // Preparar datos de días individuales (máximo 4 días)
-    const diasData = fechasOrdenadas.slice(0, 4).map((dia) => ({
-      numDias: 1,
-      fromDate: formatDateForAPI(dia.fecha),
-      toDate: formatDateForAPI(dia.fecha)
-    }));
+    const diasData = fechasOrdenadas.slice(0, 4).map((dia) => {
+      const tipo = dia.tipo_dia || 'COMPLETO';
+      return {
+        numDias: getDaysForType(tipo),
+        fromDate: formatDateForAPI(dia.fecha),
+        toDate: formatDateForAPI(dia.fecha)
+      };
+    });
 
     // Construir objeto de datos para la API externa
     const vacationAPIData = {
@@ -115,7 +130,7 @@ export async function saveVacationToExternalAPI(payload: SaveVacationPayload): P
       AUTOR: '0', // default
       FROMDATE: `${fechaInicio} 0:00:00.0`,
       TODATE: `${fechaFin} 0:00:00.0`,
-      NUMDIAS: payload.fechas.length,
+      NUMDIAS: totalDays,
       TIPO: 'V',
       AUTORIZA: payload.manager_id || 0, // ID del manager que aprobó
       // Calcular ANIO parseando directamente desde el string para evitar problemas de zona horaria

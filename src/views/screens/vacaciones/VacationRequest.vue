@@ -107,7 +107,7 @@
                     <div class="space-y-1 text-sm text-gray-600">
                       <div class="flex justify-between">
                         <span>Días seleccionados:</span>
-                        <span class="font-semibold text-gray-900">{{ selectedDates.length }} / {{ currentUser.vacationBalance }}</span>
+                        <span class="font-semibold text-gray-900">{{ totalSelectedDays.toFixed(1) }} / {{ currentUser.vacationBalance }}</span>
                       </div>
                       <div class="flex justify-between">
                         <span>Tipo:</span>
@@ -292,8 +292,8 @@
               <div v-if="programmedVacationsEnabled" class="mt-4 flex items-center justify-between text-sm border-t pt-4">
                 <div>
                   <span class="font-medium">Seleccionados:</span>
-                  <span :class="selectedDates.length === currentUser.vacationBalance ? 'text-green-600 font-semibold ml-2' : 'text-gray-700 ml-2'">
-                    {{ selectedDates.length }} / {{ currentUser.vacationBalance }}
+                  <span :class="totalSelectedDays === currentUser.vacationBalance ? 'text-green-600 font-semibold ml-2' : 'text-gray-700 ml-2'">
+                    {{ totalSelectedDays.toFixed(1) }} / {{ currentUser.vacationBalance }}
                   </span>
                 </div>
               </div>
@@ -338,16 +338,16 @@
                 <div class="flex items-center justify-between">
                   <div class="text-sm">
                     <span class="font-medium">Seleccionados:</span>
-                    <span :class="selectedDates.length === currentUser.vacationBalance ? 'text-green-600 font-semibold ml-2' : 'text-orange-600 ml-2'">
-                      {{ selectedDates.length }} / {{ currentUser.vacationBalance }}
+                    <span :class="totalSelectedDays === currentUser.vacationBalance ? 'text-green-600 font-semibold ml-2' : 'text-orange-600 ml-2'">
+                      {{ totalSelectedDays.toFixed(1) }} / {{ currentUser.vacationBalance }}
                     </span>
-                    <p v-if="selectedDates.length !== currentUser.vacationBalance" class="text-xs text-orange-600 mt-1">
+                    <p v-if="totalSelectedDays !== currentUser.vacationBalance" class="text-xs text-orange-600 mt-1">
                       Debes seleccionar exactamente {{ currentUser.vacationBalance }} días
                     </p>
                   </div>
                   <button
                     @click="showConfirmModal = true"
-                    :disabled="selectedDates.length !== currentUser.vacationBalance || isSubmittingRequest"
+                    :disabled="totalSelectedDays !== currentUser.vacationBalance || isSubmittingRequest"
                     class="px-6 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Enviar Programación
@@ -699,6 +699,27 @@ const route = useRoute()
 // Reactive data
 const selectedDates = ref<Date[]>([])
 const daySelections = ref<any[]>([])
+
+// Función helper para calcular el total de días considerando medio día = 0.5
+const calculateTotalDays = (selections: any[]): number => {
+  return selections.reduce((total, selection) => {
+    if (selection.type === 'full' || selection.turno === 'COMPLETO' || !selection.type) {
+      return total + 1
+    }
+    if (selection.type === 'morning' || selection.turno === 'MAÑANA') {
+      return total + 0.5
+    }
+    if (selection.type === 'afternoon' || selection.turno === 'TARDE') {
+      return total + 0.5
+    }
+    return total + 1 // default
+  }, 0)
+}
+
+// Computed para el total de días seleccionados
+const totalSelectedDays = computed(() => {
+  return calculateTotalDays(daySelections.value)
+})
 const requests = ref<any[]>([])
 const showForm = ref(false)
 const activeView = ref<'calendar' | 'requests' | 'profile' | 'boss'>('calendar')
@@ -990,12 +1011,12 @@ const handleRequestSubmit = async (request: any) => {
   }
 
   // Mostrar notificación de confirmación ANTES de enviar
-  const totalDays = daySelections.value.length
+  const totalDays = calculateTotalDays(daySelections.value)
   const vacationType = request.type === 'programmed' ? 'programadas' : 'a cuenta'
   showNotification(
     'info',
     'Enviando solicitud...',
-    `Procesando solicitud de ${totalDays} día(s) de vacaciones ${vacationType}. Por favor espera.`,
+    `Procesando solicitud de ${totalDays.toFixed(1)} día(s) de vacaciones ${vacationType}. Por favor espera.`,
     4000
   )
   

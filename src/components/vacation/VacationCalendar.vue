@@ -87,7 +87,7 @@
 
     <div v-if="daySelections.length > 0" class="mt-4 p-3 bg-blue-50 rounded-lg">
       <div class="text-sm font-medium text-blue-900 mb-2">
-        {{ daySelections.length }} día(s) seleccionado(s)
+        {{ totalDays.toFixed(1) }} día(s) seleccionado(s)
       </div>
       <div class="flex flex-wrap gap-1">
         <span
@@ -190,6 +190,24 @@ const selectedDateForType = ref<Date | null>(null)
 const daySelections = ref<DaySelection[]>([])
 const autoFullDay = ref(true)
 const publicHolidays = ref<PublicHoliday[]>([])
+
+// Función helper para calcular el total de días considerando medio día = 0.5
+const calculateTotalDays = (selections: DaySelection[]): number => {
+  return selections.reduce((total, selection) => {
+    if (selection.type === 'full') {
+      return total + 1
+    }
+    if (selection.type === 'morning' || selection.type === 'afternoon') {
+      return total + 0.5
+    }
+    return total + 1 // default
+  }, 0)
+}
+
+// Computed para el total de días seleccionados
+const totalDays = computed(() => {
+  return calculateTotalDays(daySelections.value)
+})
 
 // Fetch public holidays from API
 const fetchPublicHolidays = async () => {

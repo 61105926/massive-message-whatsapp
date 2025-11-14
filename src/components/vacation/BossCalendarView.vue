@@ -996,8 +996,14 @@ const getProgrammedDaysCount = (empId: string | number | undefined): number => {
     let daysInRequest = 0
     
     if (req.fechas && Array.isArray(req.fechas) && req.fechas.length > 0) {
-      // Contar cada fecha en el array de fechas
-      daysInRequest = req.fechas.length
+      // Calcular días considerando medio día = 0.5
+      daysInRequest = req.fechas.reduce((total: number, fecha: any) => {
+        const tipo = fecha.turno || fecha.tipo_dia || 'COMPLETO';
+        if (tipo === 'MAÑANA' || tipo === 'TARDE') {
+          return total + 0.5;
+        }
+        return total + 1; // COMPLETO o cualquier otro
+      }, 0);
       console.log(`  📅 Solicitud ${index + 1} (${req.id_solicitud}): ${daysInRequest} días (desde array fechas)`)
     } else if (req.fechas_agrupadas && Array.isArray(req.fechas_agrupadas) && req.fechas_agrupadas.length > 0) {
       // Si tiene fechas_agrupadas, contar esas
