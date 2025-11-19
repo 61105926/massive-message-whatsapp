@@ -1666,10 +1666,120 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                     req.fecha_solicitud === requestData.fecha_solicitud
                   )
 
-                  // Verificar si hay alguna preaprobada que aún no esté aprobada
+                  // Si es un grupo, extraer el ID base para comparar correctamente
+                  const esGrupo = String(requestId).includes('_grupo_')
+                  let idBaseParaComparar = requestId
+                  
+                  if (esGrupo) {
+                    // Extraer el ID base del grupo (ej: "719_grupo_0" -> "719")
+                    idBaseParaComparar = String(requestId).split('_grupo_')[0]
+                    console.log('🔍 Es un grupo. ID base extraído:', idBaseParaComparar, '| ID completo:', requestId)
+                    
+                    // Si es grupo, obtener las fechas del grupo para verificar que todas estén aprobadas
+                    const request = pendingRequests.value.find(r => String(r.id_solicitud) === String(requestId))
+                    if (request && (request as any).fechas_agrupadas) {
+                      const fechasGrupo = (request as any).fechas_agrupadas
+                      console.log('🔍 Fechas del grupo:', fechasGrupo)
+                      
+                      // Verificar que todas las solicitudes con estas fechas estén aprobadas
+                      const solicitudesDelGrupo = solicitudesEmpleado.filter((req: any) => 
+                        req.fechas.some((f: any) => fechasGrupo.includes(f.fecha))
+                      )
+                      
+                      console.log('🔍 Solicitudes del grupo encontradas:', solicitudesDelGrupo.length)
+                      console.log('🔍 Estados de las solicitudes del grupo:', solicitudesDelGrupo.map((r: any) => ({ id: r.id_solicitud, estado: r.estado })))
+                      
+                      // Verificar si hay alguna preaprobada que aún no esté aprobada en el grupo
+                      const hayPreaprobadasPendientes = solicitudesDelGrupo.some((req: any) => 
+                        req.estado === 'PREAPROBADO' || req.estado === 'PRE-APROBADO'
+                      )
+                      
+                      console.log('🔍 Hay preaprobadas pendientes en el grupo:', hayPreaprobadasPendientes)
+                      
+                      // Si no hay preaprobadas pendientes en el grupo, todas están aprobadas
+                      if (!hayPreaprobadasPendientes && solicitudesDelGrupo.length > 0) {
+                        console.log('✅ Todas las fechas del grupo están aprobadas. Enviando notificación.')
+                        
+                        // Usar las fechas del grupo para la notificación
+                        const todasFechas = fechasGrupo.map((fecha: string) => `${fecha} (COMPLETO)`)
+                        
+                        // Obtener reemplazantes
+                        let reemplazantesCompletos = []
+                        if (requestData.reemplazante && requestData.reemplazante.length > 0) {
+                          reemplazantesCompletos = requestData.reemplazante.map((rep: any) => ({
+                            emp_id: rep.emp_id,
+                            nombre: rep.nombre,
+                            telefono: rep.telefono || '77711124'
+                          }))
+                        } else if (reemplazantes && reemplazantes.length > 0) {
+                          // Usar los reemplazantes pasados como parámetro
+                          try {
+                            const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${idBaseParaComparar}`)
+                            if (reemplazanteResponse.ok) {
+                              const reemplazanteData = await reemplazanteResponse.json()
+                              if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
+                                reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
+                                  emp_id: rep.EMP_ID,
+                                  nombre: rep.NOMBRE,
+                                  telefono: rep.TELEFONO
+                                }))
+                              }
+                            }
+                          } catch (apiError) {
+                            console.warn('⚠️ Error al obtener reemplazantes:', apiError)
+                          }
+                        }
+                        
+                        // Preparar payload para notificación
+                        const notificationPayload = {
+                          id_solicitud: idBaseParaComparar,
+                          emp_id: requestData.emp_id,
+                          emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
+                          estado: 'APROBADO',
+                          comentario: comentario || 'Todas tus vacaciones preaprobadas han sido aprobadas',
+                          tipo: requestData.tipo,
+                          dias_solicitados: todasFechas.length,
+                          fechas: todasFechas,
+                          reemplazantes: reemplazantesCompletos.map((rep: any) => ({
+                            emp_id: rep.emp_id,
+                            nombre: rep.nombre,
+                            telefono: rep.telefono
+                          }))
+                        }
+                        
+                        // Usar variable de entorno o localhost para desarrollo
+                        const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
+                        console.log('📤 Enviando notificación de grupo aprobado:', notificationPayload)
+                        
+                        await fetch(`${BOT_URL}/api/vacation-notification`, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify(notificationPayload)
+                        }).then(res => {
+                          if (res.ok) {
+                            console.log('✅✅✅ NOTIFICACIÓN DE GRUPO ENVIADA EXITOSAMENTE ✅✅✅')
+                          } else {
+                            console.warn('⚠️ Error al enviar notificación:', res.status, res.statusText)
+                          }
+                        }).catch(err => {
+                          console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
+                        })
+                        
+                        // Salir de la función aquí ya que enviamos la notificación
+                        return
+                      } else {
+                        console.log('⏸️ Aún hay fechas preaprobadas pendientes en el grupo. No se envía notificación todavía.')
+                        return
+                      }
+                    }
+                  }
+
+                  // Verificar si hay alguna preaprobada que aún no esté aprobada (para solicitudes individuales)
                   const hayPreaprobadasPendientes = solicitudesEmpleado.some((req: any) => 
                     (req.estado === 'PREAPROBADO' || req.estado === 'PRE-APROBADO') &&
-                    req.id_solicitud !== requestId
+                    String(req.id_solicitud) !== String(idBaseParaComparar)
                   )
 
                   // Si no hay preaprobadas pendientes, todas están aprobadas - enviar resumen
