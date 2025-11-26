@@ -596,6 +596,49 @@
             </div>
           </div>
           
+          <!-- Selector de turno -->
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-gray-700">Turno:</label>
+            <div class="flex gap-2">
+              <button
+                @click="newVacationTurno = 'COMPLETO'"
+                :class="[
+                  'flex-1 px-3 py-2 text-sm rounded-lg transition-colors font-medium',
+                  newVacationTurno === 'COMPLETO'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ]"
+              >
+                Día Completo
+              </button>
+              <button
+                @click="newVacationTurno = 'MAÑANA'"
+                :class="[
+                  'flex-1 px-3 py-2 text-sm rounded-lg transition-colors font-medium',
+                  newVacationTurno === 'MAÑANA'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ]"
+              >
+                Medio Día (Mañana)
+              </button>
+              <button
+                @click="newVacationTurno = 'TARDE'"
+                :class="[
+                  'flex-1 px-3 py-2 text-sm rounded-lg transition-colors font-medium',
+                  newVacationTurno === 'TARDE'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ]"
+              >
+                Medio Día (Tarde)
+              </button>
+            </div>
+            <p class="text-xs text-gray-500">
+              {{ newVacationTurno === 'COMPLETO' ? 'Se contará como 1 día' : 'Se contará como 0.5 días' }}
+            </p>
+          </div>
+          
           <div class="flex gap-2 pt-2">
             <button
               @click="submitVacationForm"
@@ -746,6 +789,7 @@ const selectedDateForVacation = ref<Date | null>(null)
 const newVacationStartDate = ref('')
 const newVacationEndDate = ref('')
 const newVacationNote = ref('')
+const newVacationTurno = ref<'COMPLETO' | 'MAÑANA' | 'TARDE'>('COMPLETO')
 const showProgressModal = ref(false)
 const progressInfo = ref({
   current: 0,
@@ -2077,12 +2121,11 @@ const createVacation = async () => {
       daysRemaining
     })
     
-    // Calcular días que se están sugiriendo
+    // Calcular días que se están sugiriendo (considerando medio día = 0.5)
     const startDate = newVacationStartDate.value || ''
     const endDate = newVacationEndDate.value || startDate
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-    const daysToSuggest = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    // Si es medio día, contar como 0.5, si es completo contar como 1
+    const daysToSuggest = newVacationTurno.value === 'COMPLETO' ? 1 : 0.5
     
     if (daysRemaining <= 0) {
       showNotification(
@@ -2120,7 +2163,7 @@ const createVacation = async () => {
       antiguedad: '1',
       detalle: [{
         fecha: startDate,
-        turno: 'COMPLETO',
+        turno: newVacationTurno.value,
         observacion: null
       }],
       reemplazantes: []
@@ -2148,6 +2191,7 @@ const createVacation = async () => {
     newVacationStartDate.value = ''
     newVacationEndDate.value = ''
     newVacationNote.value = ''
+    newVacationTurno.value = 'COMPLETO'
     selectedEmployeeForVacation.value = null
     await loadData()
   } catch (error) {

@@ -149,10 +149,10 @@
                 <p class="text-muted-foreground">Período</p>
                 <p class="font-medium">
                   <span v-if="(request as any).fechas_agrupadas && (request as any).fechas_agrupadas.length > 0">
-                    {{ formatDate((request as any).fechas_agrupadas[0]) }} - {{ formatDate((request as any).fechas_agrupadas[(request as any).fechas_agrupadas.length - 1]) }} ({{ (request as any).fechas_agrupadas.length }} días)
+                    {{ formatDate((request as any).fechas_agrupadas[0]) }} - {{ formatDate((request as any).fechas_agrupadas[(request as any).fechas_agrupadas.length - 1]) }} ({{ calcularDiasTotales(request) }} días)
                   </span>
                   <span v-else-if="request.fechas && request.fechas.length > 0">
-                    {{ formatDate(getSortedFechas(request.fechas)[0].fecha) }} - {{ formatDate(getSortedFechas(request.fechas)[getSortedFechas(request.fechas).length - 1].fecha) }} ({{ getSortedFechas(request.fechas).length }} días)
+                    {{ formatDate(getSortedFechas(request.fechas)[0].fecha) }} - {{ formatDate(getSortedFechas(request.fechas)[getSortedFechas(request.fechas).length - 1].fecha) }} ({{ calcularDiasTotales(request) }} días)
                   </span>
                   <span v-else>N/A</span>
                 </p>
@@ -160,8 +160,8 @@
               <div>
                 <p class="text-muted-foreground">Días solicitados</p>
                 <p class="font-medium">
-                  {{ (request.total_dias || request.fechas?.length || (request as any).fechas_agrupadas?.length || 0) }} 
-                  día{{ (request.total_dias || request.fechas?.length || (request as any).fechas_agrupadas?.length || 0) > 1 ? 's' : '' }}
+                  {{ calcularDiasTotales(request) }} 
+                  día{{ calcularDiasTotales(request) !== 1 ? 's' : '' }}
                 </p>
               </div>
               <div>
@@ -192,7 +192,7 @@
                   :key="idx"
                   class="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700"
                 >
-                  {{ formatDate(fecha.fecha) }} - {{ fecha.turno }}
+                  {{ formatDate(fecha.fecha) }} - {{ fecha.turno }} ({{ (fecha.turno === 'MAÑANA' || fecha.turno === 'TARDE') ? '0.5' : '1' }} día)
                 </span>
               </div>
             </div>
@@ -385,7 +385,7 @@
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-600">Días:</span>
-                <span class="font-semibold text-green-700">{{ selectedRequest.total_dias }} día{{ parseInt(selectedRequest.total_dias) > 1 ? 's' : '' }}</span>
+                <span class="font-semibold text-green-700">{{ calcularDiasTotales(selectedRequest) }} día{{ calcularDiasTotales(selectedRequest) !== 1 ? 's' : '' }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-600">Período:</span>
@@ -472,7 +472,7 @@
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-600">Días:</span>
-                <span class="font-semibold text-red-700">{{ selectedRequest.total_dias }} día{{ parseInt(selectedRequest.total_dias) > 1 ? 's' : '' }}</span>
+                <span class="font-semibold text-red-700">{{ calcularDiasTotales(selectedRequest) }} día{{ calcularDiasTotales(selectedRequest) !== 1 ? 's' : '' }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-600">Período:</span>
@@ -560,7 +560,7 @@
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-600">Días:</span>
-                <span class="font-medium text-gray-700">{{ selectedRequest.total_dias }} día{{ parseInt(selectedRequest.total_dias) > 1 ? 's' : '' }}</span>
+                <span class="font-medium text-gray-700">{{ calcularDiasTotales(selectedRequest) }} día{{ calcularDiasTotales(selectedRequest) !== 1 ? 's' : '' }}</span>
               </div>
             </div>
           </div>
@@ -1198,7 +1198,7 @@ const processedProgrammedRequests = computed(() => {
         id_solicitud: `${primera.id_solicitud}_grupo_${i}`,
         tipo: primera.tipo || 'PROGRAMADA', // Asegurar que el tipo se preserve
         fechas: fechasCompletas,
-        total_dias: grupoFechasOrdenado.length,
+        total_dias: calcularDiasDeFechas(fechasCompletas),
         es_grupo: grupoFechasOrdenado.length > 1,
         fechas_agrupadas: grupoFechasOrdenado // Agregar fechas_agrupadas ordenadas para compatibilidad
       })
@@ -1738,7 +1738,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                           estado: 'APROBADO',
                           comentario: comentario || 'Todas tus vacaciones preaprobadas han sido aprobadas',
                           tipo: requestData.tipo,
-                          dias_solicitados: todasFechas.length,
+                          dias_solicitados: calcularDiasDeFechas(todasFechas),
                           fechas: todasFechas,
                           reemplazantes: reemplazantesCompletos.map((rep: any) => ({
                             emp_id: rep.emp_id,
@@ -1992,7 +1992,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                 estado: 'APROBADO',
                 comentario: comentario,
                 tipo: requestData.tipo,
-                dias_solicitados: fechasAprobadas.length,
+                dias_solicitados: calcularDiasDeFechas(fechasAprobadas),
                 fechas: fechasAprobadas,
                 reemplazantes: reemplazantesCompletos.map((rep: any) => ({
                   emp_id: rep.emp_id,
@@ -2110,7 +2110,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
               estado: estado,
               comentario: comentario,
               tipo: requestData.tipo,
-              dias_solicitados: parseInt(requestData.total_dias || '0'),
+              dias_solicitados: calcularDiasTotales(requestData),
               fechas: requestData.fechas.map((f: any) => `${f.fecha} (${f.turno})`)
             }
 
@@ -2353,6 +2353,59 @@ const getVacationType = (tipo: string) => {
     default:
       return tipo
   }
+}
+
+// Función helper para calcular días de un array de fechas con turno
+const calcularDiasDeFechas = (fechas: any[]): number => {
+  if (!fechas || !Array.isArray(fechas) || fechas.length === 0) return 0
+  
+  return fechas.reduce((total: number, fecha: any) => {
+    // Si la fecha es un string (formato "YYYY-MM-DD (TURNO)"), extraer el turno
+    if (typeof fecha === 'string') {
+      if (fecha.includes(' (')) {
+        const partes = fecha.split(' (')
+        const turno = partes[1]?.replace(')', '').trim() || 'COMPLETO'
+        if (turno === 'MAÑANA' || turno === 'TARDE') {
+          return total + 0.5
+        }
+        return total + 1
+      }
+      // Si es solo una fecha sin turno, asumir día completo
+      return total + 1
+    }
+    
+    // Si es un objeto con turno
+    const turno = fecha.turno || fecha.tipo_dia || 'COMPLETO'
+    if (turno === 'MAÑANA' || turno === 'TARDE') {
+      return total + 0.5
+    }
+    return total + 1
+  }, 0)
+}
+
+// Función para calcular el total de días considerando medio día = 0.5
+const calcularDiasTotales = (request: any): number => {
+  // Si tiene fechas con turno, calcular sumando 0.5 para MAÑANA/TARDE y 1 para COMPLETO
+  if (request.fechas && Array.isArray(request.fechas) && request.fechas.length > 0) {
+    return calcularDiasDeFechas(request.fechas)
+  }
+  
+  // Si tiene fechas_agrupadas, asumir que son días completos (pero esto podría ser incorrecto)
+  // Por ahora, contamos las fechas como días completos
+  if ((request as any).fechas_agrupadas && Array.isArray((request as any).fechas_agrupadas)) {
+    return (request as any).fechas_agrupadas.length
+  }
+  
+  // Si tiene total_dias, intentar usarlo
+  if (request.total_dias) {
+    const total = parseFloat(String(request.total_dias))
+    if (!isNaN(total)) {
+      return total
+    }
+  }
+  
+  // Fallback: retornar 0 si no hay información
+  return 0
 }
 
 const formatDate = (dateString: string) => {

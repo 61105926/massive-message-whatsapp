@@ -64,7 +64,7 @@
                   {{ getStatusText(request.estado) }}
                 </span>
                 <span class="text-sm text-muted-foreground">
-                  {{ (request as any).fechas_agrupadas ? (request as any).fechas_agrupadas.length : request.total_dias }} día{{ ((request as any).fechas_agrupadas ? (request as any).fechas_agrupadas.length : parseInt(request.total_dias)) > 1 ? 's' : '' }}
+                  {{ calcularDiasTotales(request) }} día{{ calcularDiasTotales(request) !== 1 ? 's' : '' }}
                 </span>
                 <span class="text-xs text-muted-foreground">
                   ID: {{ request.id_solicitud }}
@@ -99,7 +99,7 @@
                     class="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700"
                   >
                     {{ formatFechasAgrupadas((request as any).fechas_agrupadas) }}
-                    <span class="ml-1 text-blue-600">({{ (request as any).fechas_agrupadas.length }} días)</span>
+                    <span class="ml-1 text-blue-600">({{ calcularDiasTotales(request) }} días)</span>
                   </span>
                   <!-- Si no, mostrar fechas individuales -->
                   <span
@@ -108,7 +108,7 @@
                     :key="idx"
                     class="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700"
                   >
-                    {{ formatDate(fecha.fecha) }} - {{ fecha.turno }}
+                    {{ formatDate(fecha.fecha) }} - {{ fecha.turno }} ({{ (fecha.turno === 'MAÑANA' || fecha.turno === 'TARDE') ? '0.5' : '1' }} día)
                   </span>
                 </div>
               </div>
@@ -188,7 +188,7 @@
               {{ currentTakeVacationRequest?.fechas_agrupadas && currentTakeVacationRequest.fechas_agrupadas.length > 0 ? formatDate(currentTakeVacationRequest.fechas_agrupadas[currentTakeVacationRequest.fechas_agrupadas.length - 1]) : (currentTakeVacationRequest?.fechas && currentTakeVacationRequest.fechas.length > 0 ? formatDate(currentTakeVacationRequest.fechas[currentTakeVacationRequest.fechas.length - 1].fecha) : '') }}
             </p>
             <p class="text-xs text-gray-600 mt-2">
-              Días totales: {{ (currentTakeVacationRequest as any)?.fechas_agrupadas ? (currentTakeVacationRequest as any).fechas_agrupadas.length : currentTakeVacationRequest?.total_dias }}
+              Días totales: {{ calcularDiasTotales(currentTakeVacationRequest) }}
             </p>
           </div>
 
@@ -275,7 +275,7 @@
               {{ currentViewVacationRequest?.fechas_agrupadas && currentViewVacationRequest.fechas_agrupadas.length > 0 ? formatDate(currentViewVacationRequest.fechas_agrupadas[currentViewVacationRequest.fechas_agrupadas.length - 1]) : (currentViewVacationRequest?.fechas && currentViewVacationRequest.fechas.length > 0 ? formatDate(currentViewVacationRequest.fechas[currentViewVacationRequest.fechas.length - 1].fecha) : '') }}
             </p>
             <p class="text-xs text-gray-600 mt-2">
-              Días totales: {{ (currentViewVacationRequest as any)?.fechas_agrupadas ? (currentViewVacationRequest as any).fechas_agrupadas.length : currentViewVacationRequest?.total_dias }}
+              Días totales: {{ calcularDiasTotales(currentViewVacationRequest) }}
             </p>
           </div>
 
@@ -1019,6 +1019,37 @@ const getVacationType = (tipo: string) => {
   }
 }
 
+// Función para calcular el total de días considerando medio día = 0.5
+const calcularDiasTotales = (request: any): number => {
+  // Si tiene fechas con turno, calcular sumando 0.5 para MAÑANA/TARDE y 1 para COMPLETO
+  if (request.fechas && Array.isArray(request.fechas) && request.fechas.length > 0) {
+    return request.fechas.reduce((total: number, fecha: any) => {
+      const turno = fecha.turno || fecha.tipo_dia || 'COMPLETO'
+      if (turno === 'MAÑANA' || turno === 'TARDE') {
+        return total + 0.5
+      }
+      return total + 1
+    }, 0)
+  }
+  
+  // Si tiene fechas_agrupadas, asumir que son días completos (pero esto podría ser incorrecto)
+  // Por ahora, contamos las fechas como días completos
+  if ((request as any).fechas_agrupadas && Array.isArray((request as any).fechas_agrupadas)) {
+    return (request as any).fechas_agrupadas.length
+  }
+  
+  // Si tiene total_dias, intentar usarlo
+  if (request.total_dias) {
+    const total = parseFloat(String(request.total_dias))
+    if (!isNaN(total)) {
+      return total
+    }
+  }
+  
+  // Fallback: retornar 0 si no hay información
+  return 0
+}
+
 const formatDate = (dateString: string) => {
   // Evitar problemas de zona horaria: parsear la fecha directamente sin conversión
   // Si la fecha viene como "YYYY-MM-DD", crear la fecha en hora local
@@ -1114,11 +1145,34 @@ const downloadBoleta = async (request: VacationRequest | any) => {
       console.warn('📄 Excepción al obtener datos del empleado:', err.message)
     }
 
-    // Obtener fechas de la solicitud
-    const fechas = (request as any).fechas_agrupadas || request.fechas?.map((f: any) => f.fecha) || []
-    console.log('📄 Fechas obtenidas:', fechas)
+    // Obtener fechas de la solicitud con su turno
+    let fechasConTurno: Array<{ fecha: string; turno: string; dias: number }> = []
     
-    if (fechas.length === 0) {
+    if ((request as any).fechas_agrupadas && Array.isArray((request as any).fechas_agrupadas)) {
+      // Si tiene fechas_agrupadas, asumir que son días completos
+      fechasConTurno = (request as any).fechas_agrupadas.map((fecha: string) => ({
+        fecha,
+        turno: 'COMPLETO',
+        dias: 1
+      }))
+    } else if (request.fechas && Array.isArray(request.fechas)) {
+      // Si tiene fechas con turno, usar esos datos
+      fechasConTurno = request.fechas.map((f: any) => {
+        const turno = f.turno || f.tipo_dia || 'COMPLETO'
+        const dias = (turno === 'MAÑANA' || turno === 'TARDE') ? 0.5 : 1
+        return {
+          fecha: f.fecha,
+          turno,
+          dias
+        }
+      })
+    } else {
+      throw new Error('No se encontraron fechas en la solicitud')
+    }
+    
+    console.log('📄 Fechas con turno obtenidas:', fechasConTurno)
+    
+    if (fechasConTurno.length === 0) {
       throw new Error('No se encontraron fechas en la solicitud')
     }
     
@@ -1161,41 +1215,53 @@ const downloadBoleta = async (request: VacationRequest | any) => {
       detalle: []
     }
 
-    // Agrupar fechas consecutivas en el detalle
-    if (fechas.length > 0) {
-      const fechasOrdenadas = [...fechas].sort()
+    // Agrupar fechas consecutivas en el detalle, considerando turnos
+    if (fechasConTurno.length > 0) {
+      // Ordenar por fecha
+      const fechasOrdenadas = [...fechasConTurno].sort((a, b) => a.fecha.localeCompare(b.fecha))
+      
       let grupoInicio = fechasOrdenadas[0]
       let grupoFin = fechasOrdenadas[0]
+      let totalDiasGrupo = grupoInicio.dias
+      let turnoGrupo = grupoInicio.turno
 
       for (let i = 1; i < fechasOrdenadas.length; i++) {
-        const fechaActual = new Date(fechasOrdenadas[i] + 'T00:00:00')
-        const fechaAnterior = new Date(fechasOrdenadas[i - 1] + 'T00:00:00')
-        const diferenciaDias = (fechaActual.getTime() - fechaAnterior.getTime()) / (1000 * 60 * 60 * 24)
+        const fechaActual = fechasOrdenadas[i]
+        const fechaAnterior = new Date(fechasOrdenadas[i - 1].fecha + 'T00:00:00')
+        const fechaActualDate = new Date(fechaActual.fecha + 'T00:00:00')
+        const diferenciaDias = (fechaActualDate.getTime() - fechaAnterior.getTime()) / (1000 * 60 * 60 * 24)
 
-        if (diferenciaDias === 1) {
-          // Fecha consecutiva, extender el grupo
-          grupoFin = fechasOrdenadas[i]
+        // Verificar si es consecutiva y tiene el mismo turno
+        const esConsecutiva = diferenciaDias === 1
+        const mismoTurno = fechaActual.turno === turnoGrupo
+
+        if (esConsecutiva && mismoTurno) {
+          // Fecha consecutiva con mismo turno, extender el grupo
+          grupoFin = fechaActual
+          totalDiasGrupo += fechaActual.dias
         } else {
-          // Nueva secuencia, guardar el grupo anterior
-          const dias = (new Date(grupoFin + 'T00:00:00').getTime() - new Date(grupoInicio + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24) + 1
+          // Nueva secuencia o turno diferente, guardar el grupo anterior
           boletaPayload.detalle.push({
-            Desde: grupoInicio,
-            Hasta: grupoFin,
-            Dias: dias,
-            Tipo: request.tipo === 'PROGRAMADA' ? 'Vacación' : request.tipo || 'Vacación'
+            Desde: grupoInicio.fecha,
+            Hasta: grupoFin.fecha,
+            Dias: totalDiasGrupo,
+            Tipo: request.tipo === 'PROGRAMADA' ? 'Vacación' : request.tipo || 'Vacación',
+            Turno: turnoGrupo !== 'COMPLETO' ? turnoGrupo : undefined
           })
-          grupoInicio = fechasOrdenadas[i]
-          grupoFin = fechasOrdenadas[i]
+          grupoInicio = fechaActual
+          grupoFin = fechaActual
+          totalDiasGrupo = fechaActual.dias
+          turnoGrupo = fechaActual.turno
         }
       }
 
       // Agregar el último grupo
-      const dias = (new Date(grupoFin + 'T00:00:00').getTime() - new Date(grupoInicio + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24) + 1
       boletaPayload.detalle.push({
-        Desde: grupoInicio,
-        Hasta: grupoFin,
-        Dias: dias,
-        Tipo: request.tipo === 'PROGRAMADA' ? 'Vacación' : request.tipo || 'Vacación'
+        Desde: grupoInicio.fecha,
+        Hasta: grupoFin.fecha,
+        Dias: totalDiasGrupo,
+        Tipo: request.tipo === 'PROGRAMADA' ? 'Vacación' : request.tipo || 'Vacación',
+        Turno: turnoGrupo !== 'COMPLETO' ? turnoGrupo : undefined
       })
     }
 
