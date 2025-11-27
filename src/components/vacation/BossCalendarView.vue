@@ -1050,9 +1050,21 @@ const getProgrammedDaysCount = (empId: string | number | undefined): number => {
       }, 0);
       console.log(`  📅 Solicitud ${index + 1} (${req.id_solicitud}): ${daysInRequest} días (desde array fechas)`)
     } else if (req.fechas_agrupadas && Array.isArray(req.fechas_agrupadas) && req.fechas_agrupadas.length > 0) {
-      // Si tiene fechas_agrupadas, contar esas
-      daysInRequest = req.fechas_agrupadas.length
-      console.log(`  📅 Solicitud ${index + 1} (${req.id_solicitud}): ${daysInRequest} días (desde fechas_agrupadas)`)
+      // Si tiene fechas_agrupadas, calcular días desde fechas con turno si están disponibles
+      if (req.fechas && Array.isArray(req.fechas) && req.fechas.length > 0) {
+        daysInRequest = req.fechas.reduce((total: number, fecha: any) => {
+          const tipo = fecha.turno || fecha.tipo_dia || 'COMPLETO';
+          if (tipo === 'MAÑANA' || tipo === 'TARDE') {
+            return total + 0.5;
+          }
+          return total + 1;
+        }, 0);
+        console.log(`  📅 Solicitud ${index + 1} (${req.id_solicitud}): ${daysInRequest} días (desde fechas con turno)`)
+      } else {
+        // Fallback: contar fechas_agrupadas como días completos (no ideal pero mejor que nada)
+        daysInRequest = req.fechas_agrupadas.length
+        console.log(`  📅 Solicitud ${index + 1} (${req.id_solicitud}): ${daysInRequest} días (desde fechas_agrupadas, sin turno)`)
+      }
     } else if (req.start_date && req.end_date) {
       // Si tiene start_date y end_date, calcular la diferencia
       const start = new Date(req.start_date)
@@ -2155,12 +2167,16 @@ const createVacation = async () => {
       daysToSuggest
     })
     
+    // Calcular días según el turno
+    const diasCalculados = newVacationTurno.value === 'COMPLETO' ? 1 : 0.5
+    
     const payload = {
       emp_id: selectedEmployeeForVacation.value.emp_id,
       tipo: 'PROGRAMADA',
       comentario: newVacationNote.value || `Vacación programada del ${startDate} al ${endDate}`,
       manager_id: props.managerId,
       antiguedad: '1',
+      total_dias: diasCalculados.toString(), // Agregar total_dias calculado
       detalle: [{
         fecha: startDate,
         turno: newVacationTurno.value,

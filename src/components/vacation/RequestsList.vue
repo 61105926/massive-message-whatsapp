@@ -106,9 +106,45 @@
                     v-else
                     v-for="(fecha, idx) in request.fechas"
                     :key="idx"
-                    class="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700"
+                    class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium"
+                    :class="{
+                      'bg-yellow-50 text-yellow-700': fecha.turno === 'TARDE',
+                      'bg-blue-50 text-blue-700': fecha.turno === 'MAÑANA',
+                      'bg-green-50 text-green-700': !fecha.turno || fecha.turno === 'COMPLETO'
+                    }"
                   >
-                    {{ formatDate(fecha.fecha) }} - {{ fecha.turno }} ({{ (fecha.turno === 'MAÑANA' || fecha.turno === 'TARDE') ? '0.5' : '1' }} día)
+                    {{ formatDate(fecha.fecha) }}
+                    <span class="ml-1 font-semibold">
+                      {{ fecha.turno === 'MAÑANA' ? '(Mañana)' : fecha.turno === 'TARDE' ? '(Tarde)' : '(Completo)' }}
+                    </span>
+                    <span class="ml-1 text-gray-600">
+                      ({{ (fecha.turno === 'MAÑANA' || fecha.turno === 'TARDE') ? '0.5' : '1' }} día)
+                    </span>
+                  </span>
+                </div>
+              </div>
+              
+              <!-- Detalle de fechas (similar al panel del jefe) -->
+              <div v-if="request.fechas && request.fechas.length > 0" class="border-t pt-2 mt-2">
+                <p class="text-xs font-medium mb-2 text-muted-foreground">Detalle de fechas:</p>
+                <div class="flex flex-wrap gap-2">
+                  <span
+                    v-for="(fecha, idx) in request.fechas"
+                    :key="idx"
+                    class="inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-medium"
+                    :class="{
+                      'bg-yellow-50 text-yellow-700': fecha.turno === 'TARDE',
+                      'bg-blue-50 text-blue-700': fecha.turno === 'MAÑANA',
+                      'bg-green-50 text-green-700': !fecha.turno || fecha.turno === 'COMPLETO'
+                    }"
+                  >
+                    {{ formatDate(fecha.fecha) }}
+                    <span class="ml-1 font-semibold">
+                      {{ fecha.turno === 'MAÑANA' ? '(Mañana)' : fecha.turno === 'TARDE' ? '(Tarde)' : '(Completo)' }}
+                    </span>
+                    <span class="ml-1 text-gray-600">
+                      ({{ (fecha.turno === 'MAÑANA' || fecha.turno === 'TARDE') ? '0.5' : '1' }} día)
+                    </span>
                   </span>
                 </div>
               </div>
@@ -277,6 +313,31 @@
             <p class="text-xs text-gray-600 mt-2">
               Días totales: {{ calcularDiasTotales(currentViewVacationRequest) }}
             </p>
+            
+            <!-- Detalle de fechas con turno -->
+            <div v-if="currentViewVacationRequest?.fechas && currentViewVacationRequest.fechas.length > 0" class="mt-3 pt-3 border-t border-blue-200">
+              <p class="text-xs font-medium mb-2 text-gray-700">Detalle de fechas:</p>
+              <div class="flex flex-wrap gap-2">
+                <span
+                  v-for="(fecha, idx) in currentViewVacationRequest.fechas"
+                  :key="idx"
+                  class="inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-medium"
+                  :class="{
+                    'bg-yellow-50 text-yellow-700': fecha.turno === 'TARDE',
+                    'bg-blue-50 text-blue-700': fecha.turno === 'MAÑANA',
+                    'bg-green-50 text-green-700': !fecha.turno || fecha.turno === 'COMPLETO'
+                  }"
+                >
+                  {{ formatDate(fecha.fecha) }}
+                  <span class="ml-1 font-semibold">
+                    {{ fecha.turno === 'MAÑANA' ? '(Mañana)' : fecha.turno === 'TARDE' ? '(Tarde)' : '(Completo)' }}
+                  </span>
+                  <span class="ml-1 text-gray-600">
+                    ({{ (fecha.turno === 'MAÑANA' || fecha.turno === 'TARDE') ? '0.5' : '1' }} día)
+                  </span>
+                </span>
+              </div>
+            </div>
           </div>
 
           <!-- Selección de reemplazantes -->
@@ -928,12 +989,21 @@ const groupedProgrammedRequests = computed(() => {
     
     // Crear un request para cada grupo de fechas consecutivas
     for (let i = 0; i < grupos.length; i++) {
+      // Obtener las fechas completas (con turno) para este grupo
+      const fechasCompletas = solicitudes
+        .flatMap(s => s.fechas)
+        .filter(f => grupos[i].includes(f.fecha))
+        .sort((a, b) => a.fecha.localeCompare(b.fecha))
+      
+      // Calcular días considerando turnos
+      const diasCalculados = calcularDiasTotales({ fechas: fechasCompletas })
+      
       result.push({
         ...primera,
         id_solicitud: `${primera.id_solicitud}_grupo_${i}`, // ID único para cada grupo
-        fechas: [], // Limpiar fechas individuales
+        fechas: fechasCompletas, // ✅ Mantener fechas con turno
         fechas_agrupadas: grupos[i],
-        total_dias: String(grupos[i].length), // Calcular días basado en el número de fechas agrupadas
+        total_dias: String(diasCalculados), // ✅ Calcular días considerando turnos
         id_grupo: `${primera.id_solicitud}_grupo_${i}` as any
       })
     }
@@ -1133,9 +1203,17 @@ const downloadBoleta = async (request: VacationRequest | any) => {
         const empResult = await empResponse.json()
         console.log('📄 Resultado de empleado/info:', empResult)
         
-        if (empResult.status === 'success' && Array.isArray(empResult.data) && empResult.data.length > 0) {
+        // La API puede devolver directamente un array o un objeto con status
+        if (Array.isArray(empResult) && empResult.length > 0) {
+          // Nuevo formato: array directo
+          employeeData = empResult[0]
+          console.log('📄 Datos del empleado obtenidos (formato array):', employeeData)
+        } else if (empResult.status === 'success' && Array.isArray(empResult.data) && empResult.data.length > 0) {
+          // Formato antiguo: objeto con status y data
           employeeData = empResult.data[0]
-          console.log('📄 Datos del empleado obtenidos:', employeeData)
+          console.log('📄 Datos del empleado obtenidos (formato objeto):', employeeData)
+        } else {
+          console.warn('📄 Formato de respuesta no reconocido:', empResult)
         }
       } else {
         const errorText = await empResponse.text()
@@ -1148,66 +1226,157 @@ const downloadBoleta = async (request: VacationRequest | any) => {
     // Obtener fechas de la solicitud con su turno
     let fechasConTurno: Array<{ fecha: string; turno: string; dias: number }> = []
     
-    if ((request as any).fechas_agrupadas && Array.isArray((request as any).fechas_agrupadas)) {
-      // Si tiene fechas_agrupadas, asumir que son días completos
+    console.log('📄 Request completo para PDF:', JSON.stringify(request, null, 2))
+    console.log('📄 request.fechas:', request.fechas)
+    console.log('📄 request.fechas_agrupadas:', (request as any).fechas_agrupadas)
+    
+    // ✅ PRIORIZAR: Si tiene fechas con turno, usarlas (son más precisas)
+    if (request.fechas && Array.isArray(request.fechas) && request.fechas.length > 0) {
+      // Si tiene fechas con turno, usar esos datos
+      fechasConTurno = request.fechas.map((f: any) => {
+        // Manejar tanto objetos como strings
+        const fechaStr = typeof f === 'string' ? f : f.fecha
+        let turno = (typeof f === 'object' && f.turno) ? f.turno : 
+                    (typeof f === 'object' && f.tipo_dia) ? f.tipo_dia : 'COMPLETO'
+        
+        // Normalizar turno a mayúsculas para comparación
+        const turnoUpper = String(turno).toUpperCase().trim()
+        const esMedioDia = turnoUpper === 'MAÑANA' || turnoUpper === 'MANANA' || turnoUpper === 'TARDE'
+        const dias = esMedioDia ? 0.5 : 1
+        
+        // Normalizar turno para guardarlo (mantener formato original pero asegurar consistencia)
+        if (esMedioDia) {
+          turno = turnoUpper === 'MAÑANA' || turnoUpper === 'MANANA' ? 'MAÑANA' : 'TARDE'
+        } else {
+          turno = 'COMPLETO'
+        }
+        
+        console.log(`📄 Fecha procesada: ${fechaStr}, Turno original: ${f.turno || f.tipo_dia}, Turno normalizado: ${turno}, Días: ${dias}`)
+        return {
+          fecha: fechaStr,
+          turno,
+          dias
+        }
+      })
+    } else if ((request as any).fechas_agrupadas && Array.isArray((request as any).fechas_agrupadas)) {
+      // Si solo tiene fechas_agrupadas (sin turno), asumir que son días completos
+      // Esto es un fallback, idealmente siempre debería tener request.fechas
+      console.warn('⚠️ Usando fechas_agrupadas sin información de turno, asumiendo COMPLETO')
       fechasConTurno = (request as any).fechas_agrupadas.map((fecha: string) => ({
         fecha,
         turno: 'COMPLETO',
         dias: 1
       }))
-    } else if (request.fechas && Array.isArray(request.fechas)) {
-      // Si tiene fechas con turno, usar esos datos
-      fechasConTurno = request.fechas.map((f: any) => {
-        const turno = f.turno || f.tipo_dia || 'COMPLETO'
-        const dias = (turno === 'MAÑANA' || turno === 'TARDE') ? 0.5 : 1
-        return {
-          fecha: f.fecha,
-          turno,
-          dias
-        }
-      })
     } else {
       throw new Error('No se encontraron fechas en la solicitud')
     }
     
     console.log('📄 Fechas con turno obtenidas:', fechasConTurno)
+    console.log('📄 Total días calculado desde fechas:', fechasConTurno.reduce((sum, f) => sum + f.dias, 0))
     
     if (fechasConTurno.length === 0) {
       throw new Error('No se encontraron fechas en la solicitud')
     }
     
-    // Validar y formatear FechaIngreso
-    let fechaIngreso = employeeData?.fecha_ingreso || employeeData?.FechaIngreso || employeeData?.fecha_ingreso_empleado
-    if (!fechaIngreso || fechaIngreso === 'N/A' || fechaIngreso === '') {
-      // Si no hay fecha de ingreso, usar una fecha por defecto (1 año atrás desde hoy)
-      const fechaDefault = new Date()
-      fechaDefault.setFullYear(fechaDefault.getFullYear() - 1)
-      fechaIngreso = fechaDefault.toISOString().split('T')[0]
-      console.warn('📄 No se encontró fecha de ingreso, usando fecha por defecto:', fechaIngreso)
-    } else {
-      // Asegurar que la fecha esté en formato YYYY-MM-DD
-      try {
-        const fechaParsed = new Date(fechaIngreso)
-        if (isNaN(fechaParsed.getTime())) {
-          throw new Error('Fecha inválida')
-        }
-        fechaIngreso = fechaParsed.toISOString().split('T')[0]
-        console.log('📄 Fecha de ingreso formateada:', fechaIngreso)
-      } catch (e) {
-        // Si no se puede parsear, usar fecha por defecto
+    // Validar y formatear FechaIngreso - buscar en múltiples campos posibles
+    // ✅ La API devuelve: fechaIngreso
+    let fechaIngreso = employeeData?.fechaIngreso || 
+                      employeeData?.FechaIngreso || 
+                      employeeData?.fecha_ingreso || 
+                      employeeData?.FECHA_INGRESO ||
+                      employeeData?.fecha_ingreso_empleado ||
+                      employeeData?.fecha_ingreso_emp ||
+                      employeeData?.fecha_inicio ||
+                      employeeData?.fecha_inicio_laboral ||
+                      request?.fecha_ingreso ||
+                      request?.emp_fecha_ingreso ||
+                      null
+    
+    console.log('📄 Fecha de ingreso encontrada:', fechaIngreso)
+    console.log('📄 employeeData completo:', employeeData)
+    
+    if (!fechaIngreso || fechaIngreso === 'N/A' || fechaIngreso === '' || fechaIngreso === null) {
+      // Si no hay fecha de ingreso, intentar obtenerla desde la solicitud o usar una fecha por defecto
+      console.warn('📄 No se encontró fecha de ingreso en employeeData, buscando en request...')
+      
+      // Intentar desde el request si tiene información del empleado
+      if (request.emp_fecha_ingreso) {
+        fechaIngreso = request.emp_fecha_ingreso
+        console.log('📄 Usando fecha de ingreso del request:', fechaIngreso)
+      } else {
+        // Si no hay fecha de ingreso, usar una fecha por defecto (1 año atrás desde hoy)
         const fechaDefault = new Date()
         fechaDefault.setFullYear(fechaDefault.getFullYear() - 1)
         fechaIngreso = fechaDefault.toISOString().split('T')[0]
-        console.warn('📄 Error al parsear fecha de ingreso, usando fecha por defecto:', fechaIngreso)
+        console.warn('📄 No se encontró fecha de ingreso, usando fecha por defecto:', fechaIngreso)
       }
     }
     
+    // Asegurar que la fecha esté en formato YYYY-MM-DD
+    try {
+      const fechaParsed = new Date(fechaIngreso)
+      if (isNaN(fechaParsed.getTime())) {
+        throw new Error('Fecha inválida')
+      }
+      fechaIngreso = fechaParsed.toISOString().split('T')[0]
+      console.log('📄 Fecha de ingreso formateada:', fechaIngreso)
+    } catch (e) {
+      // Si no se puede parsear, usar fecha por defecto
+      const fechaDefault = new Date()
+      fechaDefault.setFullYear(fechaDefault.getFullYear() - 1)
+      fechaIngreso = fechaDefault.toISOString().split('T')[0]
+      console.warn('📄 Error al parsear fecha de ingreso, usando fecha por defecto:', fechaIngreso)
+    }
+    
     // Construir payload para la boleta
+    // Intentar obtener datos del empleado desde múltiples fuentes
+    // ✅ La API devuelve: fullName, cargo, departamento, fechaIngreso, empID
+    const nombreEmpleado = employeeData?.fullName || 
+                          employeeData?.nombre || 
+                          employeeData?.NOMBRE || 
+                          employeeData?.nombre_completo ||
+                          employeeData?.EmpleadoNombre ||
+                          request.emp_nombre || 
+                          'Empleado'
+    
+    const cargoEmpleado = employeeData?.cargo || 
+                         employeeData?.CARGO || 
+                         employeeData?.puesto ||
+                         employeeData?.EmpleadoCargo ||
+                         request.emp_cargo ||
+                         'N/A'
+    
+    const departamentoEmpleado = employeeData?.departamento || 
+                                employeeData?.Departamento ||
+                                employeeData?.dept || 
+                                employeeData?.DEPARTAMENTO || 
+                                employeeData?.DEPT ||
+                                employeeData?.departamento_nombre ||
+                                request.emp_departamento ||
+                                'N/A'
+    
+    const codigoEmpleado = employeeData?.empID || 
+                          employeeData?.EmpleadoID ||
+                          employeeData?.codigo || 
+                          employeeData?.EMP_ID ||
+                          employeeData?.codigo_empleado ||
+                          empIdToUse || 
+                          'N/A'
+    
+    console.log('📄 Datos del empleado para PDF:', {
+      nombre: nombreEmpleado,
+      cargo: cargoEmpleado,
+      departamento: departamentoEmpleado,
+      codigo: codigoEmpleado,
+      fechaIngreso: fechaIngreso,
+      employeeData: employeeData
+    })
+    
     const boletaPayload: any = {
-      Codigo: employeeData?.codigo || employeeData?.empID || empIdToUse || 'N/A',
-      Empleado: employeeData?.fullName || employeeData?.nombre || request.emp_nombre || 'Empleado',
-      Cargo: employeeData?.cargo || 'N/A',
-      Departamento: employeeData?.departamento || employeeData?.dept || 'N/A',
+      Codigo: codigoEmpleado,
+      Empleado: nombreEmpleado,
+      Cargo: cargoEmpleado,
+      Departamento: departamentoEmpleado,
       FechaIngreso: fechaIngreso, // Ahora siempre será una fecha válida
       FechaSolicitud: request.fecha_solicitud || new Date().toISOString().split('T')[0],
       Estado: 'Autorizado',
@@ -1216,56 +1385,97 @@ const downloadBoleta = async (request: VacationRequest | any) => {
     }
 
     // Agrupar fechas consecutivas en el detalle, considerando turnos
+    // ✅ IMPORTANTE: Para medio día, NO agrupar fechas no consecutivas, mostrar cada una por separado
     if (fechasConTurno.length > 0) {
       // Ordenar por fecha
       const fechasOrdenadas = [...fechasConTurno].sort((a, b) => a.fecha.localeCompare(b.fecha))
       
-      let grupoInicio = fechasOrdenadas[0]
-      let grupoFin = fechasOrdenadas[0]
-      let totalDiasGrupo = grupoInicio.dias
-      let turnoGrupo = grupoInicio.turno
+      // Si todas las fechas son medio día (0.5), NO agrupar, mostrar cada una por separado
+      const todasSonMedioDia = fechasOrdenadas.every(f => f.dias === 0.5)
+      
+      if (todasSonMedioDia) {
+        // ✅ Para medio día, crear un registro por cada fecha individual
+        console.log('📄 Todas las fechas son medio día - Creando registros individuales')
+        fechasOrdenadas.forEach(fecha => {
+          boletaPayload.detalle.push({
+            Desde: fecha.fecha,
+            Hasta: fecha.fecha,
+            Dias: fecha.dias,
+            Tipo: request.tipo === 'PROGRAMADA' ? 'Vacación' : request.tipo || 'Vacación',
+            Turno: fecha.turno !== 'COMPLETO' ? fecha.turno : null
+          })
+          console.log(`📄 Registro individual - Fecha: ${fecha.fecha}, Días: ${fecha.dias}, Turno: ${fecha.turno}`)
+        })
+      } else {
+        // Para días completos o mixtos, agrupar por turno primero, luego por fechas consecutivas
+        const gruposPorTurno = new Map<string, typeof fechasOrdenadas>()
+        
+        // Separar por turno
+        fechasOrdenadas.forEach(fecha => {
+          const turno = fecha.turno || 'COMPLETO'
+          if (!gruposPorTurno.has(turno)) {
+            gruposPorTurno.set(turno, [])
+          }
+          gruposPorTurno.get(turno)!.push(fecha)
+        })
+        
+        // Para cada turno, agrupar fechas consecutivas
+        gruposPorTurno.forEach((fechasDelTurno, turno) => {
+          console.log(`📄 Procesando turno: ${turno}, Fechas:`, fechasDelTurno)
+          let grupoInicio = fechasDelTurno[0]
+          let grupoFin = fechasDelTurno[0]
+          let totalDiasGrupo = grupoInicio.dias
+          
+          console.log(`📄 Grupo inicial - Desde: ${grupoInicio.fecha}, Turno: ${grupoInicio.turno}, Días: ${grupoInicio.dias}, Total días grupo: ${totalDiasGrupo}`)
 
-      for (let i = 1; i < fechasOrdenadas.length; i++) {
-        const fechaActual = fechasOrdenadas[i]
-        const fechaAnterior = new Date(fechasOrdenadas[i - 1].fecha + 'T00:00:00')
-        const fechaActualDate = new Date(fechaActual.fecha + 'T00:00:00')
-        const diferenciaDias = (fechaActualDate.getTime() - fechaAnterior.getTime()) / (1000 * 60 * 60 * 24)
+          for (let i = 1; i < fechasDelTurno.length; i++) {
+            const fechaActual = fechasDelTurno[i]
+            const fechaAnterior = new Date(fechasDelTurno[i - 1].fecha + 'T00:00:00')
+            const fechaActualDate = new Date(fechaActual.fecha + 'T00:00:00')
+            const diferenciaDias = (fechaActualDate.getTime() - fechaAnterior.getTime()) / (1000 * 60 * 60 * 24)
 
-        // Verificar si es consecutiva y tiene el mismo turno
-        const esConsecutiva = diferenciaDias === 1
-        const mismoTurno = fechaActual.turno === turnoGrupo
+            // Verificar si es consecutiva (mismo turno ya está garantizado)
+            const esConsecutiva = diferenciaDias === 1
 
-        if (esConsecutiva && mismoTurno) {
-          // Fecha consecutiva con mismo turno, extender el grupo
-          grupoFin = fechaActual
-          totalDiasGrupo += fechaActual.dias
-        } else {
-          // Nueva secuencia o turno diferente, guardar el grupo anterior
+            if (esConsecutiva) {
+              // Fecha consecutiva, extender el grupo
+              grupoFin = fechaActual
+              totalDiasGrupo += fechaActual.dias
+              console.log(`📄 Fecha consecutiva agregada - Fecha: ${fechaActual.fecha}, Días: ${fechaActual.dias}, Total acumulado: ${totalDiasGrupo}`)
+            } else {
+              // Nueva secuencia, guardar el grupo anterior
+              console.log(`📄 Guardando grupo anterior - Desde: ${grupoInicio.fecha}, Hasta: ${grupoFin.fecha}, Días: ${totalDiasGrupo}, Turno: ${turno}`)
+              boletaPayload.detalle.push({
+                Desde: grupoInicio.fecha,
+                Hasta: grupoFin.fecha,
+                Dias: totalDiasGrupo,
+                Tipo: request.tipo === 'PROGRAMADA' ? 'Vacación' : request.tipo || 'Vacación',
+                Turno: turno !== 'COMPLETO' ? turno : null
+              })
+              grupoInicio = fechaActual
+              grupoFin = fechaActual
+              totalDiasGrupo = fechaActual.dias
+              console.log(`📄 Nuevo grupo iniciado - Desde: ${grupoInicio.fecha}, Días: ${totalDiasGrupo}`)
+            }
+          }
+
+          // Agregar el último grupo de este turno
+          console.log(`📄 Guardando último grupo - Desde: ${grupoInicio.fecha}, Hasta: ${grupoFin.fecha}, Días: ${totalDiasGrupo}, Turno: ${turno}`)
           boletaPayload.detalle.push({
             Desde: grupoInicio.fecha,
             Hasta: grupoFin.fecha,
             Dias: totalDiasGrupo,
             Tipo: request.tipo === 'PROGRAMADA' ? 'Vacación' : request.tipo || 'Vacación',
-            Turno: turnoGrupo !== 'COMPLETO' ? turnoGrupo : undefined
+            Turno: turno !== 'COMPLETO' ? turno : null
           })
-          grupoInicio = fechaActual
-          grupoFin = fechaActual
-          totalDiasGrupo = fechaActual.dias
-          turnoGrupo = fechaActual.turno
-        }
+        })
       }
-
-      // Agregar el último grupo
-      boletaPayload.detalle.push({
-        Desde: grupoInicio.fecha,
-        Hasta: grupoFin.fecha,
-        Dias: totalDiasGrupo,
-        Tipo: request.tipo === 'PROGRAMADA' ? 'Vacación' : request.tipo || 'Vacación',
-        Turno: turnoGrupo !== 'COMPLETO' ? turnoGrupo : undefined
-      })
     }
 
     console.log('📄 Payload de boleta completo:', JSON.stringify(boletaPayload, null, 2))
+    console.log('📄 Detalle del payload:', boletaPayload.detalle)
+    const totalDiasPayload = boletaPayload.detalle.reduce((sum: number, item: any) => sum + parseFloat(item.Dias || 0), 0)
+    console.log('📄 Total días en payload:', totalDiasPayload)
 
     // Generar PDF usando GET (la API solo acepta GET)
     console.log('📄 Enviando request a /api/vacacion...')
@@ -1282,12 +1492,19 @@ const downloadBoleta = async (request: VacationRequest | any) => {
     params.append('Observaciones', String(boletaPayload.Observaciones))
     
     // Agregar cada elemento del detalle como parámetros separados
-    // Formato: detalle[0][Desde]=...&detalle[0][Hasta]=...&detalle[0][Dias]=...&detalle[0][Tipo]=...
+    // Formato: detalle[0][Desde]=...&detalle[0][Hasta]=...&detalle[0][Dias]=...&detalle[0][Tipo]=...&detalle[0][Turno]=...
     boletaPayload.detalle.forEach((item: any, index: number) => {
       params.append(`detalle[${index}][Desde]`, String(item.Desde))
       params.append(`detalle[${index}][Hasta]`, String(item.Hasta))
       params.append(`detalle[${index}][Dias]`, String(item.Dias))
       params.append(`detalle[${index}][Tipo]`, String(item.Tipo))
+      // ✅ Siempre enviar Turno, incluso si es null o undefined (el backend lo manejará)
+      if (item.Turno !== null && item.Turno !== undefined) {
+        params.append(`detalle[${index}][Turno]`, String(item.Turno))
+      } else {
+        // Si no hay turno, enviar 'COMPLETO' explícitamente
+        params.append(`detalle[${index}][Turno]`, 'COMPLETO')
+      }
     })
     
     const apiUrl = `http://190.171.225.68/api/vacacion?${params.toString()}`

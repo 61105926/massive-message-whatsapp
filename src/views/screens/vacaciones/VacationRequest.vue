@@ -1229,6 +1229,21 @@ const handleRequestSubmit = async (request: any) => {
       return
     }
 
+    // Calcular días totales considerando medio día = 0.5
+    const calcularDiasTotales = (selections: any[]): number => {
+      return selections.reduce((total, selection) => {
+        if (selection.type === 'full' || !selection.type) {
+          return total + 1
+        }
+        if (selection.type === 'morning' || selection.type === 'afternoon') {
+          return total + 0.5
+        }
+        return total + 1
+      }, 0)
+    }
+    
+    const diasTotales = calcularDiasTotales(daySelections.value)
+    
     // Si NO es programadas, enviar todo junto (comportamiento anterior)
     const payload = {
       emp_id: employeeData.value?.empID || currentUser.value.id,
@@ -1236,6 +1251,7 @@ const handleRequestSubmit = async (request: any) => {
       comentario: request.reason || 'Solicitud de vacaciones',
       manager_id: employeeData.value?.manager?.id_manager,
       antiguedad: employeeData.value?.vacation?.years || '1',
+      total_dias: diasTotales.toString(), // Agregar total_dias calculado
 
       // Detalle de días - usar daySelections para enviar cada fecha con su turno
       detalle: daySelections.value.map((selection: any) => {

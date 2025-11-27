@@ -156,6 +156,14 @@
                   </span>
                   <span v-else>N/A</span>
                 </p>
+                <!-- Mostrar resumen de turnos si hay medio día -->
+                <p v-if="request.fechas && request.fechas.length > 0" class="text-xs text-gray-500 mt-1">
+                  <span v-for="(fecha, idx) in getSortedFechas(request.fechas)" :key="idx">
+                    <span v-if="fecha.turno === 'MAÑANA' || fecha.turno === 'TARDE'">
+                      {{ formatDate(fecha.fecha) }} ({{ fecha.turno === 'MAÑANA' ? 'Mañana' : 'Tarde' }})<span v-if="idx < request.fechas.length - 1">, </span>
+                    </span>
+                  </span>
+                </p>
               </div>
               <div>
                 <p class="text-muted-foreground">Días solicitados</p>
@@ -190,9 +198,20 @@
                 <span
                   v-for="(fecha, idx) in request.fechas"
                   :key="idx"
-                  class="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700"
+                  class="inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-medium"
+                  :class="{
+                    'bg-yellow-50 text-yellow-700': fecha.turno === 'TARDE',
+                    'bg-blue-50 text-blue-700': fecha.turno === 'MAÑANA',
+                    'bg-green-50 text-green-700': !fecha.turno || fecha.turno === 'COMPLETO'
+                  }"
                 >
-                  {{ formatDate(fecha.fecha) }} - {{ fecha.turno }} ({{ (fecha.turno === 'MAÑANA' || fecha.turno === 'TARDE') ? '0.5' : '1' }} día)
+                  {{ formatDate(fecha.fecha) }} 
+                  <span class="ml-1 font-semibold">
+                    {{ fecha.turno === 'MAÑANA' ? '(Mañana)' : fecha.turno === 'TARDE' ? '(Tarde)' : '(Completo)' }}
+                  </span>
+                  <span class="ml-1 text-gray-600">
+                    ({{ (fecha.turno === 'MAÑANA' || fecha.turno === 'TARDE') ? '0.5' : '1' }} día)
+                  </span>
                 </span>
               </div>
             </div>
@@ -572,19 +591,19 @@
             </label>
             <div class="rounded-md border border-input bg-background p-3 max-h-64 overflow-y-auto space-y-2">
               <div
-                v-for="person in availableReplacements"
-                :key="person.id"
+                v-for="(person, index) in availableReplacements"
+                :key="`replacement-${person.id || index}-${person.name}`"
                 class="flex items-center space-x-2 hover:bg-accent p-2 rounded"
               >
                 <input
                   type="checkbox"
-                  :id="`replacement-boss-${person.id}`"
-                  :value="person.id"
+                  :id="`replacement-boss-${person.id || index}-${selectedRequestId || 'default'}`"
+                  :value="String(person.id || index)"
                   v-model="selectedReplacements"
                   class="rounded border-gray-300 text-primary focus:ring-primary"
                 />
                 <label
-                  :for="`replacement-boss-${person.id}`"
+                  :for="`replacement-boss-${person.id || index}-${selectedRequestId || 'default'}`"
                   class="flex-1 text-sm cursor-pointer"
                 >
                   {{ person.name }} - {{ person.department }}
@@ -865,7 +884,8 @@ const loadAvailableReplacements = async (empId: string) => {
     if (allReplacements.length === 0 && selectedRequest.value) {
       try {
         const requestId = String(selectedRequest.value.id_solicitud).split('_grupo_')[0]
-        const savedResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?id_solicitud=${requestId}`)
+        const empIdToUse = selectedRequest.value.emp_id || empId
+        const savedResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?id_solicitud=${requestId}&emp_id=${empIdToUse}`)
         if (savedResponse.ok) {
           const savedData = await savedResponse.json()
           if (savedData.success && Array.isArray(savedData.data) && savedData.data.length > 0) {
@@ -885,12 +905,28 @@ const loadAvailableReplacements = async (empId: string) => {
       }
     }
     
-    availableReplacements.value = allReplacements
+    // Eliminar duplicados por ID para evitar problemas con checkboxes
+    const uniqueReplacements = new Map<string, any>()
+    allReplacements.forEach((rep: any) => {
+      const repId = String(rep.id || rep.EMP_ID || rep.emp_id || '')
+      if (repId && !uniqueReplacements.has(repId)) {
+        uniqueReplacements.set(repId, {
+          id: repId,
+          name: rep.name || rep.NOMBRE || rep.nombre || 'N/A',
+          department: rep.department || rep.cargo || rep.CARGO || 'N/A',
+          phone: rep.phone || rep.TELEFONO || '',
+          isRecommended: rep.isRecommended || false
+        })
+      }
+    })
+    
+    availableReplacements.value = Array.from(uniqueReplacements.values())
     
     if (availableReplacements.value.length === 0) {
       console.warn('⚠️ No se encontraron reemplazantes disponibles desde ninguna fuente')
     } else {
-      console.log('✅ Total de reemplazantes disponibles:', availableReplacements.value.length)
+      console.log('✅ Total de reemplazantes disponibles (sin duplicados):', availableReplacements.value.length)
+      console.log('📋 IDs de reemplazantes:', availableReplacements.value.map(r => r.id))
     }
   } catch (error) {
     console.error('❌ Error al cargar reemplazantes:', error)
@@ -1410,7 +1446,8 @@ const handleApprove = async (requestId: string) => {
   // Si es una solicitud programada, mostrar modal de reemplazantes
   if (request.tipo === 'PROGRAMADA') {
     showReplacementModal.value = true
-    selectedReplacements.value = []
+    selectedReplacements.value = [] // ✅ Limpiar selección antes de abrir modal
+    availableReplacements.value = [] // ✅ Limpiar lista de reemplazantes antes de cargar
     // Cargar los reemplazantes disponibles desde la API
     await loadAvailableReplacements(request.emp_id)
   } else {
@@ -1700,8 +1737,11 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                       if (!hayPreaprobadasPendientes && solicitudesDelGrupo.length > 0) {
                         console.log('✅ Todas las fechas del grupo están aprobadas. Enviando notificación.')
                         
-                        // Usar las fechas del grupo para la notificación
-                        const todasFechas = fechasGrupo.map((fecha: string) => `${fecha} (COMPLETO)`)
+                        // Usar las fechas del grupo con sus turnos reales para la notificación
+                        const todasFechas = solicitudesDelGrupo
+                          .flatMap((req: any) => req.fechas || [])
+                          .filter((f: any) => fechasGrupo.includes(f.fecha))
+                          .map((f: any) => `${f.fecha} (${f.turno || 'COMPLETO'})`)
                         
                         // Obtener reemplazantes
                         let reemplazantesCompletos = []
@@ -1714,7 +1754,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                         } else if (reemplazantes && reemplazantes.length > 0) {
                           // Usar los reemplazantes pasados como parámetro
                           try {
-                            const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${idBaseParaComparar}`)
+                            const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${idBaseParaComparar}&emp_id=${requestData.emp_id}`)
                             if (reemplazanteResponse.ok) {
                               const reemplazanteData = await reemplazanteResponse.json()
                               if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
@@ -1797,7 +1837,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                       }))
                     } else {
                       try {
-                        const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}`)
+                        const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}&emp_id=${requestData.emp_id}`)
                         if (reemplazanteResponse.ok) {
                           const reemplazanteData = await reemplazanteResponse.json()
                           if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
@@ -1820,10 +1860,18 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                       }
                     }
 
-                    // Obtener todas las fechas aprobadas (resumen completo)
+                    // Obtener todas las fechas aprobadas (resumen completo) con sus turnos reales
                     const todasFechas = solicitudesEmpleado
                       .filter((req: any) => req.estado === 'APROBADO')
-                      .flatMap((req: any) => req.fechas.map((f: any) => `${f.fecha} (${f.turno})`))
+                      .flatMap((req: any) => {
+                        // Si tiene fechas con turno, usarlas; si no, usar fechas_agrupadas como COMPLETO
+                        if (req.fechas && Array.isArray(req.fechas) && req.fechas.length > 0) {
+                          return req.fechas.map((f: any) => `${f.fecha} (${f.turno || 'COMPLETO'})`)
+                        } else if ((req as any).fechas_agrupadas) {
+                          return (req as any).fechas_agrupadas.map((fecha: string) => `${fecha} (COMPLETO)`)
+                        }
+                        return []
+                      })
 
                     // Extraer el id_solicitud base (sin _grupo_) para la notificación
                     const idSolicitudBase = String(requestId).split('_grupo_')[0]
@@ -1836,7 +1884,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                       estado: 'APROBADO',
                       comentario: comentario || 'Todas tus vacaciones preaprobadas han sido aprobadas',
                       tipo: requestData.tipo,
-                      dias_solicitados: todasFechas.length,
+                      dias_solicitados: calcularDiasDeFechas(todasFechas),
                       fechas: todasFechas,
                       reemplazantes: reemplazantesCompletos.map((rep: any) => ({
                         emp_id: rep.emp_id,
@@ -1951,7 +1999,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
               // TERCERO: Si aún no hay reemplazantes, intentar desde la API
               if (reemplazantesCompletos.length === 0) {
                 try {
-                  const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}`)
+                  const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}&emp_id=${requestData.emp_id}`)
                   if (reemplazanteResponse.ok) {
                     const reemplazanteData = await reemplazanteResponse.json()
                     if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
@@ -1974,11 +2022,19 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
               // Si es un grupo, obtener todas las fechas del grupo
               let fechasAprobadas: string[] = []
               if (esGrupo && (requestData as any).fechas_agrupadas) {
-                // Si es grupo, usar fechas_agrupadas
-                fechasAprobadas = (requestData as any).fechas_agrupadas.map((fecha: string) => `${fecha} (COMPLETO)`)
+                // Si es grupo, usar fechas con turno si están disponibles
+                if (requestData.fechas && Array.isArray(requestData.fechas) && requestData.fechas.length > 0) {
+                  // Usar las fechas con turno real
+                  fechasAprobadas = requestData.fechas
+                    .filter((f: any) => (requestData as any).fechas_agrupadas.includes(f.fecha))
+                    .map((f: any) => `${f.fecha} (${f.turno || 'COMPLETO'})`)
+                } else {
+                  // Fallback: usar fechas_agrupadas como COMPLETO
+                  fechasAprobadas = (requestData as any).fechas_agrupadas.map((fecha: string) => `${fecha} (COMPLETO)`)
+                }
               } else {
                 // Si no es grupo, usar las fechas normales
-                fechasAprobadas = requestData.fechas.map((f: any) => `${f.fecha} (${f.turno})`)
+                fechasAprobadas = requestData.fechas.map((f: any) => `${f.fecha} (${f.turno || 'COMPLETO'})`)
               }
 
               // Extraer el id_solicitud base (sin _grupo_) para la notificación
@@ -2164,11 +2220,14 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
         comentario: comentario || (estado === 'APROBADO' ? 'Aprobado por el jefe' : '')
       }
       
+      // ✅ Usar REEMPLAZOS_EMPIDS en lugar de reemplazantes
       if (reemplazantes && reemplazantes.length > 0) {
-        payload.reemplazantes = reemplazantes
+        payload.REEMPLAZOS_EMPIDS = reemplazantes
+        console.log(`📤 Agregando REEMPLAZOS_EMPIDS para solicitud ${index + 1}:`, reemplazantes)
       }
       
       console.log(`📤 Preparando solicitud ${index + 1}/${solicitudesAActualizar.length} para id_solicitud: ${req.id_solicitud}`)
+      console.log(`📦 Payload completo:`, JSON.stringify(payload, null, 2))
       
       return fetch('http://190.171.225.68/api/vacaciones/state', {
         method: 'POST',
@@ -2390,9 +2449,13 @@ const calcularDiasTotales = (request: any): number => {
     return calcularDiasDeFechas(request.fechas)
   }
   
-  // Si tiene fechas_agrupadas, asumir que son días completos (pero esto podría ser incorrecto)
-  // Por ahora, contamos las fechas como días completos
+  // Si tiene fechas_agrupadas, intentar calcular desde fechas con turno si están disponibles
   if ((request as any).fechas_agrupadas && Array.isArray((request as any).fechas_agrupadas)) {
+    // Si tiene fechas con turno, calcular desde ahí
+    if (request.fechas && Array.isArray(request.fechas) && request.fechas.length > 0) {
+      return calcularDiasDeFechas(request.fechas)
+    }
+    // Fallback: contar fechas_agrupadas como días completos (no ideal pero mejor que nada)
     return (request as any).fechas_agrupadas.length
   }
   
