@@ -123,7 +123,7 @@
             </div>
             <div class="flex items-center gap-1">
               <div class="w-4 h-4 rounded bg-gradient-to-br from-yellow-400 to-amber-500 border-2 border-yellow-400/60"></div>
-              <span class="text-gray-700">Revisado</span>
+              <span class="text-gray-700">Pre-Aprobado</span>
             </div>
             <div class="flex items-center gap-1">
               <div class="w-4 h-4 rounded bg-gradient-to-br from-green-500 to-emerald-600 ring-2 ring-green-300/50"></div>
@@ -211,8 +211,8 @@
                   <span class="inline-flex items-center rounded-full px-1 py-0.5 font-bold text-[9px]" :class="(employee.vacationBalance ?? 0) > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">
                     {{ (employee.vacationBalance ?? 0) > 0 ? (employee.vacationBalance ?? 0) + 'd' : '0d' }}
                   </span>
-                  <span v-if="employee.usagePercentage" class="inline-flex items-center rounded-full px-1 py-0.5 font-bold text-[9px]" :class="employee.usagePercentage >= 80 ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'">
-                    {{ employee.usagePercentage }}%
+                  <span v-if="employee.rejectedCount !== undefined && employee.rejectedCount > 0" class="inline-flex items-center rounded-full px-1 py-0.5 font-bold text-[9px] bg-red-100 text-red-700" title="Solicitudes rechazadas">
+                    {{ employee.rejectedCount }} {{ employee.rejectedCount === 1 ? 'rechazo' : 'rechazos' }}
                   </span>
                   <span v-if="employee.daysRemaining !== undefined" class="inline-flex items-center text-[9px] text-gray-500 font-medium">
                     {{ employee.daysRemaining > 0 ? `${employee.daysRemaining}d rest.` : 'Sin días' }}
@@ -749,6 +749,7 @@ interface Employee {
   usagePercentage?: number
   daysRemaining?: number
   totalDays?: number
+  rejectedCount?: number
 }
 
 interface Vacation {
@@ -1515,7 +1516,7 @@ const preapproveVacationFromModal = async (vacation: Vacation) => {
             comentario: `Solicitud revisada y preaprobada para ${dateStr}`,
             tipo: 'PROGRAMADA',
             dias_solicitados: 1,
-            fechas: [dateStr]
+            fechas: [`${dateStr} (COMPLETO)`]
           })
         })
       } catch (notifError) {
@@ -2359,7 +2360,8 @@ const loadData = async () => {
                         vacationBalance: available,
                         totalDays: total, // Usar el total calculado o corregido
                         usagePercentage: total > 0 ? Math.round((taken / total) * 100) : 0,
-                        daysRemaining: available
+                        daysRemaining: available,
+                        rejectedCount: 0 // Se actualizará después
                       })
                       continue // Ya se agregó al map, continuar con el siguiente
                     }
@@ -2376,8 +2378,19 @@ const loadData = async () => {
                 vacationBalance: 0,
                 totalDays: 0,
                 usagePercentage: 0,
-                daysRemaining: 0
+                daysRemaining: 0,
+                rejectedCount: 0 // Se actualizará después
               })
+            }
+          }
+          
+          // Contar solicitudes rechazadas por empleado
+          for (const solicitud of data.data) {
+            if (solicitud.estado === 'RECHAZADO' || solicitud.estado === 'REJECTED') {
+              const empleado = uniqueEmployees.get(solicitud.emp_id)
+              if (empleado) {
+                empleado.rejectedCount = (empleado.rejectedCount || 0) + 1
+              }
             }
           }
           

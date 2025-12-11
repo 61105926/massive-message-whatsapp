@@ -186,7 +186,7 @@
                   request.estado === 'APROBADO' ? 'bg-green-100 text-green-800' : '',
                   request.estado === 'RECHAZADO' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
                 ]">
-                  {{ request.estado === 'PREAPROBADO' || request.estado === 'PRE-APROBADO' ? 'REVISADO' : request.estado }}
+                  {{ request.estado === 'PREAPROBADO' || request.estado === 'PRE-APROBADO' ? 'PRE-APROBADO' : request.estado }}
                 </span>
               </div>
             </div>
@@ -261,7 +261,7 @@
                     <span v-else-if="request.estado === 'PREAPROBADO'">2</span>
                     <span v-else>2</span>
                   </div>
-                  <span class="text-xs text-muted-foreground">Revisado</span>
+                  <span class="text-xs text-muted-foreground">PRE-APROBADO</span>
                 </div>
                 
                 <!-- Línea conectora -->
@@ -1647,7 +1647,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
     // Solo enviar notificaciones si:
     // - Es APROBADO y todas las fechas están aprobadas (no quedan pendientes)
     // - Es RECHAZADO (siempre notificar)
-    // - NO enviar si es PREAPROBADO (se enviará cuando todas estén aprobadas)
+    // - Es PREAPROBADO (notificar al empleado que su solicitud fue revisada)
 
     console.log('🔔🔔🔔 VERIFICANDO SI ENVIAR NOTIFICACIÓN (ANTES DE ACTUALIZAR BD) 🔔🔔🔔', {
       tiene_requestData: !!requestData,
@@ -1674,7 +1674,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
     // Variable para almacenar la promesa de notificación
     let notificacionPromise: Promise<void> | null = null
 
-    if (requestData && (estado === 'APROBADO' || estado === 'RECHAZADO')) {
+    if (requestData && (estado === 'APROBADO' || estado === 'RECHAZADO' || estado === 'PREAPROBADO')) {
       // Si es APROBADO, enviar notificación
       if (estado === 'APROBADO') {
         notificacionPromise = (async () => {
@@ -1716,102 +1716,251 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                     const request = pendingRequests.value.find(r => String(r.id_solicitud) === String(requestId))
                     if (request && (request as any).fechas_agrupadas) {
                       const fechasGrupo = (request as any).fechas_agrupadas
-                      console.log('🔍 Fechas del grupo:', fechasGrupo)
+                      console.log('🔍 Fechas del grupo que se están aprobando:', fechasGrupo)
                       
-                      // Verificar que todas las solicitudes con estas fechas estén aprobadas
-                      const solicitudesDelGrupo = solicitudesEmpleado.filter((req: any) => 
-                        req.fechas.some((f: any) => fechasGrupo.includes(f.fecha))
+                      // Obtener todas las solicitudes preaprobadas del empleado con el mismo tipo y fecha_solicitud
+                      const solicitudesPreaprobadas = solicitudesEmpleado.filter((req: any) => 
+                        (req.estado === 'PREAPROBADO' || req.estado === 'PRE-APROBADO') &&
+                        req.tipo === requestData.tipo
                       )
                       
-                      console.log('🔍 Solicitudes del grupo encontradas:', solicitudesDelGrupo.length)
-                      console.log('🔍 Estados de las solicitudes del grupo:', solicitudesDelGrupo.map((r: any) => ({ id: r.id_solicitud, estado: r.estado })))
+                      // Obtener todas las fechas únicas de las solicitudes preaprobadas
+                      const todasFechasPreaprobadas = new Set<string>()
+                      solicitudesPreaprobadas.forEach((req: any) => {
+                        if (req.fechas && Array.isArray(req.fechas)) {
+                          req.fechas.forEach((f: any) => {
+                            if (typeof f === 'string') {
+                              todasFechasPreaprobadas.add(f)
+                            } else if (f.fecha) {
+                              todasFechasPreaprobadas.add(f.fecha)
+                            }
+                          })
+                        }
+                      })
                       
-                      // Verificar si hay alguna preaprobada que aún no esté aprobada en el grupo
-                      const hayPreaprobadasPendientes = solicitudesDelGrupo.some((req: any) => 
-                        req.estado === 'PREAPROBADO' || req.estado === 'PRE-APROBADO'
+                      console.log('🔍 Todas las fechas preaprobadas del empleado:', Array.from(todasFechasPreaprobadas))
+                      console.log('🔍 Fechas del grupo que se están aprobando:', fechasGrupo)
+                      
+                      // Verificar si el grupo que se está aprobando contiene TODAS las fechas preaprobadas
+                      // Esto significa que cuando se apruebe este grupo, todas las fechas preaprobadas quedarán aprobadas
+                      const todasFechasPreaprobadasEnGrupo = Array.from(todasFechasPreaprobadas).every((fecha: string) => 
+                        fechasGrupo.includes(fecha)
                       )
                       
-                      console.log('🔍 Hay preaprobadas pendientes en el grupo:', hayPreaprobadasPendientes)
+                      // También verificar que todas las fechas del grupo estén preaprobadas (para evitar aprobar fechas no preaprobadas)
+                      const todasFechasGrupoEnPreaprobadas = fechasGrupo.every((fecha: string) => 
+                        todasFechasPreaprobadas.has(fecha)
+                      )
                       
-                      // Si no hay preaprobadas pendientes en el grupo, todas están aprobadas
-                      if (!hayPreaprobadasPendientes && solicitudesDelGrupo.length > 0) {
-                        console.log('✅ Todas las fechas del grupo están aprobadas. Enviando notificación.')
-                        
+                      console.log('🔍 Análisis del grupo:', {
+                        todasFechasPreaprobadasEnGrupo,
+                        todasFechasGrupoEnPreaprobadas,
+                        fechasGrupo_count: fechasGrupo.length,
+                        todasFechasPreaprobadas_count: todasFechasPreaprobadas.size
+                      })
+                      
+                      // SIMPLIFICADO: Siempre enviar notificación cuando se aprueba un grupo
+                      // El grupo que se está aprobando debe enviar su notificación, sin importar si hay otras fechas preaprobadas
+                      console.log('✅✅✅ APROBANDO GRUPO - ENVIANDO NOTIFICACIÓN INMEDIATAMENTE ✅✅✅', {
+                        fechasGrupo,
+                        todasFechasPreaprobadas: Array.from(todasFechasPreaprobadas),
+                        requestId,
+                        emp_id: requestData.emp_id
+                      })
+                      
+                      try {
                         // Usar las fechas del grupo con sus turnos reales para la notificación
-                        const todasFechas = solicitudesDelGrupo
-                          .flatMap((req: any) => req.fechas || [])
-                          .filter((f: any) => fechasGrupo.includes(f.fecha))
-                          .map((f: any) => `${f.fecha} (${f.turno || 'COMPLETO'})`)
-                        
-                        // Obtener reemplazantes
-                        let reemplazantesCompletos = []
-                        if (requestData.reemplazante && requestData.reemplazante.length > 0) {
-                          reemplazantesCompletos = requestData.reemplazante.map((rep: any) => ({
-                            emp_id: rep.emp_id,
-                            nombre: rep.nombre,
-                            telefono: rep.telefono || '77711124'
-                          }))
-                        } else if (reemplazantes && reemplazantes.length > 0) {
-                          // Usar los reemplazantes pasados como parámetro
-                          try {
-                            const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${idBaseParaComparar}&emp_id=${requestData.emp_id}`)
-                            if (reemplazanteResponse.ok) {
-                              const reemplazanteData = await reemplazanteResponse.json()
-                              if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
-                                reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
-                                  emp_id: rep.EMP_ID,
-                                  nombre: rep.NOMBRE,
-                                  telefono: rep.TELEFONO
-                                }))
+                        // Obtener las fechas con turno desde las solicitudes preaprobadas que coinciden con el grupo
+                        let todasFechas: string[] = []
+                      
+                      // Intentar obtener las fechas con turno desde las solicitudes preaprobadas
+                      solicitudesPreaprobadas.forEach((req: any) => {
+                        if (req.fechas && Array.isArray(req.fechas)) {
+                          req.fechas.forEach((f: any) => {
+                            const fechaStr = typeof f === 'string' ? f : (f.fecha || f)
+                            if (fechasGrupo.includes(fechaStr)) {
+                              if (typeof f === 'string') {
+                                todasFechas.push(`${f} (COMPLETO)`)
+                              } else {
+                                const fecha = f.fecha || f
+                                const turno = f.turno || f.tipo_dia || 'COMPLETO'
+                                todasFechas.push(`${fecha} (${turno})`)
                               }
                             }
-                          } catch (apiError) {
-                            console.warn('⚠️ Error al obtener reemplazantes:', apiError)
+                          })
+                        }
+                      })
+                      
+                      // Si no se encontraron fechas con turno, usar las fechas del grupo como COMPLETO
+                      if (todasFechas.length === 0) {
+                        todasFechas = fechasGrupo.map((fecha: string) => `${fecha} (COMPLETO)`)
+                      }
+                      
+                      // Eliminar duplicados
+                      todasFechas = [...new Set(todasFechas)]
+                      
+                      console.log('📅 Fechas preparadas para notificación:', todasFechas)
+                      
+                      // Obtener reemplazantes
+                      let reemplazantesCompletos: any[] = []
+                      // PRIMERO: Intentar usar los reemplazantes pasados como parámetro
+                      if (reemplazantes && reemplazantes.length > 0) {
+                        console.log('📋 [GRUPO] Usando reemplazantes del parámetro:', reemplazantes)
+                        try {
+                          const reemplazantesInfo = await Promise.all(
+                            reemplazantes.map(async (repId: string) => {
+                                // Buscar en availableReplacements primero
+                                const repEnCache = availableReplacements.value.find((r: any) => String(r.id) === String(repId))
+                                if (repEnCache && repEnCache.phone) {
+                                  return {
+                                    emp_id: repEnCache.id,
+                                    nombre: repEnCache.name,
+                                    telefono: repEnCache.phone
+                                  }
+                                }
+                                // Si no está en cache, obtener desde la API
+                                try {
+                                  const empResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${repId}`)
+                                  if (empResponse.ok) {
+                                    const empData = await empResponse.json()
+                                    let empleadoInfo: any = null
+                                    if (Array.isArray(empData) && empData.length > 0) {
+                                      empleadoInfo = empData[0]
+                                    } else if (empData.status === 'success' && Array.isArray(empData.data) && empData.data.length > 0) {
+                                      empleadoInfo = empData.data[0]
+                                    }
+                                    if (empleadoInfo) {
+                                      return {
+                                        emp_id: repId,
+                                        nombre: empleadoInfo.fullName || empleadoInfo.nombre || `Empleado ${repId}`,
+                                        telefono: empleadoInfo.phone || empleadoInfo.TELEFONO || empleadoInfo.telefono || '77711124'
+                                      }
+                                    }
+                                  }
+                                } catch (err) {
+                                  console.warn(`⚠️ Error al obtener info del reemplazante ${repId}:`, err)
+                                }
+                                // Fallback
+                                if (repEnCache) {
+                                  return {
+                                    emp_id: repEnCache.id,
+                                    nombre: repEnCache.name,
+                                    telefono: repEnCache.phone || '77711124'
+                                  }
+                                }
+                                return {
+                                  emp_id: repId,
+                                  nombre: `Empleado ${repId}`,
+                                  telefono: '77711124'
+                                }
+                              })
+                            )
+                          reemplazantesCompletos = reemplazantesInfo.filter(rep => rep !== null && rep !== undefined)
+                        } catch (error) {
+                          console.error('❌ Error al obtener datos de reemplazantes:', error)
+                        }
+                      }
+                      // SEGUNDO: Si no hay reemplazantes del parámetro, intentar desde requestData
+                      if (reemplazantesCompletos.length === 0 && requestData.reemplazante && requestData.reemplazante.length > 0) {
+                        console.log('📋 [GRUPO] Usando reemplazantes de requestData')
+                        reemplazantesCompletos = requestData.reemplazante.map((rep: any) => ({
+                          emp_id: rep.emp_id,
+                          nombre: rep.nombre,
+                          telefono: rep.telefono || '77711124'
+                        }))
+                      }
+                      // TERCERO: Si aún no hay reemplazantes, intentar desde la API
+                      if (reemplazantesCompletos.length === 0) {
+                        try {
+                          const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${idBaseParaComparar}&emp_id=${requestData.emp_id}`)
+                          if (reemplazanteResponse.ok) {
+                            const reemplazanteData = await reemplazanteResponse.json()
+                            if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
+                              console.log('📋 [GRUPO] Usando reemplazantes de la API')
+                              reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
+                                emp_id: rep.EMP_ID,
+                                nombre: rep.NOMBRE,
+                                telefono: rep.TELEFONO || '77711124'
+                              }))
+                            }
                           }
+                        } catch (apiError) {
+                          console.warn('⚠️ Error al obtener reemplazantes desde API:', apiError)
                         }
-                        
-                        // Preparar payload para notificación
-                        const notificationPayload = {
-                          id_solicitud: idBaseParaComparar,
-                          emp_id: requestData.emp_id,
-                          emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
-                          estado: 'APROBADO',
-                          comentario: comentario || 'Todas tus vacaciones preaprobadas han sido aprobadas',
-                          tipo: requestData.tipo,
-                          dias_solicitados: calcularDiasDeFechas(todasFechas),
-                          fechas: todasFechas,
-                          reemplazantes: reemplazantesCompletos.map((rep: any) => ({
-                            emp_id: rep.emp_id,
-                            nombre: rep.nombre,
-                            telefono: rep.telefono
-                          }))
-                        }
-                        
-                        // Usar variable de entorno o localhost para desarrollo
-                        const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
-                        console.log('📤 Enviando notificación de grupo aprobado:', notificationPayload)
-                        
-                        await fetch(`${BOT_URL}/api/vacation-notification`, {
+                      }
+                      console.log('✅ [GRUPO] Reemplazantes finales para notificación:', reemplazantesCompletos.length, reemplazantesCompletos)
+                      
+                      // Preparar payload para notificación
+                      const notificationPayload = {
+                        id_solicitud: String(idBaseParaComparar),
+                        emp_id: String(requestData.emp_id),
+                        emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
+                        estado: 'APROBADO',
+                        comentario: comentario || 'Todas tus vacaciones preaprobadas han sido aprobadas',
+                        tipo: requestData.tipo || 'PROGRAMADA',
+                        dias_solicitados: calcularDiasDeFechas(todasFechas),
+                        fechas: todasFechas,
+                        reemplazantes: reemplazantesCompletos.length > 0 ? reemplazantesCompletos.map((rep: any) => ({
+                          emp_id: String(rep.emp_id),
+                          nombre: rep.nombre || `Empleado ${rep.emp_id}`,
+                          telefono: rep.telefono || '77711124'
+                        })) : []
+                      }
+                      
+                      // Validar payload
+                      if (!notificationPayload.id_solicitud || !notificationPayload.emp_id) {
+                        console.error('❌ Payload de notificación inválido (grupo):', notificationPayload)
+                        throw new Error('Payload de notificación inválido: faltan campos requeridos')
+                      }
+                      
+                      // Usar variable de entorno o localhost para desarrollo
+                      const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
+                      console.log('📤 [GRUPO] Enviando notificación de grupo aprobado:', {
+                        url: `${BOT_URL}/api/vacation-notification`,
+                        payload: JSON.stringify(notificationPayload, null, 2)
+                      })
+                      
+                      try {
+                        const notifResponse = await fetch(`${BOT_URL}/api/vacation-notification`, {
                           method: 'POST',
                           headers: {
                             'Content-Type': 'application/json',
                           },
                           body: JSON.stringify(notificationPayload)
-                        }).then(res => {
-                          if (res.ok) {
-                            console.log('✅✅✅ NOTIFICACIÓN DE GRUPO ENVIADA EXITOSAMENTE ✅✅✅')
-                          } else {
-                            console.warn('⚠️ Error al enviar notificación:', res.status, res.statusText)
-                          }
-                        }).catch(err => {
-                          console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
                         })
                         
+                        if (notifResponse.ok) {
+                          const result = await notifResponse.json()
+                          console.log('✅✅✅ NOTIFICACIÓN DE GRUPO ENVIADA EXITOSAMENTE ✅✅✅', result)
+                        } else {
+                          const errorText = await notifResponse.text()
+                          console.error('❌ Error al enviar notificación de grupo:', {
+                            status: notifResponse.status,
+                            statusText: notifResponse.statusText,
+                            error: errorText
+                          })
+                          throw new Error(`Error ${notifResponse.status}: ${errorText}`)
+                        }
+                      } catch (err: any) {
+                        console.error('❌❌❌ ERROR AL ENVIAR NOTIFICACIÓN DE GRUPO ❌❌❌', {
+                          error: err.message,
+                          stack: err.stack,
+                          payload: JSON.stringify(notificationPayload, null, 2)
+                        })
+                        throw err
+                      }
+                      
                         // Salir de la función aquí ya que enviamos la notificación
                         return
-                      } else {
-                        console.log('⏸️ Aún hay fechas preaprobadas pendientes en el grupo. No se envía notificación todavía.')
-                        return
+                      } catch (grupoError: any) {
+                        console.error('❌❌❌ ERROR AL PROCESAR NOTIFICACIÓN DE GRUPO ❌❌❌', {
+                          error: grupoError.message,
+                          stack: grupoError.stack,
+                          requestId,
+                          emp_id: requestData?.emp_id
+                        })
+                        // Re-lanzar el error para que se capture arriba y se muestre al usuario
+                        throw grupoError
                       }
                     }
                   }
@@ -1827,38 +1976,90 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                     console.log('✅ Todas las fechas preaprobadas están ahora aprobadas. Enviando resumen.')
 
                     // Usar los datos de reemplazantes
-                    let reemplazantesCompletos = []
-                    
-                    if (requestData.reemplazante && requestData.reemplazante.length > 0) {
+                    let reemplazantesCompletos: any[] = []
+                    // PRIMERO: Intentar usar los reemplazantes pasados como parámetro
+                    if (reemplazantes && reemplazantes.length > 0) {
+                      console.log('📋 [PREAPROBADO] Usando reemplazantes del parámetro:', reemplazantes)
+                      try {
+                        const reemplazantesInfo = await Promise.all(
+                          reemplazantes.map(async (repId: string) => {
+                            const repEnCache = availableReplacements.value.find((r: any) => String(r.id) === String(repId))
+                            if (repEnCache && repEnCache.phone) {
+                              return {
+                                emp_id: repEnCache.id,
+                                nombre: repEnCache.name,
+                                telefono: repEnCache.phone
+                              }
+                            }
+                            try {
+                              const empResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${repId}`)
+                              if (empResponse.ok) {
+                                const empData = await empResponse.json()
+                                let empleadoInfo: any = null
+                                if (Array.isArray(empData) && empData.length > 0) {
+                                  empleadoInfo = empData[0]
+                                } else if (empData.status === 'success' && Array.isArray(empData.data) && empData.data.length > 0) {
+                                  empleadoInfo = empData.data[0]
+                                }
+                                if (empleadoInfo) {
+                                  return {
+                                    emp_id: repId,
+                                    nombre: empleadoInfo.fullName || empleadoInfo.nombre || `Empleado ${repId}`,
+                                    telefono: empleadoInfo.phone || empleadoInfo.TELEFONO || empleadoInfo.telefono || '77711124'
+                                  }
+                                }
+                              }
+                            } catch (err) {
+                              console.warn(`⚠️ Error al obtener info del reemplazante ${repId}:`, err)
+                            }
+                            if (repEnCache) {
+                              return {
+                                emp_id: repEnCache.id,
+                                nombre: repEnCache.name,
+                                telefono: repEnCache.phone || '77711124'
+                              }
+                            }
+                            return {
+                              emp_id: repId,
+                              nombre: `Empleado ${repId}`,
+                              telefono: '77711124'
+                            }
+                          })
+                        )
+                        reemplazantesCompletos = reemplazantesInfo.filter(rep => rep !== null && rep !== undefined)
+                      } catch (error) {
+                        console.error('❌ Error al obtener datos de reemplazantes:', error)
+                      }
+                    }
+                    // SEGUNDO: Si no hay reemplazantes del parámetro, intentar desde requestData
+                    if (reemplazantesCompletos.length === 0 && requestData.reemplazante && requestData.reemplazante.length > 0) {
+                      console.log('📋 [PREAPROBADO] Usando reemplazantes de requestData')
                       reemplazantesCompletos = requestData.reemplazante.map((rep: any) => ({
                         emp_id: rep.emp_id,
                         nombre: rep.nombre,
                         telefono: rep.telefono || '77711124'
                       }))
-                    } else {
+                    }
+                    // TERCERO: Si aún no hay reemplazantes, intentar desde la API
+                    if (reemplazantesCompletos.length === 0) {
                       try {
                         const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}&emp_id=${requestData.emp_id}`)
                         if (reemplazanteResponse.ok) {
                           const reemplazanteData = await reemplazanteResponse.json()
                           if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
+                            console.log('📋 [PREAPROBADO] Usando reemplazantes de la API')
                             reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
                               emp_id: rep.EMP_ID,
                               nombre: rep.NOMBRE,
-                              telefono: rep.TELEFONO
+                              telefono: rep.TELEFONO || '77711124'
                             }))
                           }
                         }
                       } catch (apiError) {
-                        console.warn('⚠️ Error al obtener reemplazantes:', apiError)
-                        reemplazantesCompletos = [
-                          {
-                            emp_id: '493',
-                            nombre: 'Charvel Santiago',
-                            telefono: '78003551'
-                          }
-                        ]
+                        console.warn('⚠️ Error al obtener reemplazantes desde API:', apiError)
                       }
                     }
+                    console.log('✅ [PREAPROBADO] Reemplazantes finales para notificación:', reemplazantesCompletos.length, reemplazantesCompletos)
 
                     // Obtener todas las fechas aprobadas (resumen completo) con sus turnos reales
                     const todasFechas = solicitudesEmpleado
@@ -1878,34 +2079,63 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
 
                     // Preparar payload para notificación de resumen
                     const notificationPayload = {
-                      id_solicitud: idSolicitudBase,
-                      emp_id: requestData.emp_id,
+                      id_solicitud: String(idSolicitudBase),
+                      emp_id: String(requestData.emp_id),
                       emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
                       estado: 'APROBADO',
                       comentario: comentario || 'Todas tus vacaciones preaprobadas han sido aprobadas',
-                      tipo: requestData.tipo,
+                      tipo: requestData.tipo || 'PROGRAMADA',
                       dias_solicitados: calcularDiasDeFechas(todasFechas),
                       fechas: todasFechas,
-                      reemplazantes: reemplazantesCompletos.map((rep: any) => ({
-                        emp_id: rep.emp_id,
-                        nombre: rep.nombre,
-                        telefono: rep.telefono
-                      }))
+                      reemplazantes: reemplazantesCompletos.length > 0 ? reemplazantesCompletos.map((rep: any) => ({
+                        emp_id: String(rep.emp_id),
+                        nombre: rep.nombre || `Empleado ${rep.emp_id}`,
+                        telefono: rep.telefono || '77711124'
+                      })) : []
+                    }
+                    
+                    // Validar payload
+                    if (!notificationPayload.id_solicitud || !notificationPayload.emp_id) {
+                      console.error('❌ Payload de notificación inválido (preaprobado):', notificationPayload)
+                      throw new Error('Payload de notificación inválido: faltan campos requeridos')
                     }
 
                     // Usar variable de entorno o localhost para desarrollo
                     const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
-                    await fetch(`${BOT_URL}/api/vacation-notification`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify(notificationPayload)
-                    }).catch(err => {
-                      console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
+                    console.log('📤 [PREAPROBADO] Enviando notificación de resumen:', {
+                      url: `${BOT_URL}/api/vacation-notification`,
+                      payload: JSON.stringify(notificationPayload, null, 2)
                     })
-
-                    console.log('✅ Resumen de aprobación enviado')
+                    
+                    try {
+                      const notifResponse = await fetch(`${BOT_URL}/api/vacation-notification`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(notificationPayload)
+                      })
+                      
+                      if (notifResponse.ok) {
+                        const result = await notifResponse.json()
+                        console.log('✅✅✅ RESUMEN DE APROBACIÓN ENVIADO EXITOSAMENTE ✅✅✅', result)
+                      } else {
+                        const errorText = await notifResponse.text()
+                        console.error('❌ Error al enviar resumen de aprobación:', {
+                          status: notifResponse.status,
+                          statusText: notifResponse.statusText,
+                          error: errorText
+                        })
+                        throw new Error(`Error ${notifResponse.status}: ${errorText}`)
+                      }
+                    } catch (err: any) {
+                      console.error('❌❌❌ ERROR AL ENVIAR RESUMEN DE APROBACIÓN ❌❌❌', {
+                        error: err.message,
+                        stack: err.stack,
+                        payload: JSON.stringify(notificationPayload, null, 2)
+                      })
+                      throw err
+                    }
                   } else {
                     console.log('⏸️ Aún hay fechas preaprobadas pendientes. No se envía notificación todavía.')
                   }
@@ -1943,15 +2173,17 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                     reemplazantes.map(async (repId: string) => {
                       // Buscar en availableReplacements primero
                       const repEnCache = availableReplacements.value.find((r: any) => String(r.id) === String(repId))
-                      if (repEnCache) {
+                      if (repEnCache && repEnCache.phone) {
+                        console.log(`✅ Reemplazante ${repId} encontrado en cache con teléfono:`, repEnCache.phone)
                         return {
                           emp_id: repEnCache.id,
                           nombre: repEnCache.name,
-                          telefono: repEnCache.phone || '77711124'
+                          telefono: repEnCache.phone
                         }
                       }
-                      // Si no está en cache, intentar obtener desde la API
+                      // Si no está en cache o no tiene teléfono, intentar obtener desde la API
                       try {
+                        console.log(`🔍 Obteniendo datos del reemplazante ${repId} desde API...`)
                         const empResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${repId}`)
                         if (empResponse.ok) {
                           const empData = await empResponse.json()
@@ -1962,17 +2194,28 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                             empleadoInfo = empData.data[0]
                           }
                           if (empleadoInfo) {
+                            const telefono = empleadoInfo.phone || empleadoInfo.TELEFONO || empleadoInfo.telefono || '77711124'
+                            console.log(`✅ Reemplazante ${repId} obtenido desde API - Teléfono:`, telefono)
                             return {
                               emp_id: repId,
-                              nombre: empleadoInfo.fullName || `Empleado ${repId}`,
-                              telefono: empleadoInfo.phone || '77711124'
+                              nombre: empleadoInfo.fullName || empleadoInfo.nombre || `Empleado ${repId}`,
+                              telefono: telefono
                             }
                           }
                         }
                       } catch (err) {
                         console.warn(`⚠️ Error al obtener info del reemplazante ${repId}:`, err)
                       }
-                      // Fallback: usar solo el ID
+                      // Fallback: usar datos del cache si están disponibles (aunque no tenga teléfono)
+                      if (repEnCache) {
+                        return {
+                          emp_id: repEnCache.id,
+                          nombre: repEnCache.name,
+                          telefono: repEnCache.phone || '77711124'
+                        }
+                      }
+                      // Último fallback: usar solo el ID
+                      console.warn(`⚠️ Reemplazante ${repId} sin datos completos, usando fallback`)
                       return {
                         emp_id: repId,
                         nombre: `Empleado ${repId}`,
@@ -1980,9 +2223,10 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                       }
                     })
                   )
-                  reemplazantesCompletos = reemplazantesInfo.filter(rep => rep !== null)
+                  reemplazantesCompletos = reemplazantesInfo.filter(rep => rep !== null && rep !== undefined)
+                  console.log('✅ Reemplazantes completos obtenidos:', reemplazantesCompletos.length, reemplazantesCompletos)
                 } catch (error) {
-                  console.warn('⚠️ Error al obtener datos de reemplazantes:', error)
+                  console.error('❌ Error al obtener datos de reemplazantes:', error)
                 }
               }
               
@@ -2046,15 +2290,21 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                 emp_id: requestData.emp_id,
                 emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
                 estado: 'APROBADO',
-                comentario: comentario,
-                tipo: requestData.tipo,
+                comentario: comentario || 'Aprobado por el jefe',
+                tipo: requestData.tipo || 'PROGRAMADA',
                 dias_solicitados: calcularDiasDeFechas(fechasAprobadas),
                 fechas: fechasAprobadas,
-                reemplazantes: reemplazantesCompletos.map((rep: any) => ({
-                  emp_id: rep.emp_id,
-                  nombre: rep.nombre,
-                  telefono: rep.telefono
-                }))
+                reemplazantes: reemplazantesCompletos.length > 0 ? reemplazantesCompletos.map((rep: any) => ({
+                  emp_id: String(rep.emp_id),
+                  nombre: rep.nombre || `Empleado ${rep.emp_id}`,
+                  telefono: rep.telefono || '77711124'
+                })) : []
+              }
+              
+              // Validar que el payload tenga los datos mínimos necesarios
+              if (!notificationPayload.id_solicitud || !notificationPayload.emp_id) {
+                console.error('❌ Payload de notificación inválido:', notificationPayload)
+                throw new Error('Payload de notificación inválido: faltan campos requeridos')
               }
 
               // Usar variable de entorno o localhost para desarrollo
@@ -2067,6 +2317,13 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
               // Enviar notificación de forma asíncrona pero esperar a que se complete
               // Usar Promise.race con timeout para evitar que se quede colgado
               try {
+                console.log('🚀🚀🚀 INICIANDO ENVÍO DE NOTIFICACIÓN 🚀🚀🚀', {
+                  url: `${BOT_URL}/api/vacation-notification`,
+                  payload_size: JSON.stringify(notificationPayload).length,
+                  tiene_fechas: notificationPayload.fechas.length,
+                  tiene_reemplazantes: notificationPayload.reemplazantes.length
+                })
+                
                 const notifPromise = fetch(`${BOT_URL}/api/vacation-notification`, {
                   method: 'POST',
                   headers: {
@@ -2075,45 +2332,58 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                   body: JSON.stringify(notificationPayload)
                 })
                 
-                // Timeout de 30 segundos para dar más tiempo a la notificación (WhatsApp puede tardar)
-                const timeoutPromise = new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error('Timeout al enviar notificación')), 30000)
+                // Timeout de 60 segundos para dar más tiempo a la notificación (WhatsApp puede tardar, especialmente con PDF)
+                const timeoutPromise = new Promise<Response>((_, reject) => 
+                  setTimeout(() => reject(new Error('Timeout al enviar notificación (60s)')), 60000)
                 )
                 
-                const notifResponse = await Promise.race([notifPromise, timeoutPromise]) as Response
+                const notifResponse = await Promise.race([notifPromise, timeoutPromise])
                 
-                console.log('📡 Respuesta del servidor:', {
+                console.log('📡 Respuesta del servidor recibida:', {
                   status: notifResponse.status,
                   statusText: notifResponse.statusText,
-                  ok: notifResponse.ok
+                  ok: notifResponse.ok,
+                  headers: Object.fromEntries(notifResponse.headers.entries())
                 })
                 
                 if (notifResponse.ok) {
                   const notifResult = await notifResponse.json()
-                  console.log('✅✅✅ NOTIFICACIÓN ENVIADA EXITOSAMENTE ✅✅✅', notifResult)
+                  console.log('✅✅✅ NOTIFICACIÓN ENVIADA EXITOSAMENTE ✅✅✅', {
+                    resultado: notifResult,
+                    notificaciones_enviadas: notifResult.notificaciones_enviadas,
+                    estado: notifResult.estado
+                  })
                   
                   // Log específico para PROGRAMADA
                   if (notificationPayload.tipo === 'PROGRAMADA') {
                     console.log('✅✅✅ NOTIFICACIÓN PROGRAMADA ENVIADA EXITOSAMENTE ✅✅✅', {
                       id_solicitud: notificationPayload.id_solicitud,
                       emp_id: notificationPayload.emp_id,
-                      emp_nombre: notificationPayload.emp_nombre
+                      emp_nombre: notificationPayload.emp_nombre,
+                      fechas: notificationPayload.fechas.length,
+                      reemplazantes: notificationPayload.reemplazantes.length
                     })
                   }
                 } else {
                   const errorText = await notifResponse.text()
+                  const errorMessage = `Error en respuesta de notificación: ${notifResponse.status} ${notifResponse.statusText} - ${errorText}`
                   console.error('❌ Error en respuesta de notificación:', {
                     status: notifResponse.status,
                     statusText: notifResponse.statusText,
-                    error: errorText
+                    error: errorText,
+                    payload_enviado: JSON.stringify(notificationPayload, null, 2)
                   })
+                  // Lanzar el error para que se capture arriba
+                  throw new Error(errorMessage)
                 }
               } catch (fetchError: any) {
-                console.error('❌ Error al hacer fetch a la API de notificación:', {
+                const errorMessage = `Error al enviar notificación: ${fetchError.message}`
+                console.error('❌❌❌ ERROR AL ENVIAR NOTIFICACIÓN ❌❌❌', {
                   error: fetchError.message,
                   stack: fetchError.stack,
                   url: `${BOT_URL}/api/vacation-notification`,
-                  es_programada: notificationPayload.tipo === 'PROGRAMADA'
+                  es_programada: notificationPayload.tipo === 'PROGRAMADA',
+                  payload: JSON.stringify(notificationPayload, null, 2)
                 })
                 
                 // Log específico para PROGRAMADA
@@ -2121,22 +2391,26 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                   console.error('🚨🚨🚨 ERROR AL ENVIAR NOTIFICACIÓN PROGRAMADA 🚨🚨🚨', {
                     error: fetchError.message,
                     id_solicitud: notificationPayload.id_solicitud,
-                    emp_id: notificationPayload.emp_id
+                    emp_id: notificationPayload.emp_id,
+                    payload_completo: JSON.stringify(notificationPayload, null, 2)
                   })
                 }
                 
-                // NO re-lanzar el error para que no interrumpa el flujo
-                // La notificación es importante pero no debe bloquear la aprobación
+                // Re-lanzar el error para que se capture y se muestre al usuario
+                throw new Error(errorMessage)
               }
             }
           } catch (notifError: any) {
-            console.error('❌ Error completo al enviar notificación de aprobación:', {
+            const errorMessage = `Error al enviar notificación: ${notifError.message}`
+            console.error('❌❌❌ ERROR COMPLETO AL ENVIAR NOTIFICACIÓN DE APROBACIÓN ❌❌❌', {
               error: notifError.message,
               stack: notifError.stack,
               requestId,
               estado,
               tipo: requestData?.tipo,
-              es_programada: requestData?.tipo === 'PROGRAMADA'
+              es_programada: requestData?.tipo === 'PROGRAMADA',
+              emp_id: requestData?.emp_id,
+              emp_nombre: requestData?.empleado?.nombre
             })
             
             // Log crítico para PROGRAMADA
@@ -2144,10 +2418,16 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
               console.error('🚨🚨🚨 ERROR AL ENVIAR NOTIFICACIÓN PROGRAMADA 🚨🚨🚨', {
                 error: notifError.message,
                 requestId,
-                emp_id: requestData?.emp_id
+                emp_id: requestData?.emp_id,
+                emp_nombre: requestData?.empleado?.nombre
               })
             }
-            // Continuar aunque fallen las notificaciones
+            
+            // Mostrar notificación al usuario sobre el error
+            showNotification('warning', 'Notificación', `La solicitud fue aprobada pero hubo un problema al enviar la notificación: ${notifError.message}. Verifica la consola para más detalles.`)
+            
+            // Re-lanzar el error para que se capture arriba, pero no bloquear la aprobación
+            throw notifError
           } finally {
             // Asegurar que la promesa se resuelva siempre
             console.log('🔚 Finalizando promesa de notificación')
@@ -2188,6 +2468,78 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
           }
         })()
       }
+      // Si es PREAPROBADO, enviar notificación
+      else if (estado === 'PREAPROBADO') {
+        notificacionPromise = (async () => {
+          try {
+            // Obtener fechas de la solicitud
+            let fechasPreaprobadas: string[] = []
+            if (esGrupo && (requestData as any).fechas_agrupadas) {
+              // Si es grupo, usar fechas con turno si están disponibles
+              if (requestData.fechas && Array.isArray(requestData.fechas) && requestData.fechas.length > 0) {
+                fechasPreaprobadas = requestData.fechas
+                  .filter((f: any) => (requestData as any).fechas_agrupadas.includes(f.fecha))
+                  .map((f: any) => `${f.fecha} (${f.turno || 'COMPLETO'})`)
+              } else {
+                fechasPreaprobadas = (requestData as any).fechas_agrupadas.map((fecha: string) => `${fecha} (COMPLETO)`)
+              }
+            } else {
+              // Si no es grupo, usar las fechas normales
+              fechasPreaprobadas = requestData.fechas.map((f: any) => `${f.fecha} (${f.turno || 'COMPLETO'})`)
+            }
+
+            // Extraer el id_solicitud base (sin _grupo_) para la notificación
+            const idSolicitudBase = String(requestId).split('_grupo_')[0]
+
+            // Preparar payload para notificaciones de preaprobación
+            const notificationPayload = {
+              id_solicitud: idSolicitudBase,
+              emp_id: requestData.emp_id,
+              emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
+              estado: 'PREAPROBADO',
+              comentario: comentario || 'Solicitud revisada y preaprobada por el jefe',
+              tipo: requestData.tipo,
+              dias_solicitados: calcularDiasTotales(requestData),
+              fechas: fechasPreaprobadas
+            }
+
+            console.log('📱 Enviando notificación de preaprobación:', {
+              emp_id: notificationPayload.emp_id,
+              emp_nombre: notificationPayload.emp_nombre,
+              fechas: fechasPreaprobadas.length
+            })
+
+            // Usar variable de entorno o localhost para desarrollo
+            const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
+            const notifResponse = await fetch(`${BOT_URL}/api/vacation-notification`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(notificationPayload)
+            })
+
+            if (notifResponse.ok) {
+              console.log('✅ Notificación de preaprobación enviada exitosamente')
+            } else {
+              const errorText = await notifResponse.text()
+              console.error('❌ Error en respuesta de notificación de preaprobación:', {
+                status: notifResponse.status,
+                statusText: notifResponse.statusText,
+                error: errorText
+              })
+            }
+          } catch (notifError: any) {
+            console.error('❌ Error al enviar notificación de preaprobación:', {
+              error: notifError.message,
+              stack: notifError.stack,
+              requestId,
+              emp_id: requestData?.emp_id
+            })
+            // Continuar aunque falle la notificación
+          }
+        })()
+      }
     }
 
     // CRÍTICO: Esperar a que se complete el envío de la notificación ANTES de actualizar la BD
@@ -2196,11 +2548,28 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
       try {
         await notificacionPromise
         console.log('✅✅✅ PROCESO DE NOTIFICACIÓN COMPLETADO - AHORA ACTUALIZANDO BD ✅✅✅')
-      } catch (notifWaitError) {
-        console.error('❌ Error al esperar notificación:', notifWaitError)
+        
+        // Esperar tiempo adicional para asegurar que el PDF se haya generado y enviado
+        // Esto es especialmente importante para la generación del PDF que puede tardar
+        // El handler del backend genera el PDF y lo envía, esto puede tomar 10-15 segundos
+        if (estado === 'APROBADO') {
+          console.log('⏳ Esperando tiempo adicional para generación y envío de PDF (10 segundos)...')
+          await new Promise(resolve => setTimeout(resolve, 10000))
+          console.log('✅ Tiempo adicional completado - PDF debería estar enviado')
+        }
+      } catch (notifWaitError: any) {
+        console.error('❌❌❌ ERROR AL ESPERAR NOTIFICACIÓN ❌❌❌', {
+          error: notifWaitError?.message || notifWaitError,
+          stack: notifWaitError?.stack,
+          tipo: estado,
+          requestId
+        })
+        // Mostrar notificación al usuario pero no bloquear la aprobación
+        showNotification('warning', 'Notificación', `La solicitud fue procesada pero hubo un problema al enviar la notificación por WhatsApp. Verifica la consola para más detalles.`)
         // Esperar un poco más para dar tiempo a que se complete
         await new Promise(resolve => setTimeout(resolve, 2000))
         console.log('⏳ Esperado 2 segundos adicionales después del error')
+        // Continuar con la aprobación aunque falle la notificación
       }
     }
 
@@ -2357,18 +2726,29 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
       }
 
       // CRÍTICO: Las notificaciones ya se completaron arriba (await notificacionPromise)
+      // Ya esperamos 10 segundos adicionales arriba para el PDF, así que aquí solo esperamos un poco más
+      // para asegurar que todo se haya enviado completamente antes de recargar
+      if (estado === 'APROBADO') {
+        console.log('⏳ Esperando tiempo final antes de recargar (2 segundos más)...')
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        console.log('✅ Tiempo final completado, ahora sí recargando...')
+      }
+      
       // Ahora podemos recargar las solicitudes de forma segura
+      // Hacer la recarga de forma asíncrona para no bloquear la UI
       console.log('🔄 Recargando solicitudes después de que las notificaciones se completaron...')
       
       // Recargar solicitudes para actualizar la lista y el calendario
       // Esto se hace DESPUÉS de que se completen las notificaciones
-      // IMPORTANTE: No usar await aquí si causa problemas, pero sí asegurar que las notificaciones se completaron
-      try {
-        await fetchManagerRequests()
-        console.log('✅ Solicitudes recargadas después de completar notificaciones')
-      } catch (reloadError) {
-        console.warn('⚠️ Error al recargar solicitudes (no crítico):', reloadError)
-      }
+      // Usar setTimeout para hacer la recarga de forma asíncrona y no bloquear
+      setTimeout(async () => {
+        try {
+          await fetchManagerRequests()
+          console.log('✅ Solicitudes recargadas después de completar notificaciones')
+        } catch (reloadError) {
+          console.warn('⚠️ Error al recargar solicitudes (no crítico):', reloadError)
+        }
+      }, 500) // Pequeño delay para asegurar que todo se haya procesado
       
       // Emitir evento para actualizar el calendario en tiempo real
       const event = new CustomEvent('vacation-status-changed', {
