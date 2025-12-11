@@ -2401,7 +2401,6 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
               }
             }
           } catch (notifError: any) {
-            const errorMessage = `Error al enviar notificación: ${notifError.message}`
             console.error('❌❌❌ ERROR COMPLETO AL ENVIAR NOTIFICACIÓN DE APROBACIÓN ❌❌❌', {
               error: notifError.message,
               stack: notifError.stack,
@@ -2424,7 +2423,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
             }
             
             // Mostrar notificación al usuario sobre el error
-            showNotification('warning', 'Notificación', `La solicitud fue aprobada pero hubo un problema al enviar la notificación: ${notifError.message}. Verifica la consola para más detalles.`)
+            showNotification('error', 'Notificación', `La solicitud fue aprobada pero hubo un problema al enviar la notificación: ${notifError.message}. Verifica la consola para más detalles.`)
             
             // Re-lanzar el error para que se capture arriba, pero no bloquear la aprobación
             throw notifError
@@ -2565,7 +2564,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
           requestId
         })
         // Mostrar notificación al usuario pero no bloquear la aprobación
-        showNotification('warning', 'Notificación', `La solicitud fue procesada pero hubo un problema al enviar la notificación por WhatsApp. Verifica la consola para más detalles.`)
+        showNotification('error', 'Notificación', `La solicitud fue procesada pero hubo un problema al enviar la notificación por WhatsApp. Verifica la consola para más detalles.`)
         // Esperar un poco más para dar tiempo a que se complete
         await new Promise(resolve => setTimeout(resolve, 2000))
         console.log('⏳ Esperado 2 segundos adicionales después del error')

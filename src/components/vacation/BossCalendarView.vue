@@ -293,7 +293,7 @@
                       </button>
                       
                       <button
-                        v-if="getVacationStatus(employee.emp_id, day) !== 'rejected'"
+                        v-if="getVacationStatus(employee.emp_id, day) !== 'rejected' && getVacationStatus(employee.emp_id, day) !== 'approved'"
                         @click="rejectVacationDay(employee.emp_id, day)"
                         class="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-red-50 hover:text-red-700 flex items-center gap-2 transition-colors group"
                       >
@@ -477,7 +477,7 @@
               <span>Preaprobar</span>
             </button>
             <button
-              v-if="currentVacation.status !== 'rejected'"
+              v-if="currentVacation.status !== 'rejected' && currentVacation.status !== 'approved'"
               @click="rejectVacation(currentVacation.id)"
               class="px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-semibold flex items-center justify-center gap-2"
             >
@@ -1219,11 +1219,26 @@ const approveVacation = async (vacationId: string) => {
 
 const rejectVacation = async (vacationId: string) => {
   try {
+    const vacation = vacations.value.find(v => v.id === vacationId)
+    
+    if (!vacation) {
+      showNotification('error', 'Error', 'No se encontró la solicitud de vacaciones.')
+      return
+    }
+    
+    // Validar que la solicitud no esté aprobada
+    if (vacation.status === 'approved') {
+      showNotification('error', 'No se puede rechazar', 'No se puede rechazar una solicitud que ya está aprobada.')
+      showSuggestModal.value = false
+      return
+    }
+    
     // TODO: Llamar a API para rechazar
     console.log('Rechazar vacación:', vacationId)
     loadData()
   } catch (error) {
     console.error('Error al rechazar vacación:', error)
+    showNotification('error', 'Error', 'Error al rechazar la solicitud. Por favor intenta nuevamente.')
   }
 }
 
@@ -1536,6 +1551,13 @@ const rejectVacationDay = async (empId: string, date: Date) => {
     const vacation = vacations.value.find(v => v.emp_id === empId && v.start_date === dateStr)
     
     if (vacation) {
+      // Validar que la solicitud no esté aprobada
+      if (vacation.status === 'approved') {
+        showNotification('error', 'No se puede rechazar', 'No se puede rechazar una solicitud que ya está aprobada.')
+        contextMenu.value.show = false
+        return
+      }
+      
       // Pedir confirmación antes de rechazar
       const employee = teamEmployees.value.find(e => e.emp_id === empId)
       const employeeName = employee?.name || vacation.employee_name || `Empleado #${empId}`
