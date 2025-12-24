@@ -152,17 +152,88 @@
         </button>
       </div>
     </div>
+
+    <!-- Modal de información de feriado -->
+    <div
+      v-if="showHolidayModal && selectedHolidayInfo"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      @click="showHolidayModal = false"
+    >
+      <div 
+        class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6 border border-input" 
+        @click.stop
+      >
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-md bg-orange-100 flex items-center justify-center border border-orange-200">
+              <Calendar class="h-5 w-5 text-orange-600" />
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold leading-none tracking-tight">Feriado</h3>
+              <p class="text-sm text-muted-foreground mt-1">Día no laborable</p>
+            </div>
+          </div>
+          <button
+            @click="showHolidayModal = false"
+            class="text-muted-foreground hover:text-foreground rounded-md hover:bg-accent p-2 transition-colors"
+            aria-label="Cerrar"
+          >
+            <X class="h-4 w-4" />
+          </button>
+        </div>
+        
+        <!-- Contenido -->
+        <div class="space-y-4">
+          <!-- Fecha -->
+          <div class="p-4 bg-gray-50 rounded-lg border border-input">
+            <div class="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Fecha</div>
+            <div class="text-xl font-semibold text-foreground">
+              {{ formatDate(selectedHolidayInfo.date) }}
+            </div>
+          </div>
+          
+          <!-- Nombre del feriado -->
+          <div class="p-4 bg-orange-50 rounded-lg border border-orange-200">
+            <div class="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Se celebra</div>
+            <div class="text-lg font-semibold text-foreground leading-tight">
+              {{ selectedHolidayInfo.name }}
+            </div>
+          </div>
+          
+          <!-- Información adicional -->
+          <div class="flex items-start gap-2 pt-2">
+            <div class="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-1.5 flex-shrink-0"></div>
+            <p class="text-sm text-muted-foreground leading-relaxed">
+              Este día no se trabajará según el calendario oficial de Bolivia.
+            </p>
+          </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="mt-6 pt-4 border-t">
+          <button
+            @click="showHolidayModal = false"
+            class="w-full rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 text-sm font-medium transition-colors"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { ChevronLeft, ChevronRight, Sun, Sunset, Clock } from 'lucide-vue-next'
+import { ref, computed, onMounted, watch } from 'vue'
+import { ChevronLeft, ChevronRight, Sun, Sunset, Clock, X, Calendar } from 'lucide-vue-next'
+import { getHolidaysForEmployee, getHolidayName } from '@/data/boliviaHolidays'
 
 interface CalendarProps {
   selectedDates: Date[]
   existingRequests: any[]
   fixedYear?: number // Año fijo para el calendario (ej: 2026)
+  employeeRegional?: string // Regional del empleado para mostrar feriados departamentales
 }
 
 interface DaySelection {
@@ -172,8 +243,8 @@ interface DaySelection {
 
 interface PublicHoliday {
   date: string
-  localName: string
   name: string
+  type: 'national' | 'regional'
 }
 
 const props = withDefaults(defineProps<CalendarProps>(), {
@@ -190,6 +261,9 @@ const selectedDateForType = ref<Date | null>(null)
 const daySelections = ref<DaySelection[]>([])
 const autoFullDay = ref(true)
 const publicHolidays = ref<PublicHoliday[]>([])
+// Estado para el modal de información del feriado
+const showHolidayModal = ref(false)
+const selectedHolidayInfo = ref<{ date: Date; name: string } | null>(null)
 
 // Función helper para calcular el total de días considerando medio día = 0.5
 const calculateTotalDays = (selections: DaySelection[]): number => {
@@ -209,20 +283,63 @@ const totalDays = computed(() => {
   return calculateTotalDays(daySelections.value)
 })
 
-// Fetch public holidays from API
+// Cargar feriados desde datos locales
 const fetchPublicHolidays = async () => {
   try {
     const year = props.fixedYear || new Date().getFullYear()
-    const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/BO`)
-    if (response.ok) {
-      publicHolidays.value = await response.json()
-    }
+    // Obtener feriados según el regional del empleado
+    const holidays = getHolidaysForEmployee(year, props.employeeRegional)
+    publicHolidays.value = holidays.map(h => ({
+      date: h.date,
+      name: h.name,
+      type: h.type
+    }))
+    console.log(`✅ VacationCalendar: ${publicHolidays.value.length} feriados cargados para ${year}`, {
+      regional: props.employeeRegional,
+      feriados: publicHolidays.value.map(h => `${h.date}: ${h.name}`)
+    })
   } catch (error) {
-    console.error('Error fetching public holidays:', error)
+    console.error('Error al cargar feriados:', error)
+    publicHolidays.value = []
   }
 }
 
 onMounted(() => {
+  fetchPublicHolidays()
+})
+
+// Recargar feriados cuando cambia el mes o el año fijo
+const navigateMonth = (direction: 'prev' | 'next') => {
+  const newDate = new Date(currentDate.value)
+  if (direction === 'prev') {
+    newDate.setMonth(currentDate.value.getMonth() - 1)
+  } else {
+    newDate.setMonth(currentDate.value.getMonth() + 1)
+  }
+  
+  // Si hay un año fijo, mantener ese año
+  if (props.fixedYear) {
+    newDate.setFullYear(props.fixedYear)
+    
+    // Limitar navegación a enero-diciembre del año fijo
+    const minDate = new Date(props.fixedYear, 0, 1)
+    const maxDate = new Date(props.fixedYear, 11, 31)
+    
+    if (newDate < minDate) return
+    if (newDate > maxDate) return
+  }
+  
+  currentDate.value = newDate
+  // Recargar feriados si cambió el año
+  const oldYear = currentDate.value.getFullYear()
+  const newYear = newDate.getFullYear()
+  if (oldYear !== newYear) {
+    fetchPublicHolidays()
+  }
+}
+
+// Watch para recargar feriados cuando cambie el regional
+watch(() => props.employeeRegional, () => {
   fetchPublicHolidays()
 })
 
@@ -325,7 +442,8 @@ const isDateSelected = (date: Date) => {
 
 const isClickable = (date: Date) => {
   const status = getDateStatus(date)
-  return status !== 'past' && status !== 'rejected' && status !== 'programmed' && status !== 'sunday' && status !== 'holiday'
+  // Los feriados son clickeables para mostrar información, pero no seleccionables
+  return status !== 'past' && status !== 'rejected' && status !== 'programmed' && status !== 'sunday'
 }
 
 const getDateClasses = (date: Date) => {
@@ -340,7 +458,7 @@ const getDateClasses = (date: Date) => {
       'bg-purple-100 text-purple-800 cursor-not-allowed border-2 border-purple-400': status === 'programmed',
       'bg-gray-100 text-gray-400 cursor-not-allowed': status === 'past',
       'bg-gray-200 text-gray-500 cursor-not-allowed': status === 'sunday',
-      'bg-orange-100 text-orange-800 cursor-not-allowed': status === 'holiday',
+      'bg-orange-100 text-orange-800 cursor-pointer hover:bg-orange-200': status === 'holiday',
     }
   ]
 }
@@ -366,7 +484,23 @@ const getDayTypeEmoji = (type: string | undefined) => {
 
 const handleDateClick = (date: Date) => {
   const status = getDateStatus(date)
-  if (status === 'past' || status === 'rejected' || status === 'programmed' || status === 'sunday' || status === 'holiday') return
+  
+  // Si es feriado, mostrar información del feriado
+  if (status === 'holiday') {
+    const dateString = date.toISOString().split('T')[0]
+    const holidayName = getHolidayName(dateString, props.employeeRegional)
+    console.log('🔍 Click en feriado:', { dateString, holidayName, status, regional: props.employeeRegional })
+    if (holidayName) {
+      selectedHolidayInfo.value = { date, name: holidayName }
+      showHolidayModal.value = true
+      console.log('✅ Modal de feriado abierto:', { date: dateString, name: holidayName })
+    } else {
+      console.warn('⚠️ No se encontró nombre del feriado para:', dateString, 'con regional:', props.employeeRegional)
+    }
+    return
+  }
+  
+  if (status === 'past' || status === 'rejected' || status === 'programmed' || status === 'sunday') return
 
   const existingSelection = daySelections.value.find((sel) => sel.date.toDateString() === date.toDateString())
 
@@ -393,6 +527,10 @@ const handleDateClick = (date: Date) => {
   }
 }
 
+const formatDate = (date: Date): string => {
+  return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`
+}
+
 const handleDayTypeSelect = (type: 'morning' | 'afternoon' | 'full') => {
   if (!selectedDateForType.value) return
 
@@ -412,26 +550,4 @@ const closeDayTypeModal = () => {
   selectedDateForType.value = null
 }
 
-const navigateMonth = (direction: 'prev' | 'next') => {
-  const newDate = new Date(currentDate.value)
-  if (direction === 'prev') {
-    newDate.setMonth(currentDate.value.getMonth() - 1)
-  } else {
-    newDate.setMonth(currentDate.value.getMonth() + 1)
-  }
-  
-  // Si hay un año fijo, mantener ese año
-  if (props.fixedYear) {
-    newDate.setFullYear(props.fixedYear)
-    
-    // Limitar navegación a enero-diciembre del año fijo
-    const minDate = new Date(props.fixedYear, 0, 1)
-    const maxDate = new Date(props.fixedYear, 11, 31)
-    
-    if (newDate < minDate) return
-    if (newDate > maxDate) return
-  }
-  
-  currentDate.value = newDate
-}
 </script>

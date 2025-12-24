@@ -288,6 +288,7 @@
                 @date-select="handleDateSelect"
                 :existing-requests="requests"
                 :fixed-year="programmedVacationsEnabled ? 2026 : undefined"
+                :employee-regional="employeeData?.regional || employeeData?.REGIONAL || null"
               />
               <div v-if="programmedVacationsEnabled" class="mt-4 flex items-center justify-between text-sm border-t pt-4">
                 <div>

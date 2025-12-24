@@ -173,14 +173,16 @@
               :class="{
                 'bg-red-900/20': day && isWeekend(day),
                 'bg-purple-900/40': day && isHoliday(day),
-                'bg-gray-800': day && !isWeekend(day) && !isHoliday(day)
+                'bg-gray-800': day && !isWeekend(day) && !isHoliday(day),
+                'cursor-pointer': day && isHoliday(day)
               }"
               style="height: 70px;"
+              @click="day && isHoliday(day) && showHolidayInfo(day)"
             >
               <div class="w-full">
                 <div class="font-bold text-white text-base mb-0.5">{{ day ? day.getDate() : '' }}</div>
                 <div class="text-[10px] text-gray-300 font-medium">{{ day ? dayNames[day.getDay()] : '' }}</div>
-                <div v-if="day && isHoliday(day)" class="text-[8px] text-purple-200 font-semibold mt-0.5">FERIADO</div>
+                <div v-if="day && isHoliday(day)" class="text-[8px] text-purple-200 font-semibold mt-0.5 cursor-pointer hover:text-purple-100">FERIADO</div>
                 <div v-if="day && isToday(day)" class="w-4 h-1 bg-blue-500 rounded-full mx-auto mt-1"></div>
               </div>
             </div>
@@ -228,10 +230,10 @@
               class="border-r relative transition-colors cursor-pointer hover:bg-blue-50/40"
               :class="{
                 'bg-red-50/30': day && isWeekend(day),
-                'bg-purple-50/40': day && isHoliday(day),
-                'bg-white': day && !isWeekend(day) && !isHoliday(day)
+                'bg-purple-50/40': day && isHoliday(day, employee),
+                'bg-white': day && !isWeekend(day) && !isHoliday(day, employee)
               }"
-              @click="openVacationModal(employee.emp_id, day)"
+              @click="day && isHoliday(day, employee) ? showHolidayInfo(day, employee) : openVacationModal(employee.emp_id, day)"
             >
               <!-- Indicador de día de hoy -->
               <div v-if="day && isToday(day)" class="absolute top-0 left-0 right-0 h-0.5 bg-blue-600 z-10"></div>
@@ -326,7 +328,7 @@
               <!-- Indicador de celda vacía (para programar vacaciones) -->
               <div v-else-if="day" class="absolute inset-0 flex flex-col items-center justify-center">
                 <!-- Indicador de feriado -->
-                <div v-if="isHoliday(day)" class="text-[8px] font-bold text-purple-600 mb-1">FERIADO</div>
+                <div v-if="isHoliday(day, employee)" class="text-[8px] font-bold text-purple-600 mb-1 cursor-pointer hover:text-purple-700" @click.stop="showHolidayInfo(day, employee)">FERIADO</div>
                 <div class="opacity-0 group-hover:opacity-20 text-2xl text-blue-400">+</div>
               </div>
             </div>
@@ -708,6 +710,7 @@
                 :disabled="isHoliday(alternateDate) || alternateDate.getDay() === 0"
                 class="aspect-square flex items-center justify-center text-xs rounded hover:bg-blue-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 :class="isAlternateDateSelected(alternateDate) ? 'bg-blue-600 text-white' : isHoliday(alternateDate) ? 'bg-purple-100 border border-purple-300 text-purple-700' : 'bg-white border border-gray-200 text-gray-700'"
+                :title="isHoliday(alternateDate) ? getHolidayNameForDate(alternateDate) || 'Feriado' : ''"
               >
                 {{ alternateDate.getDate() }}
               </button>
@@ -734,17 +737,63 @@
       </div>
     </div>
 
+    <!-- Modal de información de feriado -->
+    <div
+      v-if="showHolidayModal && selectedHolidayInfo"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      @click="showHolidayModal = false"
+    >
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6" @click.stop>
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-bold text-purple-700">Feriado</h3>
+          <button
+            @click="showHolidayModal = false"
+            class="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X class="h-5 w-5" />
+          </button>
+        </div>
+        
+        <div class="space-y-4">
+          <div class="bg-purple-50 rounded-lg p-4 border-2 border-purple-200">
+            <div class="text-sm text-gray-600 mb-1">Fecha</div>
+            <div class="text-lg font-semibold text-gray-900">
+              {{ formatDate(selectedHolidayInfo.date.toISOString()) }}
+            </div>
+          </div>
+          
+          <div class="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-4 border-2 border-purple-200">
+            <div class="text-sm text-gray-600 mb-1">Nombre del Feriado</div>
+            <div class="text-xl font-bold text-purple-700">
+              {{ selectedHolidayInfo.name }}
+            </div>
+          </div>
+        </div>
+        
+        <div class="mt-6 flex justify-end">
+          <button
+            @click="showHolidayModal = false"
+            class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ChevronLeft, ChevronRight, CheckCircle, AlertCircle, X } from 'lucide-vue-next'
+import { getHolidaysForEmployee, getHolidayName } from '@/data/boliviaHolidays'
 
 interface Employee {
   emp_id: string
   name: string
   department: string
+  regional?: string
   vacationBalance?: number
   usagePercentage?: number
   daysRemaining?: number
@@ -820,9 +869,12 @@ const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Juli
 
 const teamEmployees = ref<Employee[]>([])
 const vacations = ref<Vacation[]>([])
-const publicHolidays = ref<{ date: string; name: string }[]>([])
+const publicHolidays = ref<{ date: string; name: string; type: 'national' | 'regional' }[]>([])
 // Almacenar todas las solicitudes originales para contar días programados
 const allRequests = ref<any[]>([])
+// Estado para mostrar información del feriado al hacer click
+const selectedHolidayInfo = ref<{ date: Date; name: string } | null>(null)
+const showHolidayModal = ref(false)
 
 // Notification state
 const notification = ref({
@@ -889,10 +941,40 @@ const isWeekend = (date: Date): boolean => {
   return day === 0 || day === 6
 }
 
-const isHoliday = (date: Date): boolean => {
+const isHoliday = (date: Date, employee?: Employee): boolean => {
   if (!date) return false
   const dateStr = date.toISOString().split('T')[0]
-  return publicHolidays.value.some(h => h.date === dateStr)
+  // Si se proporciona un empleado, usar sus feriados específicos
+  if (employee) {
+    const employeeHolidays = getHolidaysForEmployee(date.getFullYear(), employee.regional)
+    return employeeHolidays.some(h => h.date === dateStr)
+  }
+  // Si no hay empleado, usar solo feriados nacionales del encabezado
+  const isNationalHoliday = publicHolidays.value.some(h => h.date === dateStr)
+  // Debug: verificar si el 2 de febrero aparece como feriado
+  if (dateStr === '2026-02-02') {
+    console.log('🔍 Debug 2026-02-02:', {
+      dateStr,
+      isNationalHoliday,
+      publicHolidays: publicHolidays.value.filter(h => h.date === dateStr),
+      allHolidays: publicHolidays.value.map(h => h.date)
+    })
+  }
+  return isNationalHoliday
+}
+
+const getHolidayNameForDate = (date: Date, employee?: Employee): string | null => {
+  if (!date) return null
+  const dateStr = date.toISOString().split('T')[0]
+  return getHolidayName(dateStr, employee?.regional)
+}
+
+const showHolidayInfo = (date: Date, employee?: Employee) => {
+  const holidayName = getHolidayNameForDate(date, employee)
+  if (holidayName) {
+    selectedHolidayInfo.value = { date, name: holidayName }
+    showHolidayModal.value = true
+  }
 }
 
 const hasVacation = (empId: string, date: Date): boolean => {
@@ -1312,185 +1394,6 @@ const preapproveVacationDay = async (empId: string, date: Date) => {
   }
 }
 
-// Función no utilizada - comentada para evitar error de TypeScript
-/*
-const approveVacationDay = async (empId: string, date: Date) => {
-  try {
-    const dateStr = date.toISOString().split('T')[0]
-    const vacation = vacations.value.find(v => v.emp_id === empId && v.start_date === dateStr)
-    
-    if (vacation) {
-      console.log('✓ Aprobando vacación:', vacation)
-      
-      // Extraer el id_solicitud del id de la vacación (formato: id_solicitud_fecha)
-      const id_solicitud = vacation.id.split('_')[0]
-      
-      // Obtener datos completos de la solicitud para la notificación
-      const employee = teamEmployees.value.find(e => e.emp_id === empId)
-      const employeeName = employee?.name || vacation.employee_name
-      
-      // Llamar a la API para actualizar en la base de datos
-      const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id_solicitud: parseInt(id_solicitud),
-          estado: 'APROBADO',
-          comentario: `Fecha aprobada: ${dateStr}`
-        })
-      })
-      
-      if (response.ok) {
-        // Guardar el estado original antes de cambiarlo
-        const estadoOriginal = vacation.status
-        
-        // Cambiar estado a aprobado en el array local
-        vacation.status = 'approved'
-        console.log('✅ Vacación aprobada en la base de datos')
-        
-        // Verificar si estaba preaprobada para enviar resumen o individual
-        const estabaPreaprobada = estadoOriginal === 'preapproved'
-        
-        if (estabaPreaprobada) {
-          // Si estaba preaprobada, verificar si todas las fechas preaprobadas están ahora aprobadas
-          console.log('📋 Vacación estaba preaprobada. Verificando si todas las fechas están aprobadas para enviar resumen.')
-          
-          try {
-            const checkResponse = await fetch(`http://190.171.225.68/api/vacacion-data-manager?manager=${props.managerId}`)
-            if (checkResponse.ok) {
-              const checkData = await checkResponse.json()
-              if (checkData.success && Array.isArray(checkData.data)) {
-                // Buscar todas las solicitudes del mismo empleado con el mismo id_solicitud
-                const solicitudesEmpleado = checkData.data.filter((req: any) => 
-                  req.emp_id === empId && 
-                  req.tipo === 'PROGRAMADA' &&
-                  String(req.id_solicitud) === id_solicitud
-                )
-
-                // Verificar si hay alguna preaprobada que aún no esté aprobada
-                const hayPreaprobadasPendientes = solicitudesEmpleado.some((req: any) => 
-                  req.estado === 'PREAPROBADO' || req.estado === 'PRE-APROBADO'
-                )
-
-                // Si no hay preaprobadas pendientes, todas están aprobadas - enviar resumen
-                if (!hayPreaprobadasPendientes) {
-                  console.log('✅ Todas las fechas preaprobadas están ahora aprobadas. Enviando resumen.')
-
-                  // Obtener reemplazantes
-                  let reemplazantesCompletos = []
-                  try {
-                    const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${id_solicitud}`)
-                    if (reemplazanteResponse.ok) {
-                      const reemplazanteData = await reemplazanteResponse.json()
-                      if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
-                        reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
-                          emp_id: rep.EMP_ID,
-                          nombre: rep.NOMBRE,
-                          telefono: rep.TELEFONO
-                        }))
-                      }
-                    }
-                  } catch (apiError) {
-                    console.warn('⚠️ Error al obtener reemplazantes:', apiError)
-                  }
-
-                  // Obtener todas las fechas aprobadas (resumen completo)
-                  const todasFechas = solicitudesEmpleado
-                    .filter((req: any) => req.estado === 'APROBADO')
-                    .flatMap((req: any) => req.fechas.map((f: any) => `${f.fecha} (${f.turno})`))
-
-                  const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
-                  await fetch(`${BOT_URL}/api/vacation-notification`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      id_solicitud: id_solicitud,
-                      emp_id: empId,
-                      emp_nombre: employeeName,
-                      estado: 'APROBADO',
-                      comentario: `Todas tus vacaciones preaprobadas han sido aprobadas`,
-                      tipo: 'PROGRAMADA',
-                      dias_solicitados: todasFechas.length,
-                      fechas: todasFechas,
-                      reemplazantes: reemplazantesCompletos
-                    })
-                  }).catch(err => {
-                    console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
-                  })
-                  
-                  console.log('✅ Resumen de aprobación enviado')
-                } else {
-                  console.log('⏸️ Aún hay fechas preaprobadas pendientes. No se envía notificación todavía.')
-                }
-              }
-            }
-          } catch (checkError) {
-            console.warn('⚠️ Error al verificar estado de solicitudes:', checkError)
-          }
-        } else {
-          // Si NO estaba preaprobada, enviar notificación individual inmediatamente
-          console.log('✅ Aprobación directa desde calendario: Enviando notificación individual inmediata.')
-          
-          try {
-            // Obtener reemplazantes
-            let reemplazantesCompletos = []
-            try {
-              const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${id_solicitud}`)
-              if (reemplazanteResponse.ok) {
-                const reemplazanteData = await reemplazanteResponse.json()
-                if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
-                  reemplazantesCompletos = reemplazanteData.data.map((rep: any) => ({
-                    emp_id: rep.EMP_ID,
-                    nombre: rep.NOMBRE,
-                    telefono: rep.TELEFONO
-                  }))
-                }
-              }
-            } catch (apiError) {
-              console.warn('⚠️ Error al obtener reemplazantes:', apiError)
-            }
-
-            const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
-            await fetch(`${BOT_URL}/api/vacation-notification`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                id_solicitud: id_solicitud,
-                emp_id: empId,
-                emp_nombre: employeeName,
-                estado: 'APROBADO',
-                comentario: `Fecha aprobada: ${dateStr}`,
-                tipo: 'PROGRAMADA',
-                dias_solicitados: 1,
-                fechas: [`${dateStr} (COMPLETO)`],
-                reemplazantes: reemplazantesCompletos
-              })
-            }).catch(err => {
-              console.warn('⚠️ No se pudo enviar notificación de WhatsApp:', err)
-            })
-            
-            console.log('✅ Notificación de aprobación individual enviada')
-          } catch (notifError) {
-            console.warn('⚠️ Error al enviar notificación de aprobación:', notifError)
-          }
-        }
-      } else {
-        console.error('❌ Error al aprobar en la API')
-      }
-      
-      contextMenu.value.show = false
-    }
-  } catch (error) {
-    console.error('Error al aprobar vacación:', error)
-  }
-}
-*/
 
 // Función para preaprobar desde el modal
 const preapproveVacationFromModal = async (vacation: Vacation) => {
@@ -1906,51 +1809,7 @@ const preapproveVacationYear = async (empId: string) => {
   }
 }
 
-// Función no utilizada - comentada para evitar error de TypeScript
-/*
-const suggestVacationMonth = async (empId: string, date: Date) => {
-  try {
-    const year = date.getFullYear()
-    const month = date.getMonth()
-    
-    // Obtener todas las vacaciones del empleado en ese mes
-    const monthVacations = vacations.value.filter(v => {
-      if (v.emp_id !== empId) return false
-      const vacDate = new Date(v.start_date)
-      return vacDate.getFullYear() === year && vacDate.getMonth() === month
-    })
-    
-    console.log('💡 Sugiriendo alternativas para:', empId, `Mes: ${monthNames[month]} ${year}`, monthVacations.length, 'fechas')
-    
-    // Preparar datos para el modal
-    suggestionData.value = {
-      emp_id: empId,
-      currentVacations: monthVacations,
-      alternateDates: [], // Se llenará con fechas disponibles en el mes
-      originalDates: monthVacations.map(v => v.start_date)
-    }
-    
-    // Generar fechas disponibles para sugerir (excluyendo feriados y domingos)
-    const startDate = new Date(year, month, 1)
-    const endDate = new Date(year, month + 1, 0)
-    const dates: Date[] = []
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      // No incluir domingos ni feriados
-      if (d.getDay() !== 0 && !isHoliday(d)) {
-        dates.push(new Date(d))
-      }
-    }
-    suggestionData.value.alternateDates = dates
-    
-    selectedAlternateDates.value = []
-    showSuggestionModal.value = true
-    
-    contextMenu.value.show = false
-  } catch (error) {
-    console.error('Error al sugerir:', error)
-  }
-}
-*/
+
 
 const toggleAlternateDate = (date: Date) => {
   const index = selectedAlternateDates.value.findIndex(d => d.toDateString() === date.toDateString())
@@ -2245,21 +2104,36 @@ const formatDate = (dateString: string): string => {
   return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`
 }
 
-// Cargar feriados de Bolivia
+// Cargar feriados de Bolivia desde datos locales
 const fetchHolidays = async () => {
   try {
     const year = currentDate.value.getFullYear()
-    const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/BO`)
-    if (response.ok) {
-      const holidays = await response.json()
-      publicHolidays.value = holidays.map((h: any) => ({
+    // Limpiar feriados anteriores para evitar datos residuales
+    publicHolidays.value = []
+    
+    // Obtener solo los feriados nacionales para el encabezado (sin regional)
+    const allHolidays = getHolidaysForEmployee(year, undefined)
+    // Filtrar solo feriados nacionales para el encabezado
+    publicHolidays.value = allHolidays
+      .filter(h => h.type === 'national')
+      .map(h => ({
         date: h.date,
-        name: h.localName
+        name: h.name,
+        type: h.type
       }))
-      console.log(`✅ ${publicHolidays.value.length} feriados cargados para ${year}`)
+    console.log(`✅ ${publicHolidays.value.length} feriados nacionales cargados para ${year}`)
+    console.log('📅 Feriados nacionales cargados:', publicHolidays.value.map(h => `${h.date}: ${h.name}`))
+    
+    // Verificar específicamente el 2 de febrero
+    const feb2Holiday = publicHolidays.value.find(h => h.date === '2026-02-02')
+    if (feb2Holiday) {
+      console.warn('⚠️ ADVERTENCIA: El 2 de febrero aparece como feriado:', feb2Holiday)
+    } else {
+      console.log('✅ Confirmado: El 2 de febrero NO es feriado')
     }
   } catch (error) {
     console.error('Error al cargar feriados:', error)
+    publicHolidays.value = []
   }
 }
 
@@ -2335,6 +2209,9 @@ const loadData = async () => {
                     nombre = empleadoInfo.fullName || nombre
                     cargo = empleadoInfo.cargo || cargo
                     
+                    // Obtener el regional del empleado si está disponible
+                    const regional = empleadoInfo.regional || empleadoInfo.REGIONAL || empleadoInfo.departamento || null
+                    
                     // También cargar información de vacaciones si está disponible
                     if (empleadoInfo.vacation) {
                       const vacationInfo = empleadoInfo.vacation
@@ -2379,6 +2256,7 @@ const loadData = async () => {
                         emp_id: solicitud.emp_id,
                         name: nombre,
                         department: cargo,
+                        regional: regional,
                         vacationBalance: available,
                         totalDays: total, // Usar el total calculado o corregido
                         usagePercentage: total > 0 ? Math.round((taken / total) * 100) : 0,
@@ -2393,10 +2271,33 @@ const loadData = async () => {
                 console.error('Error al cargar info del empleado:', err)
               }
               
+              // Obtener el regional si no se obtuvo antes
+              let regional = null
+              try {
+                const empInfoResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${solicitud.emp_id}`)
+                if (empInfoResponse.ok) {
+                  const empInfoData = await empInfoResponse.json()
+                  let empleadoInfo: any = null
+                  
+                  if (Array.isArray(empInfoData) && empInfoData.length > 0) {
+                    empleadoInfo = empInfoData[0]
+                  } else if (empInfoData.status === 'success' && Array.isArray(empInfoData.data) && empInfoData.data.length > 0) {
+                    empleadoInfo = empInfoData.data[0]
+                  }
+                  
+                  if (empleadoInfo) {
+                    regional = empleadoInfo.regional || empleadoInfo.REGIONAL || empleadoInfo.departamento || null
+                  }
+                }
+              } catch (err) {
+                console.error('Error al obtener regional del empleado:', err)
+              }
+              
               uniqueEmployees.set(solicitud.emp_id, {
                 emp_id: solicitud.emp_id,
                 name: nombre,
                 department: cargo,
+                regional: regional,
                 vacationBalance: 0,
                 totalDays: 0,
                 usagePercentage: 0,
