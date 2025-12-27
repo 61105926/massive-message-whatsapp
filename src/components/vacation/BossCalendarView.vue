@@ -247,7 +247,7 @@
                   class="w-full rounded-md transition-all duration-200 shadow-md hover:shadow-xl border-2 border-white/50 hover:border-white/90 hover:scale-[1.03] transform cursor-pointer relative group"
                   :class="getVacationBlockClasses(employee.emp_id, day)"
                   :title="getVacationTooltip(employee.emp_id, day)"
-                  @click.stop="showVacationContextMenu(employee.emp_id, day)"
+                  @click.stop="showVacationContextMenu(employee.emp_id, day, $event)"
                 >
                   <!-- Indicador de acción rápida en hover -->
                   <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -266,62 +266,6 @@
                     </div>
                   </div>
                   
-                  <!-- Menú contextual mejorado con preaprobación -->
-                  <div
-                    v-if="contextMenu.show && contextMenu.emp_id === employee.emp_id && contextMenu.date?.toDateString() === day.toDateString()"
-                    class="absolute z-50 mt-1 w-56 bg-white rounded-lg shadow-xl border-2 border-gray-200 py-2 overflow-hidden"
-                    @click.stop
-                  >
-                    <!-- Header del menú -->
-                    <div class="px-4 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
-                      <div class="text-xs font-semibold text-gray-700">Acciones Rápidas</div>
-                      <div class="text-[10px] text-gray-500 mt-0.5">{{ formatDate(day.toISOString()) }}</div>
-                    </div>
-                    
-                    <!-- Acciones principales -->
-                    <div class="py-1">
-                      <button
-                        v-if="getVacationStatus(employee.emp_id, day) === 'pending'"
-                        @click="preapproveVacationDay(employee.emp_id, day)"
-                        class="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-yellow-50 hover:text-yellow-700 flex items-center gap-2 transition-colors group"
-                      >
-                        <div class="w-8 h-8 rounded-full bg-yellow-100 group-hover:bg-yellow-200 flex items-center justify-center flex-shrink-0">
-                          <span class="text-yellow-600 font-bold">✓</span>
-                        </div>
-                        <div class="flex-1">
-                          <div class="font-semibold">Preaprobar</div>
-                          <div class="text-xs text-gray-500">Marcar como revisado</div>
-                        </div>
-                      </button>
-                      
-                      <button
-                        v-if="getVacationStatus(employee.emp_id, day) !== 'rejected' && getVacationStatus(employee.emp_id, day) !== 'approved'"
-                        @click="rejectVacationDay(employee.emp_id, day)"
-                        class="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-red-50 hover:text-red-700 flex items-center gap-2 transition-colors group"
-                      >
-                        <div class="w-8 h-8 rounded-full bg-red-100 group-hover:bg-red-200 flex items-center justify-center flex-shrink-0">
-                          <span class="text-red-600 font-bold">✗</span>
-                        </div>
-                        <div class="flex-1">
-                          <div class="font-semibold">Rechazar</div>
-                          <div class="text-xs text-gray-500">Rechazar solicitud</div>
-                        </div>
-                      </button>
-                    </div>
-                    
-                    <div class="border-t my-1"></div>
-                    
-                    <!-- Acciones adicionales -->
-                    <div class="py-1">
-                      <button
-                        @click="preapproveVacationYear(employee.emp_id)"
-                        class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-yellow-50 hover:text-yellow-700 flex items-center gap-2 transition-colors"
-                      >
-                        <span class="text-yellow-600">📅</span>
-                        <span>Preaprobar todo el año</span>
-                      </button>
-                    </div>
-                  </div>
                 </div>
               </div>
               
@@ -781,6 +725,65 @@
       </div>
     </div>
 
+    <!-- Menú contextual mejorado con preaprobación - Renderizado fuera del contenedor con overflow -->
+    <div
+      v-if="contextMenu.show && contextMenu.date"
+      data-context-menu
+      class="fixed z-[9999] w-56 bg-white rounded-lg shadow-xl border-2 border-gray-200 py-2 overflow-hidden"
+      :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+      @click.stop
+    >
+      <!-- Header del menú -->
+      <div class="px-4 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+        <div class="text-xs font-semibold text-gray-700">Acciones Rápidas</div>
+        <div class="text-[10px] text-gray-500 mt-0.5">{{ formatDate(contextMenu.date.toISOString()) }}</div>
+      </div>
+      
+      <!-- Acciones principales -->
+      <div class="py-1">
+        <button
+          v-if="contextMenu.date && getVacationStatus(contextMenu.emp_id, contextMenu.date) === 'pending'"
+          @click="preapproveVacationDay(contextMenu.emp_id, contextMenu.date)"
+          class="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-yellow-50 hover:text-yellow-700 flex items-center gap-2 transition-colors group"
+        >
+          <div class="w-8 h-8 rounded-full bg-yellow-100 group-hover:bg-yellow-200 flex items-center justify-center flex-shrink-0">
+            <span class="text-yellow-600 font-bold">✓</span>
+          </div>
+          <div class="flex-1">
+            <div class="font-semibold">Preaprobar</div>
+            <div class="text-xs text-gray-500">Marcar como revisado</div>
+          </div>
+        </button>
+        
+        <button
+          v-if="contextMenu.date && getVacationStatus(contextMenu.emp_id, contextMenu.date) !== 'rejected' && getVacationStatus(contextMenu.emp_id, contextMenu.date) !== 'approved'"
+          @click="rejectVacationDay(contextMenu.emp_id, contextMenu.date)"
+          class="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-red-50 hover:text-red-700 flex items-center gap-2 transition-colors group"
+        >
+          <div class="w-8 h-8 rounded-full bg-red-100 group-hover:bg-red-200 flex items-center justify-center flex-shrink-0">
+            <span class="text-red-600 font-bold">✗</span>
+          </div>
+          <div class="flex-1">
+            <div class="font-semibold">Rechazar</div>
+            <div class="text-xs text-gray-500">Rechazar solicitud</div>
+          </div>
+        </button>
+      </div>
+      
+      <div class="border-t my-1"></div>
+      
+      <!-- Acciones adicionales -->
+      <div class="py-1">
+        <button
+          @click="preapproveVacationYear(contextMenu.emp_id)"
+          class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-yellow-50 hover:text-yellow-700 flex items-center gap-2 transition-colors"
+        >
+          <span class="text-yellow-600">📅</span>
+          <span>Preaprobar todo el año</span>
+        </button>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -851,7 +854,9 @@ const progressInfo = ref({
 const contextMenu = ref({
   show: false,
   emp_id: '',
-  date: null as Date | null
+  date: null as Date | null,
+  x: 0,
+  y: 0
 })
 
 // Modal de sugerencias
@@ -1344,11 +1349,40 @@ const sendSuggestion = async () => {
 }
 
 // Funciones del menú contextual
-const showVacationContextMenu = (empId: string, date: Date) => {
-  contextMenu.value = {
-    show: true,
-    emp_id: empId,
-    date: date
+const showVacationContextMenu = (empId: string, date: Date, event?: MouseEvent) => {
+  if (event) {
+    event.stopPropagation()
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+    const menuWidth = 224 // w-56 = 14rem = 224px
+    const menuHeight = 200 // altura aproximada del menú
+    let x = rect.left
+    let y = rect.bottom + 4
+    
+    // Ajustar posición si el menú se sale de la pantalla
+    if (x + menuWidth > window.innerWidth) {
+      x = window.innerWidth - menuWidth - 10
+    }
+    if (y + menuHeight > window.innerHeight) {
+      y = rect.top - menuHeight - 4
+    }
+    if (x < 0) x = 10
+    if (y < 0) y = 10
+    
+    contextMenu.value = {
+      show: true,
+      emp_id: empId,
+      date: date,
+      x: x,
+      y: y
+    }
+  } else {
+    contextMenu.value = {
+      show: true,
+      emp_id: empId,
+      date: date,
+      x: 0,
+      y: 0
+    }
   }
 }
 
@@ -1929,9 +1963,21 @@ const confirmSuggestion = async () => {
 
 // Cerrar menú contextual al hacer clic fuera
 const setupContextMenuListener = () => {
-  window.addEventListener('click', () => {
+  const handleClickOutside = (e: MouseEvent) => {
+    const target = e.target as HTMLElement
+    // No cerrar si el clic es dentro del menú contextual
+    if (target.closest('[data-context-menu]')) {
+      return
+    }
     contextMenu.value.show = false
-  })
+  }
+  
+  window.addEventListener('click', handleClickOutside)
+  
+  // También cerrar al hacer scroll
+  window.addEventListener('scroll', () => {
+    contextMenu.value.show = false
+  }, true)
 }
 
 const formatDayMonth = (dateString?: string) => {
