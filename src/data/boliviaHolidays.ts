@@ -21,7 +21,7 @@ export const boliviaHolidays2026: HolidaysData = {
   year: 2026,
   national_holidays: [
     { date: "2026-01-01", name: "Año Nuevo", type: "national" },
-    { date: "2026-01-22", name: "Día del Estado Plurinacional de Bolivia", type: "national" },
+    { date: "2026-01-02", name: "Feriado Nacional", type: "national" },
     { date: "2026-02-16", name: "Carnaval (Lunes)", type: "national" },
     { date: "2026-02-17", name: "Carnaval (Martes)", type: "national" },
     { date: "2026-04-03", name: "Viernes Santo", type: "national" },
