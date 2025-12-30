@@ -2303,8 +2303,12 @@ const loadData = async () => {
                         taken = parseFloat(vacationInfo.taken || vacationInfo.TAKEN || '0')
                         const totalFromAPI = parseFloat(vacationInfo.total || vacationInfo.TOTAL || '0')
                         
-                        // Calcular total de días
-                        total = available + taken
+                        // Calcular total de días - usar totalFromAPI si está disponible y es razonable, sino calcular
+                        if (totalFromAPI > 0 && totalFromAPI <= 30) {
+                          total = totalFromAPI
+                        } else {
+                          total = available + taken
+                        }
                         
                         // Si el total calculado es mayor a 30, probablemente hay un error
                         // En ese caso, usar el valor de available como referencia (si es razonable)
@@ -2316,6 +2320,7 @@ const loadData = async () => {
                             available,
                             taken,
                             total_calculado: available + taken,
+                            total_api: totalFromAPI,
                             total_usado: total
                           })
                         }
