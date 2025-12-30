@@ -2234,120 +2234,166 @@ const loadData = async () => {
               // Intentar cargar info del empleado
               let nombre = `Empleado #${solicitud.emp_id}`
               let cargo = 'N/A'
+              let regional = null
+              let available = 0
+              let taken = 0
+              let total = 0
               
-              try {
-                const empInfoResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${solicitud.emp_id}`)
-                if (empInfoResponse.ok) {
-                  const empInfoData = await empInfoResponse.json()
+              // Intentar cargar información del empleado con retry
+              let maxRetries = 2
+              let retryCount = 0
+              let empleadoInfo: any = null
+              
+              while (retryCount <= maxRetries && !empleadoInfo) {
+                try {
+                  const controller = new AbortController()
+                  const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 segundos timeout
                   
-                  // La API ahora devuelve directamente un array o un objeto con status
-                  let empleadoInfo: any = null
+                  const empInfoResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${solicitud.emp_id}`, {
+                    signal: controller.signal
+                  })
                   
-                  if (Array.isArray(empInfoData) && empInfoData.length > 0) {
-                    // Nuevo formato: array directo
-                    empleadoInfo = empInfoData[0]
-                  } else if (empInfoData.status === 'success' && Array.isArray(empInfoData.data) && empInfoData.data.length > 0) {
-                    // Formato antiguo: objeto con status y data
-                    empleadoInfo = empInfoData.data[0]
-                  }
+                  clearTimeout(timeoutId)
                   
-                  if (empleadoInfo) {
-                    nombre = empleadoInfo.fullName || nombre
-                    cargo = empleadoInfo.cargo || cargo
+                  if (empInfoResponse.ok) {
+                    const empInfoData = await empInfoResponse.json()
                     
-                    // Obtener el regional del empleado si está disponible
-                    const regional = empleadoInfo.regional || empleadoInfo.REGIONAL || empleadoInfo.departamento || null
+                    // La API ahora devuelve directamente un array o un objeto con status
+                    if (Array.isArray(empInfoData) && empInfoData.length > 0) {
+                      // Nuevo formato: array directo
+                      empleadoInfo = empInfoData[0]
+                    } else if (empInfoData.status === 'success' && Array.isArray(empInfoData.data) && empInfoData.data.length > 0) {
+                      // Formato antiguo: objeto con status y data
+                      empleadoInfo = empInfoData.data[0]
+                    }
                     
-                    // También cargar información de vacaciones si está disponible
-                    if (empleadoInfo.vacation) {
-                      const vacationInfo = empleadoInfo.vacation
-                      const available = parseFloat(vacationInfo.available || '0')
-                      const taken = parseFloat(vacationInfo.taken || '0')
-                      const totalFromAPI = parseFloat(vacationInfo.total || '0')
+                    if (empleadoInfo) {
+                      // Intentar múltiples campos posibles para el nombre
+                      nombre = empleadoInfo.fullName || 
+                              empleadoInfo.name || 
+                              empleadoInfo.nombre || 
+                              empleadoInfo.NOMBRE ||
+                              empleadoInfo.FULLNAME ||
+                              empleadoInfo.NAME ||
+                              empleadoInfo.FULL_NAME ||
+                              nombre
                       
-                      // El total de días debe ser el máximo entre:
-                      // 1. available + taken (días disponibles + días ya usados)
-                      // 2. El valor de vacationBalance si es mayor (porque puede incluir días programados)
-                      // 3. El total de la API si es razonable (menor o igual a available + taken + margen)
-                      // Priorizar: si available es el saldo real y representa el total correcto, usarlo
-                      // Si available + taken da un total razonable (<= 30), usarlo
-                      // Si no, usar el total de la API solo si es razonable
-                      let total = available + taken
+                      // Intentar múltiples campos posibles para el cargo/departamento
+                      cargo = empleadoInfo.cargo || 
+                             empleadoInfo.CARGO ||
+                             empleadoInfo.department || 
+                             empleadoInfo.DEPARTMENT ||
+                             empleadoInfo.departamento ||
+                             empleadoInfo.DEPARTAMENTO ||
+                             empleadoInfo.dept ||
+                             empleadoInfo.DEPT ||
+                             cargo
                       
-                      // Si el total calculado es mayor a 30, probablemente hay un error
-                      // En ese caso, usar el valor de available como referencia (si es razonable)
-                      if (total > 30 && available > 0 && available <= 30) {
-                        // Si available parece ser el total correcto (ej: 15), usarlo
-                        total = available
-                        console.warn('⚠️ Total calculado muy alto, usando available como total:', {
+                      // Obtener el regional del empleado si está disponible
+                      regional = empleadoInfo.regional || 
+                                empleadoInfo.REGIONAL || 
+                                empleadoInfo.departamento || 
+                                empleadoInfo.DEPARTAMENTO ||
+                                null
+                      
+                      // También cargar información de vacaciones si está disponible
+                      if (empleadoInfo.vacation) {
+                        const vacationInfo = empleadoInfo.vacation
+                        available = parseFloat(vacationInfo.available || vacationInfo.AVAILABLE || '0')
+                        taken = parseFloat(vacationInfo.taken || vacationInfo.TAKEN || '0')
+                        const totalFromAPI = parseFloat(vacationInfo.total || vacationInfo.TOTAL || '0')
+                        
+                        // Calcular total de días
+                        total = available + taken
+                        
+                        // Si el total calculado es mayor a 30, probablemente hay un error
+                        // En ese caso, usar el valor de available como referencia (si es razonable)
+                        if (total > 30 && available > 0 && available <= 30) {
+                          // Si available parece ser el total correcto (ej: 15), usarlo
+                          total = available
+                          console.warn('⚠️ Total calculado muy alto, usando available como total:', {
+                            emp_id: solicitud.emp_id,
+                            available,
+                            taken,
+                            total_calculado: available + taken,
+                            total_usado: total
+                          })
+                        }
+                        
+                        console.log('✅ Información completa del empleado cargada:', {
                           emp_id: solicitud.emp_id,
+                          nombre,
+                          cargo,
                           available,
                           taken,
-                          total_calculado: available + taken,
-                          total_usado: total
+                          total
                         })
+                      } else {
+                        // Si no hay información de vacaciones en el objeto vacation, buscar en otros campos
+                        const altAvailable = parseFloat(empleadoInfo.vacationBalance || empleadoInfo.vacation_balance || empleadoInfo.available || '0')
+                        const altTaken = parseFloat(empleadoInfo.vacationTaken || empleadoInfo.vacation_taken || empleadoInfo.taken || '0')
+                        const altTotal = parseFloat(empleadoInfo.vacationTotal || empleadoInfo.vacation_total || empleadoInfo.total || '0')
+                        
+                        if (altAvailable > 0 || altTotal > 0) {
+                          available = altAvailable
+                          taken = altTaken
+                          total = altTotal || (altAvailable + altTaken)
+                          console.log('✅ Información de vacaciones encontrada en campos alternativos:', {
+                            emp_id: solicitud.emp_id,
+                            available,
+                            taken,
+                            total
+                          })
+                        } else {
+                          console.warn('⚠️ No se encontró información de vacaciones para empleado:', solicitud.emp_id)
+                        }
                       }
-                      
-                      console.log('📊 Información de vacaciones del empleado:', {
+                    } else {
+                      console.warn('⚠️ Respuesta vacía o inválida para empleado:', {
                         emp_id: solicitud.emp_id,
-                        nombre,
-                        available,
-                        taken,
-                        total_calculado: available + taken,
-                        total_api: totalFromAPI,
-                        total_final: total
+                        response: empInfoData,
+                        retryCount
                       })
-                      
-                      uniqueEmployees.set(solicitud.emp_id, {
-                        emp_id: solicitud.emp_id,
-                        name: nombre,
-                        department: cargo,
-                        regional: regional,
-                        vacationBalance: available,
-                        totalDays: total, // Usar el total calculado o corregido
-                        usagePercentage: total > 0 ? Math.round((taken / total) * 100) : 0,
-                        daysRemaining: available,
-                        rejectedCount: 0 // Se actualizará después
-                      })
-                      continue // Ya se agregó al map, continuar con el siguiente
                     }
+                  } else {
+                    console.warn('⚠️ Error HTTP al obtener información del empleado:', {
+                      emp_id: solicitud.emp_id,
+                      status: empInfoResponse.status,
+                      statusText: empInfoResponse.statusText,
+                      retryCount
+                    })
+                  }
+                } catch (err: any) {
+                  console.error('❌ Error al cargar info del empleado (intento ' + (retryCount + 1) + '):', {
+                    emp_id: solicitud.emp_id,
+                    error: err?.message || err,
+                    retryCount
+                  })
+                  
+                  // Si es un error de timeout o red, esperar un poco antes de reintentar
+                  if (retryCount < maxRetries && (err?.name === 'TimeoutError' || err?.message?.includes('fetch'))) {
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))) // Delay incremental
                   }
                 }
-              } catch (err) {
-                console.error('Error al cargar info del empleado:', err)
+                
+                retryCount++
               }
               
-              // Obtener el regional si no se obtuvo antes
-              let regional = null
-              try {
-                const empInfoResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${solicitud.emp_id}`)
-                if (empInfoResponse.ok) {
-                  const empInfoData = await empInfoResponse.json()
-                  let empleadoInfo: any = null
-                  
-                  if (Array.isArray(empInfoData) && empInfoData.length > 0) {
-                    empleadoInfo = empInfoData[0]
-                  } else if (empInfoData.status === 'success' && Array.isArray(empInfoData.data) && empInfoData.data.length > 0) {
-                    empleadoInfo = empInfoData.data[0]
-                  }
-                  
-                  if (empleadoInfo) {
-                    regional = empleadoInfo.regional || empleadoInfo.REGIONAL || empleadoInfo.departamento || null
-                  }
-                }
-              } catch (err) {
-                console.error('Error al obtener regional del empleado:', err)
+              // Si después de todos los intentos no se obtuvo información, loguear el problema
+              if (!empleadoInfo) {
+                console.error('❌ No se pudo cargar información del empleado después de ' + (maxRetries + 1) + ' intentos:', solicitud.emp_id)
               }
               
+              // Agregar empleado al mapa (incluso si no se pudo cargar toda la info)
               uniqueEmployees.set(solicitud.emp_id, {
                 emp_id: solicitud.emp_id,
                 name: nombre,
                 department: cargo,
                 regional: regional,
-                vacationBalance: 0,
-                totalDays: 0,
-                usagePercentage: 0,
-                daysRemaining: 0,
+                vacationBalance: available,
+                totalDays: total,
+                usagePercentage: total > 0 ? Math.round((taken / total) * 100) : 0,
+                daysRemaining: available,
                 rejectedCount: 0 // Se actualizará después
               })
             }
