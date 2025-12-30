@@ -1430,94 +1430,165 @@ const handleRequestSubmit = async (request: any) => {
         return { fechaStr, payload }
       })
 
-      console.log(`📦 Preparando ${solicitudes.length} solicitudes para enviar en paralelo`)
+      console.log(`📦 Preparando ${solicitudes.length} solicitudes para enviar con throttling`)
 
-      // Enviar todas las solicitudes en paralelo
-      const promesas = solicitudes.map(async ({ fechaStr, payload }) => {
-        console.log(`📅 Enviando solicitud para ${fechaStr}:`, payload)
-
-        try {
-          const controller = new AbortController()
-          // Timeout de 60 segundos para cada solicitud
-          const timeoutId = setTimeout(() => controller.abort(), 60000)
-
-          // 1️⃣ PRIMERO: Enviar a Laravel para guardar en BD
-          console.log(`🌐 [${fechaStr}] Enviando a Laravel para guardar en BD...`)
-          const laravelUrl = 'http://190.171.225.68/api/store-vacation'
-          
-          const laravelResponse = await fetch(laravelUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-            signal: controller.signal
-          }).catch((fetchError: any) => {
-            console.error(`❌ [${fechaStr}] Error de red al conectar con Laravel:`, fetchError)
-            if (fetchError.name === 'TypeError' && fetchError.message.includes('fetch')) {
-              throw { 
-                fechaStr, 
-                error: new Error(`No se pudo conectar al servidor Laravel. Verifica que el servidor esté corriendo en ${laravelUrl}`), 
-                tipo: 'network_error',
-                originalError: fetchError.message
-              }
-            }
-            throw { fechaStr, error: fetchError, tipo: 'network_error' }
-          })
-
-          if (!laravelResponse.ok) {
-            let errorData: any = {}
-            try {
-              errorData = await laravelResponse.json()
-            } catch (e) {
-              errorData = { message: `Error HTTP ${laravelResponse.status}: ${laravelResponse.statusText}` }
-            }
-            const errorMessage = errorData.message || `Error al guardar solicitud en BD para ${fechaStr} (${laravelResponse.status})`
-            console.error(`❌ [${fechaStr}] Error HTTP de Laravel:`, errorMessage)
-            throw { fechaStr, error: new Error(errorMessage), tipo: 'http_error', status: laravelResponse.status }
-          }
-
-          const laravelResult = await laravelResponse.json().catch(() => ({}))
-          console.log(`✅ [${fechaStr}] Solicitud guardada en BD:`, laravelResult)
-
-          // 2️⃣ SEGUNDO: Enviar notificación al bot de WhatsApp (no bloquea si falla)
+      // Función helper para enviar una solicitud con reintentos
+      const enviarSolicitudConReintentos = async ({ fechaStr, payload }: { fechaStr: string, payload: any }, maxReintentos = 3): Promise<{ fechaStr: string, success: boolean, result?: any }> => {
+        let intento = 0
+        
+        while (intento < maxReintentos) {
           try {
-            const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
-            const botUrl = `${BOT_URL}/api/store-vacation`
+            const controller = new AbortController()
+            // Timeout de 60 segundos para cada solicitud
+            const timeoutId = setTimeout(() => controller.abort(), 60000)
+
+            // 1️⃣ PRIMERO: Enviar a Laravel para guardar en BD
+            console.log(`🌐 [${fechaStr}] Enviando a Laravel para guardar en BD... (intento ${intento + 1}/${maxReintentos})`)
+            const laravelUrl = 'http://190.171.225.68/api/store-vacation'
             
-            console.log(`📱 [${fechaStr}] Enviando notificación de WhatsApp...`)
-            await fetch(botUrl, {
+            const laravelResponse = await fetch(laravelUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify(payload),
               signal: controller.signal
+            }).catch((fetchError: any) => {
+              console.error(`❌ [${fechaStr}] Error de red al conectar con Laravel:`, fetchError)
+              if (fetchError.name === 'TypeError' && fetchError.message.includes('fetch')) {
+                throw { 
+                  fechaStr, 
+                  error: new Error(`No se pudo conectar al servidor Laravel. Verifica que el servidor esté corriendo en ${laravelUrl}`), 
+                  tipo: 'network_error',
+                  originalError: fetchError.message
+                }
+              }
+              throw { fechaStr, error: fetchError, tipo: 'network_error' }
             })
-            console.log(`✅ [${fechaStr}] Notificación de WhatsApp enviada`)
-          } catch (botError: any) {
-            console.warn(`⚠️ [${fechaStr}] No se pudo enviar notificación de WhatsApp:`, botError)
-            // No fallar la operación si las notificaciones fallan
-          }
 
-          clearTimeout(timeoutId)
-          return { fechaStr, success: true, result: laravelResult }
-        } catch (error: any) {
-          console.error(`❌ Error al enviar solicitud para ${fechaStr}:`, error)
-          // Si es un error de aborto, dar más información
-          if (error.name === 'AbortError' || error.message?.includes('aborted')) {
-            throw { fechaStr, error: new Error(`Timeout: El servidor tardó demasiado en responder para ${fechaStr}`), tipo: 'timeout' }
+            if (!laravelResponse.ok) {
+              // Si es error 429 (Too Many Requests), esperar y reintentar
+              if (laravelResponse.status === 429) {
+                const retryAfter = parseInt(laravelResponse.headers.get('Retry-After') || '5')
+                const delay = Math.min(retryAfter * 1000, (intento + 1) * 2000) // Máximo 2s por intento
+                
+                console.warn(`⚠️ [${fechaStr}] Error 429 - Esperando ${delay}ms antes de reintentar...`)
+                
+                if (intento < maxReintentos - 1) {
+                  await new Promise(resolve => setTimeout(resolve, delay))
+                  intento++
+                  continue // Reintentar
+                } else {
+                  // Último intento falló
+                  let errorData: any = {}
+                  try {
+                    errorData = await laravelResponse.json()
+                  } catch (e) {
+                    errorData = { message: `Error HTTP 429: Too Many Requests` }
+                  }
+                  const errorMessage = errorData.message || `Error HTTP 429: Too Many Requests para ${fechaStr}`
+                  throw { fechaStr, error: new Error(errorMessage), tipo: 'http_error', status: 429 }
+                }
+              } else {
+                // Otro error HTTP, no reintentar
+                let errorData: any = {}
+                try {
+                  errorData = await laravelResponse.json()
+                } catch (e) {
+                  errorData = { message: `Error HTTP ${laravelResponse.status}: ${laravelResponse.statusText}` }
+                }
+                const errorMessage = errorData.message || `Error al guardar solicitud en BD para ${fechaStr} (${laravelResponse.status})`
+                console.error(`❌ [${fechaStr}] Error HTTP de Laravel:`, errorMessage)
+                throw { fechaStr, error: new Error(errorMessage), tipo: 'http_error', status: laravelResponse.status }
+              }
+            }
+
+            const laravelResult = await laravelResponse.json().catch(() => ({}))
+            console.log(`✅ [${fechaStr}] Solicitud guardada en BD:`, laravelResult)
+
+            // 2️⃣ SEGUNDO: Enviar notificación al bot de WhatsApp (no bloquea si falla)
+            try {
+              const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+              const botUrl = `${BOT_URL}/api/store-vacation`
+              
+              console.log(`📱 [${fechaStr}] Enviando notificación de WhatsApp...`)
+              await fetch(botUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+                signal: controller.signal
+              })
+              console.log(`✅ [${fechaStr}] Notificación de WhatsApp enviada`)
+            } catch (botError: any) {
+              console.warn(`⚠️ [${fechaStr}] No se pudo enviar notificación de WhatsApp:`, botError)
+              // No fallar la operación si las notificaciones fallan
+            }
+
+            clearTimeout(timeoutId)
+            return { fechaStr, success: true, result: laravelResult }
+          } catch (error: any) {
+            console.error(`❌ Error al enviar solicitud para ${fechaStr} (intento ${intento + 1}):`, error)
+            
+            // Si es un error de aborto, dar más información
+            if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+              throw { fechaStr, error: new Error(`Timeout: El servidor tardó demasiado en responder para ${fechaStr}`), tipo: 'timeout' }
+            }
+            
+            // Si ya tiene fechaStr y no es 429, lanzar error inmediatamente
+            if (error.fechaStr && error.status !== 429) {
+              throw error
+            }
+            
+            // Si es 429 y aún hay reintentos disponibles, continuar el loop
+            if (error.status === 429 && intento < maxReintentos - 1) {
+              intento++
+              continue
+            }
+            
+            // Si no es 429 o se agotaron los reintentos, lanzar error
+            throw { fechaStr, error, tipo: 'unknown' }
           }
-          // Si ya tiene fechaStr, mantenerlo
-          if (error.fechaStr) {
-            throw error
-          }
-          throw { fechaStr, error, tipo: 'unknown' }
         }
-      })
+        
+        // Si llegamos aquí, todos los reintentos fallaron
+        throw { fechaStr, error: new Error(`Error después de ${maxReintentos} intentos`), tipo: 'max_retries_exceeded' }
+      }
 
-      // Esperar a que todas las solicitudes se completen
-      const resultados = await Promise.allSettled(promesas)
+      // Enviar solicitudes en lotes con delay entre lotes para evitar rate limiting
+      const TAMANO_LOTE = 5 // Enviar 5 solicitudes a la vez
+      const DELAY_ENTRE_LOTES = 500 // 500ms entre lotes
+      const DELAY_ENTRE_SOLICITUDES = 100 // 100ms entre solicitudes dentro del mismo lote
+      
+      const resultados: PromiseSettledResult<any>[] = []
+      
+      for (let i = 0; i < solicitudes.length; i += TAMANO_LOTE) {
+        const lote = solicitudes.slice(i, i + TAMANO_LOTE)
+        const indiceLote = Math.floor(i / TAMANO_LOTE) + 1
+        const totalLotes = Math.ceil(solicitudes.length / TAMANO_LOTE)
+        
+        console.log(`📦 Enviando lote ${indiceLote}/${totalLotes} (${lote.length} solicitudes)`)
+        
+        // Enviar solicitudes del lote con pequeño delay entre cada una
+        const promesasLote = lote.map(async (solicitud, index) => {
+          if (index > 0) {
+            // Esperar un pequeño delay antes de enviar la siguiente solicitud del mismo lote
+            await new Promise(resolve => setTimeout(resolve, DELAY_ENTRE_SOLICITUDES))
+          }
+          return enviarSolicitudConReintentos(solicitud)
+        })
+        
+        // Esperar a que todas las solicitudes del lote se completen
+        const resultadosLote = await Promise.allSettled(promesasLote)
+        resultados.push(...resultadosLote)
+        
+        // Esperar antes de enviar el siguiente lote (excepto si es el último)
+        if (i + TAMANO_LOTE < solicitudes.length) {
+          console.log(`⏳ Esperando ${DELAY_ENTRE_LOTES}ms antes del siguiente lote...`)
+          await new Promise(resolve => setTimeout(resolve, DELAY_ENTRE_LOTES))
+        }
+      }
       
       // Separar éxitos y errores
       const exitosos = resultados.filter(r => r.status === 'fulfilled')
