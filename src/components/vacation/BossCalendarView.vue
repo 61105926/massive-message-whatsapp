@@ -2435,75 +2435,38 @@ const loadData = async () => {
       }
     } catch (err) {
       console.error('❌ Error al cargar datos del manager:', err)
-      // Datos de ejemplo como fallback
-      teamEmployees.value = [
-      { emp_id: '1', name: 'Juan Pérez', department: 'Distribución', vacationBalance: 15, totalDays: 25, usagePercentage: 40, daysRemaining: 10 },
-      { emp_id: '2', name: 'María García', department: 'Almacén', vacationBalance: 0, totalDays: 20, usagePercentage: 100, daysRemaining: 0 },
-      { emp_id: '3', name: 'Pedro López', department: 'Logística', vacationBalance: 5, totalDays: 20, usagePercentage: 75, daysRemaining: 5 },
-      { emp_id: '4', name: 'Ana Martínez', department: 'Ventas', vacationBalance: 22, totalDays: 30, usagePercentage: 27, daysRemaining: 8 },
-      { emp_id: '5', name: 'Luis Sánchez', department: 'Producción', vacationBalance: 16, totalDays: 25, usagePercentage: 36, daysRemaining: 9 },
-      { emp_id: '6', name: 'Carmen Torres', department: 'Administración', vacationBalance: 19, totalDays: 25, usagePercentage: 24, daysRemaining: 6 },
-      { emp_id: '7', name: 'Roberto Silva', department: 'Contabilidad', vacationBalance: 12, totalDays: 20, usagePercentage: 40, daysRemaining: 8 },
-      { emp_id: '8', name: 'Laura Morales', department: 'Recursos Humanos', vacationBalance: 18, totalDays: 25, usagePercentage: 28, daysRemaining: 7 },
-      { emp_id: '9', name: 'Carlos Ramírez', department: 'Sistemas', vacationBalance: 8, totalDays: 20, usagePercentage: 60, daysRemaining: 12 },
-      { emp_id: '10', name: 'Patricia González', department: 'Marketing', vacationBalance: 20, totalDays: 25, usagePercentage: 20, daysRemaining: 5 },
-      { emp_id: '11', name: 'Fernando Herrera', department: 'Compras', vacationBalance: 10, totalDays: 20, usagePercentage: 50, daysRemaining: 10 },
-      { emp_id: '12', name: 'Sandra Vega', department: 'Ventas', vacationBalance: 15, totalDays: 25, usagePercentage: 40, daysRemaining: 10 },
-      { emp_id: '13', name: 'Miguel Ángel', department: 'Distribución', vacationBalance: 3, totalDays: 20, usagePercentage: 85, daysRemaining: 17 },
-      { emp_id: '14', name: 'Andrea Cárdenas', department: 'Almacén', vacationBalance: 25, totalDays: 30, usagePercentage: 17, daysRemaining: 5 },
-      { emp_id: '15', name: 'Jorge Méndez', department: 'Logística', vacationBalance: 14, totalDays: 20, usagePercentage: 30, daysRemaining: 6 },
-      { emp_id: '16', name: 'Lucía Fernández', department: 'Producción', vacationBalance: 11, totalDays: 20, usagePercentage: 45, daysRemaining: 9 },
-      { emp_id: '17', name: 'Ricardo Pacheco', department: 'Seguridad', vacationBalance: 22, totalDays: 25, usagePercentage: 12, daysRemaining: 3 },
-      { emp_id: '18', name: 'Estela Romero', department: 'Limpieza', vacationBalance: 19, totalDays: 25, usagePercentage: 24, daysRemaining: 6 },
-      { emp_id: '19', name: 'Mario Castillo', department: 'Mantenimiento', vacationBalance: 6, totalDays: 20, usagePercentage: 70, daysRemaining: 14 },
-      { emp_id: '20', name: 'Diana Flores', department: 'Atención al Cliente', vacationBalance: 17, totalDays: 25, usagePercentage: 32, daysRemaining: 8 }
-    ]
-    
-    // Datos de vacaciones de ejemplo para el mes actual
-    const currentMonth = currentDate.value.getMonth() + 1
-    const currentYear = currentDate.value.getFullYear()
-    
-    vacations.value = [
-      {
-        id: '1',
-        emp_id: '1',
-        employee_name: 'Juan Pérez',
-        department: 'Distribución',
-        start_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-27`,
-        end_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-29`,
-        status: 'pending'
-      },
-      {
-        id: '2',
-        emp_id: '2',
-        employee_name: 'María García',
-        department: 'Almacén',
-        start_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-10`,
-        end_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-15`,
-        status: 'approved'
-      },
-      {
-        id: '3',
-        emp_id: '3',
-        employee_name: 'Pedro López',
-        department: 'Logística',
-        start_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-05`,
-        end_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-08`,
-        status: 'approved'
-      }
-    ]
+      // No usar datos de ejemplo - mostrar error y dejar vacío
+      teamEmployees.value = []
+      vacations.value = []
+      departments.value = []
+      
+      // Mostrar mensaje de error al usuario
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido'
+      showNotification(
+        'error',
+        'Error al cargar datos',
+        `No se pudieron cargar los datos del equipo. Por favor verifica tu conexión e intenta recargar la página.\n\nError: ${errorMessage}`
+      )
     }
     
-    // Extraer departamentos únicos para el filtro
-    departments.value = Array.from(new Set(teamEmployees.value.map(emp => emp.department))).sort()
-    
+    // Extraer departamentos únicos para el filtro (solo si hay empleados)
+    if (teamEmployees.value.length > 0) {
+      departments.value = Array.from(new Set(teamEmployees.value.map(emp => emp.department))).sort()
+    }
   } catch (error) {
     console.error('❌ Error al cargar datos en loadData:', error)
-    // Datos de ejemplo como fallback
-    teamEmployees.value = [
-      { emp_id: '1', name: 'Juan Pérez', department: 'Distribución', vacationBalance: 15, totalDays: 25, usagePercentage: 40, daysRemaining: 10 }
-    ]
-    departments.value = ['Distribución']
+    // No usar datos de ejemplo - mostrar error y dejar vacío
+    teamEmployees.value = []
+    vacations.value = []
+    departments.value = []
+    
+    // Mostrar mensaje de error al usuario
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
+    showNotification(
+      'error',
+      'Error al cargar datos',
+      `No se pudieron cargar los datos del equipo. Por favor verifica tu conexión e intenta recargar la página.\n\nError: ${errorMessage}`
+    )
   }
 }
 
