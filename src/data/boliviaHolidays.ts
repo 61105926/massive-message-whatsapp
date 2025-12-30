@@ -167,13 +167,13 @@ export function getHolidaysForEmployee(year: number, regional?: string): Array<{
                       normalizedRegional.includes(normalizedDepartment) ||
                       normalizedDepartment.includes(normalizedRegional)
       
-      console.log('🔍 Comparando regional:', {
-        department: holiday.department,
-        regional: regional,
-        normalizedDepartment,
-        normalizedRegional,
-        matches
-      })
+      // console.log('🔍 Comparando regional:', {
+      //   department: holiday.department,
+      //   regional: regional,
+      //   normalizedDepartment,
+      //   normalizedRegional,
+      //   matches
+      // })
       
       return matches
     }

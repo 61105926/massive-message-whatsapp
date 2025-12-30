@@ -938,7 +938,7 @@ const navigateMonth = (direction: 'prev' | 'next') => {
     currentDate.value = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() + 1, 1)
   }
   fetchHolidays() // Recargar feriados al cambiar de mes
-  loadData()
+  // NO recargar datos al cambiar de mes - ya están cargados
 }
 
 const isWeekend = (date: Date): boolean => {
