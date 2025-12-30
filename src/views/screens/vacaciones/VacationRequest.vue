@@ -275,7 +275,12 @@
               </h3>
               <p class="text-sm text-muted-foreground">
                 <span v-if="programmedVacationsEnabled">
-                  Debes seleccionar exactamente {{ currentUser.vacationBalance }} días dentro del año 2026.
+                  <span v-if="vacationRange">
+                    Debes seleccionar entre {{ vacationRange.minimo.toFixed(1) }} y {{ vacationRange.maximo.toFixed(1) }} días dentro del año 2026.
+                  </span>
+                  <span v-else>
+                    Debes seleccionar exactamente {{ currentUser.vacationBalance }} días dentro del año 2026.
+                  </span>
                 </span>
                 <span v-else>
                   Toca las fechas que quieres solicitar. Se enviarán como vacaciones programadas para aprobación del jefe.
@@ -293,9 +298,39 @@
               <div v-if="programmedVacationsEnabled" class="mt-4 flex items-center justify-between text-sm border-t pt-4">
                 <div>
                   <span class="font-medium">Seleccionados:</span>
-                  <span :class="totalSelectedDays === currentUser.vacationBalance ? 'text-green-600 font-semibold ml-2' : 'text-gray-700 ml-2'">
-                    {{ totalSelectedDays.toFixed(1) }} / {{ currentUser.vacationBalance }}
+                  <span :class="isWithinVacationRange ? 'text-green-600 font-semibold ml-2' : 'text-gray-700 ml-2'">
+                    {{ totalSelectedDays.toFixed(1) }}
+                    <span v-if="vacationRange">
+                      / Rango: {{ vacationRange.minimo.toFixed(1) }} - {{ vacationRange.maximo.toFixed(1) }} días
+                    </span>
+                    <span v-else>
+                      / {{ currentUser.vacationBalance }}
+                    </span>
                   </span>
+                </div>
+              </div>
+
+              <!-- Mostrar rango de vacaciones calculado -->
+              <div v-if="vacationRange" class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 class="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Rango de Vacaciones Permitido
+                </h4>
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span class="text-blue-700 font-medium">Mínimo:</span>
+                    <span class="ml-2 text-blue-900 font-semibold">{{ vacationRange.minimo.toFixed(1) }} días</span>
+                  </div>
+                  <div>
+                    <span class="text-blue-700 font-medium">Máximo:</span>
+                    <span class="ml-2 text-blue-900 font-semibold">{{ vacationRange.maximo.toFixed(1) }} días</span>
+                  </div>
+                  <div v-if="vacationRange.duodecima > 0" class="col-span-2 text-xs text-blue-600 mt-1">
+                    Duodécima: {{ vacationRange.duodecima.toFixed(1) }} días | 
+                    Saldo acumulado: {{ vacationRange.saldoAcumulado }} días
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -339,16 +374,30 @@
                 <div class="flex items-center justify-between">
                   <div class="text-sm">
                     <span class="font-medium">Seleccionados:</span>
-                    <span :class="totalSelectedDays === currentUser.vacationBalance ? 'text-green-600 font-semibold ml-2' : 'text-orange-600 ml-2'">
-                      {{ totalSelectedDays.toFixed(1) }} / {{ currentUser.vacationBalance }}
+                    <span :class="isWithinVacationRange ? 'text-green-600 font-semibold ml-2' : 'text-orange-600 ml-2'">
+                      {{ totalSelectedDays.toFixed(1) }}
+                      <span v-if="vacationRange">
+                        / Rango: {{ vacationRange.minimo.toFixed(1) }} - {{ vacationRange.maximo.toFixed(1) }} días
+                      </span>
+                      <span v-else>
+                        / {{ currentUser.vacationBalance }}
+                      </span>
                     </span>
-                    <p v-if="totalSelectedDays !== currentUser.vacationBalance" class="text-xs text-orange-600 mt-1">
+                    <p v-if="vacationRange && !isWithinVacationRange" class="text-xs text-orange-600 mt-1">
+                      <span v-if="totalSelectedDays < vacationRange.minimo">
+                        Debes seleccionar al menos {{ vacationRange.minimo.toFixed(1) }} días
+                      </span>
+                      <span v-else-if="totalSelectedDays > vacationRange.maximo">
+                        No puedes seleccionar más de {{ vacationRange.maximo.toFixed(1) }} días
+                      </span>
+                    </p>
+                    <p v-else-if="!vacationRange && totalSelectedDays !== currentUser.vacationBalance" class="text-xs text-orange-600 mt-1">
                       Debes seleccionar exactamente {{ currentUser.vacationBalance }} días
                     </p>
                   </div>
                   <button
                     @click="showConfirmModal = true"
-                    :disabled="totalSelectedDays !== currentUser.vacationBalance || isSubmittingRequest"
+                    :disabled="!isWithinVacationRange || isSubmittingRequest"
                     class="px-6 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Enviar Programación
@@ -693,6 +742,7 @@ import VacationRequestForm from '@/components/vacation/VacationRequestForm.vue'
 import RequestsList from '@/components/vacation/RequestsList.vue'
 import BossApprovalPanel from '@/components/vacation/BossApprovalPanel.vue'
 import BossCalendarView from '@/components/vacation/BossCalendarView.vue'
+import { calcularRangoVacaciones, type VacationRangeOutput } from '@/utils/vacationRange'
 
 // Router
 const route = useRoute()
@@ -721,6 +771,30 @@ const calculateTotalDays = (selections: any[]): number => {
 const totalSelectedDays = computed(() => {
   return calculateTotalDays(daySelections.value)
 })
+
+// Computed para verificar si los días seleccionados están dentro del rango permitido
+const isWithinVacationRange = computed(() => {
+  if (!vacationRange.value) {
+    // Si no hay rango calculado, usar la validación anterior
+    return totalSelectedDays.value === currentUser.value.vacationBalance
+  }
+  // Verificar que esté entre el mínimo y el máximo
+  const dentroDelRango = totalSelectedDays.value >= vacationRange.value.minimo && 
+                         totalSelectedDays.value <= vacationRange.value.maximo
+  
+  // Log para depuración
+  if (import.meta.env.DEV) {
+    console.log('🔍 Validación de rango:', {
+      totalSelectedDays: totalSelectedDays.value,
+      minimo: vacationRange.value.minimo,
+      maximo: vacationRange.value.maximo,
+      dentroDelRango
+    })
+  }
+  
+  return dentroDelRango
+})
+
 const requests = ref<any[]>([])
 const showForm = ref(false)
 const activeView = ref<'calendar' | 'requests' | 'profile' | 'boss'>('calendar')
@@ -728,6 +802,7 @@ const employeeData = ref<any>(null)
 const programmedVacationsEnabled = ref(true)
 const isLoadingData = ref(false)
 const isSubmittingRequest = ref(false)
+const vacationRange = ref<VacationRangeOutput | null>(null)
 const notification = ref<{ show: boolean; type: 'success' | 'error' | 'info'; title: string; message: string }>({
   show: false,
   type: 'info',
@@ -783,6 +858,12 @@ const currentUser = ref({
 
 // Decodificar teléfono y consultar API
 const fetchEmployeeData = async (base64Data: string) => {
+  // Prevenir múltiples llamadas simultáneas
+  if (isLoadingData.value) {
+    console.warn('⚠️ Ya hay una carga de datos en proceso, ignorando llamada duplicada')
+    return
+  }
+  
   isLoadingData.value = true
   try {
     // 1. Decodificar el teléfono de base64
@@ -888,6 +969,10 @@ const fetchEmployeeData = async (base64Data: string) => {
         usedDays: vacationTaken,
         vacationTotal: vacationTotal, // Agregar total para referencia
       }
+
+      // Calcular rango de vacaciones según las reglas de la empresa
+      // Usar employeeData.value que ya tiene todos los datos cargados
+      calcularRangoVacacionesEmpleado(employeeData.value || parsedData, vacationAvailable)
     }
 
     console.log('✅ Datos de empleado cargados correctamente')
@@ -915,6 +1000,257 @@ const fetchEmployeeData = async (base64Data: string) => {
     }
   } finally {
     isLoadingData.value = false
+  }
+}
+
+// Función para calcular el rango de vacaciones del empleado
+const calcularRangoVacacionesEmpleado = (parsedData: any, saldoDisponible: number) => {
+  try {
+    // Log mínimo para depuración (sin imprimir objetos completos)
+    console.log('📊 Calculando rango de vacaciones para empleado:', parsedData.empID || parsedData.id)
+
+    // Obtener fecha de ingreso (buscar en múltiples campos posibles)
+    // También buscar en employeeData.value por si los datos están ahí
+    const fechaIngreso = parsedData.fechaIngreso || 
+                        parsedData.FechaIngreso || 
+                        parsedData.fecha_ingreso || 
+                        parsedData.FECHA_INGRESO ||
+                        parsedData.fecha_ingreso_empleado ||
+                        parsedData.fecha_ingreso_emp ||
+                        employeeData.value?.fechaIngreso ||
+                        employeeData.value?.FechaIngreso ||
+                        employeeData.value?.fecha_ingreso ||
+                        employeeData.value?.FECHA_INGRESO ||
+                        null
+
+    // Si no se encuentra, mostrar información de depuración
+    if (!fechaIngreso || fechaIngreso === '' || fechaIngreso === 'null' || fechaIngreso === 'undefined') {
+      if (import.meta.env.DEV) {
+        console.warn('⚠️ No se encontró fecha de ingreso. Campos disponibles:', {
+          parsedDataKeys: Object.keys(parsedData).filter(k => 
+            k.toLowerCase().includes('fecha') || k.toLowerCase().includes('ingreso')
+          ),
+          employeeDataKeys: employeeData.value ? Object.keys(employeeData.value).filter(k => 
+            k.toLowerCase().includes('fecha') || k.toLowerCase().includes('ingreso')
+          ) : [],
+          fechaIngresoRaw: parsedData.fechaIngreso,
+          fechaIngresoEmployeeData: employeeData.value?.fechaIngreso
+        })
+      }
+      console.warn('⚠️ No se encontró fecha de ingreso, no se puede calcular el rango de vacaciones')
+      return
+    }
+
+    // Formatear fecha de ingreso a YYYY-MM-DD
+    // Manejar diferentes formatos: "2023-07-04 00:00:00.0000000", "2023-07-04", etc.
+    let fechaIngresoFormateada: string
+    try {
+      // Limpiar la fecha: remover espacios extra y tomar solo la parte de la fecha
+      let fechaLimpia = String(fechaIngreso).trim()
+      
+      // Si tiene formato con hora (ej: "2023-07-04 00:00:00.0000000"), tomar solo la parte de la fecha
+      if (fechaLimpia.includes(' ')) {
+        fechaLimpia = fechaLimpia.split(' ')[0]
+      }
+      
+      // Si tiene formato con T (ISO), tomar solo la parte de la fecha
+      if (fechaLimpia.includes('T')) {
+        fechaLimpia = fechaLimpia.split('T')[0]
+      }
+      
+      // Validar formato YYYY-MM-DD
+      const fechaRegex = /^\d{4}-\d{2}-\d{2}$/
+      if (fechaRegex.test(fechaLimpia)) {
+        fechaIngresoFormateada = fechaLimpia
+      } else {
+        // Intentar parsear con Date si no coincide con el formato esperado
+        const fechaParsed = new Date(fechaLimpia)
+        if (isNaN(fechaParsed.getTime())) {
+          console.warn('⚠️ Fecha de ingreso inválida:', fechaIngreso)
+          return
+        }
+        fechaIngresoFormateada = fechaParsed.toISOString().split('T')[0]
+      }
+    } catch (error) {
+      console.warn('⚠️ Error al parsear fecha de ingreso:', error, 'Fecha original:', fechaIngreso)
+      return
+    }
+
+    // Obtener fecha actual
+    const fechaActual = new Date().toISOString().split('T')[0]
+
+    // Obtener saldo acumulado
+    // El saldo acumulado puede venir en diferentes campos:
+    // Buscar en múltiples campos posibles de la API
+    const saldoAcumuladoRaw = parsedData.saldoAcumulado || 
+                              parsedData.saldo_acumulado ||
+                              parsedData.saldoAcumuladoEmpleado ||
+                              parsedData.saldo_acumulado_empleado ||
+                              parsedData.vacation?.saldo_acumulado ||
+                              parsedData.vacation?.saldoAcumulado ||
+                              parsedData.saldo ||
+                              parsedData.saldo_anterior ||
+                              parsedData.saldoAnterior ||
+                              parsedData.saldo_inicial ||
+                              parsedData.saldoInicial
+    
+    const vacationTotal = parsedData.vacation?.total ? parseFloat(parsedData.vacation.total) : 0
+    const vacationTaken = parsedData.vacation?.taken ? parseFloat(parsedData.vacation.taken) : 0
+    const vacationAvailable = saldoDisponible || 0
+    
+    let saldoAcumulado: number
+    if (saldoAcumuladoRaw !== undefined && saldoAcumuladoRaw !== null && saldoAcumuladoRaw !== '') {
+      saldoAcumulado = parseFloat(String(saldoAcumuladoRaw))
+      console.log('✅ Saldo acumulado encontrado en campo específico:', saldoAcumulado)
+    } else {
+      // Si no hay campo específico, calcular el saldo acumulado
+      // El saldo acumulado es el total de días que tenía al inicio de la gestión actual
+      // antes de tomar días de vacaciones. Esto incluye días acumulados de gestiones anteriores
+      // más los días de la gestión actual.
+      // 
+      // Si available = 11, total = 30, taken = 19:
+      // - available = total - taken = 30 - 19 = 11 ✓ (coincide)
+      // 
+      // Pero el saldo acumulado podría ser diferente. Si el usuario dice que debería ser 20,
+      // entonces tal vez el cálculo es: saldo acumulado = available + taken - diasPorGestion
+      // O tal vez viene de un campo específico de la API que no estamos leyendo.
+      // 
+      // Por ahora, vamos a intentar calcularlo como: total - taken + X
+      // donde X podría ser días acumulados de gestiones anteriores.
+      // 
+      // Alternativa: Si el usuario quiere que sea 20, y tenemos total=30, taken=19, available=11,
+      // entonces: saldo acumulado = 20 podría ser el total de días que tenía ANTES de esta gestión.
+      // 
+      // Vamos a usar una lógica: si available + taken = total, entonces el saldo acumulado
+      // podría ser el available (días disponibles actuales) más algún ajuste.
+      // 
+      // Pero según las reglas, el saldo acumulado es el que se usa para calcular mínimo y máximo.
+      // Si el usuario dice que debería ser 20, entonces tal vez:
+      // - El saldo acumulado es un campo que viene de la API y representa días de gestiones anteriores
+      // - O se calcula de manera diferente
+      
+      // TEMPORAL: Intentar calcular el saldo acumulado de manera alternativa
+      // Si el usuario dice que debería ser 20 y tenemos available=11, total=30, taken=19,
+      // entonces tal vez el saldo acumulado es: available + (total - available - taken)
+      // O tal vez es simplemente un campo que viene de la API con otro nombre
+      
+      // Por ahora, vamos a usar una lógica alternativa:
+      // Si available + taken < total, entonces hay días acumulados de gestiones anteriores
+      // saldo acumulado = available + (total - available - taken) = available + días_acumulados_anteriores
+      // Pero esto no funciona si available + taken = total
+      
+      // Otra posibilidad: el saldo acumulado es el total de días que tenía ANTES de tomar los días de esta gestión
+      // Si tiene 30 días por gestión y ha tomado 19, pero el saldo acumulado es 20,
+      // entonces tal vez tenía 20 días acumulados + 30 días de esta gestión = 50 días totales
+      // y ha tomado 19, quedando 31 disponibles... pero eso no coincide con available=11
+      
+      // INTENTO DE CALCULAR EL SALDO ACUMULADO CORRECTO
+      // El usuario indica que debería ser 20, no 11 (available)
+      // 
+      // Posibilidades:
+      // 1. El saldo acumulado viene en un campo específico de la API (no encontrado aún)
+      // 2. El saldo acumulado se calcula de manera diferente
+      // 
+      // Si available=11, total=30, taken=19:
+      // - available = total - taken = 30 - 19 = 11 ✓
+      // 
+      // Si el saldo acumulado debería ser 20:
+      // - Podría ser: total - taken + días_acumulados_anteriores
+      // - O podría ser un campo específico de la API
+      // 
+      // Por ahora, vamos a intentar usar el total como saldo acumulado si es razonable
+      // O usar una fórmula alternativa basada en los datos disponibles
+      
+      // OPCIÓN 1: Usar total como saldo acumulado (si tiene sentido)
+      // Pero esto no tiene sentido porque el total son los días por gestión, no el acumulado
+      
+      // OPCIÓN 2: Calcular como: available + (total - available - taken)
+      // Esto daría: 11 + (30 - 11 - 19) = 11 + 0 = 11 (no funciona)
+      
+      // OPCIÓN 3: El saldo acumulado podría ser el total de días que tenía ANTES de esta gestión
+      // Si el usuario quiere que sea 20, tal vez es un campo específico que no estamos leyendo
+      
+      // TEMPORAL: Intentar calcular el saldo acumulado de manera alternativa
+      // Si el usuario necesita que sea 20 y tenemos available=11, total=30, taken=19,
+      // tal vez el saldo acumulado es el total menos los días tomados de esta gestión específica,
+      // más días acumulados de gestiones anteriores.
+      // 
+      // Por ahora, vamos a intentar usar el total como referencia si es razonable,
+      // o calcular de otra manera según los datos disponibles.
+      
+      // Si el usuario indica que debería ser 20, y tenemos estos datos:
+      // - available = 11 (días disponibles actuales)
+      // - total = 30 (días por gestión)
+      // - taken = 19 (días tomados)
+      // 
+      // El saldo acumulado podría ser:
+      // - Un campo específico de la API (no encontrado aún)
+      // - Calculado como: total - taken + días_acumulados_anteriores
+      // 
+      // Por ahora usar available como fallback
+      saldoAcumulado = vacationAvailable
+      
+      // Si el usuario necesita un valor específico (ej: 20), debe indicar:
+      // 1. El nombre del campo en la API que contiene ese valor, O
+      // 2. Cómo se calcula ese valor a partir de los campos disponibles
+      
+      // Log mínimo solo en desarrollo (sin imprimir objetos completos)
+      if (import.meta.env.DEV) {
+        const camposRelevantes = Object.keys(parsedData).filter(k => 
+          k.toLowerCase().includes('saldo') || 
+          k.toLowerCase().includes('acumulado') ||
+          k.toLowerCase().includes('balance')
+        )
+        console.warn('⚠️ Saldo acumulado no encontrado. Usando available:', {
+          available: vacationAvailable,
+          total: vacationTotal,
+          taken: vacationTaken,
+          camposRelevantes: camposRelevantes
+          // NO imprimir parsedData completo para evitar errores 429
+        })
+      }
+    }
+
+    // Obtener días por gestión (15, 20 o 30)
+    // Si está disponible en los datos, usarlo; si no, la función lo calculará según antigüedad
+    const diasPorGestionRaw = parsedData.diasPorGestion || 
+                              parsedData.dias_por_gestion || 
+                              parsedData.diasPorGestionEmpleado ||
+                              parsedData.vacation_days ||
+                              parsedData.vacation?.total ||
+                              null // No usar valor por defecto, dejar que la función lo calcule
+
+    // Asegurar que sea 15, 20 o 30 si está disponible
+    let diasPorGestion: 15 | 20 | 30 | undefined = undefined
+    if (diasPorGestionRaw !== null && diasPorGestionRaw !== undefined) {
+      const diasNum = parseInt(String(diasPorGestionRaw))
+      if (diasNum === 20) {
+        diasPorGestion = 20
+      } else if (diasNum === 30) {
+        diasPorGestion = 30
+      } else if (diasNum === 15) {
+        diasPorGestion = 15
+      }
+      // Si no es ninguno de estos valores, dejar undefined para que la función lo calcule
+    }
+
+    // Calcular el rango de vacaciones
+    // Si diasPorGestion no está disponible, la función lo calculará según antigüedad:
+    // 1 a 5 años: 15 días
+    // 5 a 10 años: 20 días
+    // Más de 10 años: 30 días
+    const rango = calcularRangoVacaciones({
+      fechaIngreso: fechaIngresoFormateada,
+      fechaActual: fechaActual,
+      saldoAcumulado: saldoAcumulado,
+      ...(diasPorGestion !== undefined && { diasPorGestion }) // Solo incluir si está definido
+    })
+
+    vacationRange.value = rango
+
+    console.log('📊 Rango de vacaciones calculado:', rango)
+  } catch (error) {
+    console.error('❌ Error al calcular rango de vacaciones:', error)
   }
 }
 
@@ -1011,8 +1347,30 @@ const handleRequestSubmit = async (request: any) => {
     return
   }
 
-  // Mostrar notificación de confirmación ANTES de enviar
+  // Validar rango de vacaciones según las reglas de la empresa
   const totalDays = calculateTotalDays(daySelections.value)
+  if (vacationRange.value) {
+    if (totalDays < vacationRange.value.minimo) {
+      showNotification(
+        'error',
+        'Días insuficientes',
+        `Debes solicitar al menos ${vacationRange.value.minimo.toFixed(1)} días según las reglas de la empresa.`,
+        6000
+      )
+      return
+    }
+    if (totalDays > vacationRange.value.maximo) {
+      showNotification(
+        'error',
+        'Días excedidos',
+        `No puedes solicitar más de ${vacationRange.value.maximo.toFixed(1)} días según las reglas de la empresa.`,
+        6000
+      )
+      return
+    }
+  }
+
+  // Mostrar notificación de confirmación ANTES de enviar
   const vacationType = request.type === 'programmed' ? 'programadas' : 'a cuenta'
   showNotification(
     'info',
