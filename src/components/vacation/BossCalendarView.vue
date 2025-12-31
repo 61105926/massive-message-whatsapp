@@ -510,7 +510,7 @@
     <div
       v-if="showCreateModal && selectedEmployeeForVacation"
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      @click="showCreateModal = false"
+      @click="!isCreatingVacation && (showCreateModal = false)"
     >
       <div class="bg-white rounded-lg p-4 max-w-md w-full mx-4 shadow-2xl" @click.stop>
         <!-- Header compacto -->
@@ -588,16 +588,20 @@
           <div class="flex gap-2 pt-2">
             <button
               @click="submitVacationForm"
-              :disabled="!canSuggestVacation(selectedEmployeeForVacation?.emp_id)"
+              :disabled="!canSuggestVacation(selectedEmployeeForVacation?.emp_id) || isCreatingVacation"
               :class="[
-                'w-full px-3 py-2 text-sm rounded-lg transition-colors font-semibold',
-                canSuggestVacation(selectedEmployeeForVacation?.emp_id)
+                'w-full px-3 py-2 text-sm rounded-lg transition-colors font-semibold flex items-center justify-center gap-2',
+                canSuggestVacation(selectedEmployeeForVacation?.emp_id) && !isCreatingVacation
                   ? 'bg-green-600 text-white hover:bg-green-700'
                   : 'bg-gray-400 text-gray-200 cursor-not-allowed'
               ]"
             >
+              <span v-if="isCreatingVacation" class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
               <span v-if="!canSuggestVacation(selectedEmployeeForVacation?.emp_id)">
                 Sin días disponibles
+              </span>
+              <span v-else-if="isCreatingVacation">
+                Creando...
               </span>
               <span v-else>
                 Confirmar
@@ -612,7 +616,7 @@
     <div
       v-if="showSuggestionModal"
       class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      @click="showSuggestionModal = false"
+      @click="!isSubmittingSuggestion && (showSuggestionModal = false)"
     >
       <div
         class="bg-white rounded-lg p-6 max-w-2xl w-full shadow-xl"
@@ -665,14 +669,16 @@
           <div class="flex gap-3">
             <button
               @click="confirmSuggestion"
-              :disabled="selectedAlternateDates.length === 0"
-              class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 font-medium"
+              :disabled="selectedAlternateDates.length === 0 || isSubmittingSuggestion"
+              class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
             >
-              Enviar Sugerencia
+              <span v-if="isSubmittingSuggestion" class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
+              <span>{{ isSubmittingSuggestion ? 'Enviando...' : 'Enviar Sugerencia' }}</span>
             </button>
             <button
               @click="showSuggestionModal = false"
-              class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-medium"
+              :disabled="isSubmittingSuggestion"
+              class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               Cancelar
             </button>
@@ -861,6 +867,8 @@ const contextMenu = ref({
 
 // Modal de sugerencias
 const showSuggestionModal = ref(false)
+const isSubmittingSuggestion = ref(false) // Estado para prevenir múltiples envíos
+const isCreatingVacation = ref(false) // Estado para prevenir múltiples creaciones
 const suggestionData = ref({
   emp_id: '',
   currentVacations: [] as Vacation[],
@@ -1864,11 +1872,21 @@ const formatDateOnly = (dateStr: string): string => {
 }
 
 const confirmSuggestion = async () => {
+  // Prevenir múltiples envíos simultáneos
+  if (isSubmittingSuggestion.value) {
+    console.warn('⚠️ Ya hay una sugerencia en proceso, ignorando clic duplicado')
+    return
+  }
+  
+  // Validación temprana antes de activar loading
+  if (selectedAlternateDates.value.length === 0) {
+    return
+  }
+  
+  // Activar estado de loading inmediatamente
+  isSubmittingSuggestion.value = true
+  
   try {
-    if (selectedAlternateDates.value.length === 0) {
-      return
-    }
-    
     // Verificar si el empleado ya programó todos sus días antes de sugerir
     const empId = String(suggestionData.value.emp_id)
     const employee = teamEmployees.value.find(emp => String(emp.emp_id) === empId)
@@ -1895,6 +1913,7 @@ const confirmSuggestion = async () => {
           'Sin Días Disponibles',
           `${employee.name} ya programó todos sus ${totalDays} días de vacaciones (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.`
         )
+        isSubmittingSuggestion.value = false
         return
       }
       
@@ -1904,6 +1923,7 @@ const confirmSuggestion = async () => {
           'Días Insuficientes',
           `${employee.name} solo tiene ${daysRemaining} día(s) disponible(s) de ${totalDays} totales (ya tiene ${programmedDays} días programados).\n\nEstás intentando sugerir ${datesToSuggest} día(s). Por favor, reduce la cantidad de días a sugerir.`
         )
+        isSubmittingSuggestion.value = false
         return
       }
     } else {
@@ -1916,40 +1936,44 @@ const confirmSuggestion = async () => {
     console.log('💡 Empleado:', suggestionData.value.emp_id)
     console.log('💡 Fechas originales:', suggestionData.value.originalDates)
     
-    // Crear solicitudes de sugerencia para cada fecha alternativo
-    for (const dateStr of suggestedDates) {
-      const payload = {
-        emp_id: suggestionData.value.emp_id,
-        tipo: 'PROGRAMADA',
-        comentario: `Sugerencia de fechas alternativas para ${dateStr}`,
-        manager_id: props.managerId,
-        antiguedad: '1',
-        detalle: [{
-          fecha: dateStr,
-          turno: 'COMPLETO',
-          observacion: 'Fecha sugerida como alternativa'
-        }],
-        reemplazantes: []
-      }
-
-      console.log(`💡 Enviando sugerencia para ${dateStr}:`, payload)
-
-      const response = await fetch('http://190.171.225.68/api/store-vacation', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      })
-
-      if (!response.ok) {
-        throw new Error(`Error al enviar sugerencia para ${dateStr}`)
-      }
-
-      console.log(`✅ Sugerencia enviada para ${dateStr}`)
+    // Crear UNA SOLA solicitud con todas las fechas alternativas en el detalle
+    // Esto evita duplicación y cuenta correctamente los días
+    const payload = {
+      emp_id: suggestionData.value.emp_id,
+      tipo: 'PROGRAMADA',
+      comentario: `Sugerencia de fechas alternativas: ${suggestedDates.join(', ')}`,
+      manager_id: props.managerId,
+      antiguedad: '1',
+      total_dias: suggestedDates.length.toString(), // Total de días = número de fechas
+      detalle: suggestedDates.map(dateStr => ({
+        fecha: dateStr,
+        turno: 'COMPLETO',
+        observacion: 'Fecha sugerida como alternativa'
+      })),
+      reemplazantes: []
     }
+
+    console.log('💡 Enviando sugerencia con todas las fechas:', payload)
+
+    const response = await fetch('http://190.171.225.68/api/store-vacation', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('❌ Error en respuesta:', errorText)
+      throw new Error(`Error al enviar sugerencia: ${response.status} - ${errorText}`)
+    }
+
+    const result = await response.json()
+    console.log('✅ Sugerencia enviada exitosamente:', result)
     
-    console.log('✅ Todas las sugerencias enviadas exitosamente')
+    showNotification('success', 'Sugerencia enviada', 'Las fechas alternativas se han sugerido correctamente.', 3000)
+    
     showSuggestionModal.value = false
     selectedAlternateDates.value = []
     
@@ -1958,6 +1982,9 @@ const confirmSuggestion = async () => {
   } catch (error) {
     console.error('Error al enviar sugerencia:', error)
     showNotification('error', 'Error', 'Error al enviar la sugerencia. Intenta nuevamente.')
+  } finally {
+    // Siempre desactivar el estado de loading, incluso si hay error
+    isSubmittingSuggestion.value = false
   }
 }
 
@@ -2042,11 +2069,21 @@ const submitVacationForm = () => {
 }
 
 const createVacation = async () => {
+  // Prevenir múltiples creaciones simultáneas
+  if (isCreatingVacation.value) {
+    console.warn('⚠️ Ya hay una creación de vacación en proceso, ignorando clic duplicado')
+    return
+  }
+  
+  // Validación temprana antes de activar loading
+  if (!selectedEmployeeForVacation.value) {
+    return
+  }
+  
+  // Activar estado de loading inmediatamente
+  isCreatingVacation.value = true
+  
   try {
-    if (!selectedEmployeeForVacation.value) {
-      return
-    }
-    
     // Verificar si el empleado ya programó todos sus días
     const empId = String(selectedEmployeeForVacation.value.emp_id)
     const totalDays = selectedEmployeeForVacation.value.totalDays || selectedEmployeeForVacation.value.vacationBalance || 0
@@ -2067,24 +2104,26 @@ const createVacation = async () => {
     // Si es medio día, contar como 0.5, si es completo contar como 1
     const daysToSuggest = newVacationTurno.value === 'COMPLETO' ? 1 : 0.5
     
-    if (daysRemaining <= 0) {
-      showNotification(
-        'warning',
-        'Sin Días Disponibles',
-        `${selectedEmployeeForVacation.value.name} ya programó todos sus ${totalDays} días de vacaciones (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.`
-      )
-      showCreateModal.value = false
-      return
-    }
-    
-    if (daysToSuggest > daysRemaining) {
-      showNotification(
-        'warning',
-        'Días Insuficientes',
-        `${selectedEmployeeForVacation.value.name} solo tiene ${daysRemaining} día(s) disponible(s) de ${totalDays} totales (ya tiene ${programmedDays} días programados).\n\nEstás intentando sugerir ${daysToSuggest} día(s). Por favor, selecciona menos días.`
-      )
-      return
-    }
+      if (daysRemaining <= 0) {
+        showNotification(
+          'warning',
+          'Sin Días Disponibles',
+          `${selectedEmployeeForVacation.value.name} ya programó todos sus ${totalDays} días de vacaciones (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.`
+        )
+        showCreateModal.value = false
+        isCreatingVacation.value = false
+        return
+      }
+      
+      if (daysToSuggest > daysRemaining) {
+        showNotification(
+          'warning',
+          'Días Insuficientes',
+          `${selectedEmployeeForVacation.value.name} solo tiene ${daysRemaining} día(s) disponible(s) de ${totalDays} totales (ya tiene ${programmedDays} días programados).\n\nEstás intentando sugerir ${daysToSuggest} día(s). Por favor, selecciona menos días.`
+        )
+        isCreatingVacation.value = false
+        return
+      }
     
     console.log('📝 Creando vacación:', {
       employee: selectedEmployeeForVacation.value,
@@ -2130,6 +2169,8 @@ const createVacation = async () => {
     const result = await response.json()
     console.log('✅ Vacación creada exitosamente:', result)
     
+    showNotification('success', 'Vacación creada', 'La vacación se ha creado correctamente.', 3000)
+    
     // Cerrar modal de creación y recargar datos
     showCreateModal.value = false
     newVacationStartDate.value = ''
@@ -2142,6 +2183,9 @@ const createVacation = async () => {
     console.error('❌ Error al crear vacación:', error)
     showNotification('error', 'Error', 'Error al crear la vacación. Intenta nuevamente.')
     showCreateModal.value = false
+  } finally {
+    // Siempre desactivar el estado de loading, incluso si hay error
+    isCreatingVacation.value = false
   }
 }
 
