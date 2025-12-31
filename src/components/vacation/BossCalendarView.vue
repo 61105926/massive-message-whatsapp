@@ -1972,7 +1972,7 @@ const confirmSuggestion = async () => {
     const result = await response.json()
     console.log('✅ Sugerencia enviada exitosamente:', result)
     
-    showNotification('success', 'Sugerencia enviada', 'Las fechas alternativas se han sugerido correctamente.', 3000)
+    showNotification('success', 'Sugerencia enviada', 'Las fechas alternativas se han sugerido correctamente.')
     
     showSuggestionModal.value = false
     selectedAlternateDates.value = []
@@ -2169,7 +2169,7 @@ const createVacation = async () => {
     const result = await response.json()
     console.log('✅ Vacación creada exitosamente:', result)
     
-    showNotification('success', 'Vacación creada', 'La vacación se ha creado correctamente.', 3000)
+    showNotification('success', 'Vacación creada', 'La vacación se ha creado correctamente.')
     
     // Cerrar modal de creación y recargar datos
     showCreateModal.value = false
