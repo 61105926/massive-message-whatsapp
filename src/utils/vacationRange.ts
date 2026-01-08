@@ -73,13 +73,25 @@ export function calcularRangoVacaciones(
   // Calcular la duodécima: meses desde el mes de ingreso hasta el mes actual
   // Considerando el cruce de años correctamente
   const añoIngreso = fechaIngresoDate.getFullYear();
-  const añoActual = fechaActualDate.getFullYear();
   const mesIngreso = fechaIngresoDate.getMonth() + 1;
-  const mesActual = fechaActualDate.getMonth() + 1;
+  const diaIngreso = fechaIngresoDate.getDate();
   
-  // Calcular meses transcurridos considerando años
-  // (añoActual - añoIngreso) * 12 + (mesActual - mesIngreso) + 1
-  const mesesTranscurridos = (añoActual - añoIngreso) * 12 + (mesActual - mesIngreso) + 1;
+  const añoActual = fechaActualDate.getFullYear();
+  const mesActual = fechaActualDate.getMonth() + 1;
+  const diaActual = fechaActualDate.getDate();
+  
+  // Determinar el año de inicio de la última gestión
+  const añoGestion =
+    mesActual > mesIngreso || (mesActual === mesIngreso && diaActual >= diaIngreso)
+      ? añoActual
+      : añoActual - 1;
+  
+  // Calcular meses transcurridos desde la última gestión
+  const mesesTranscurridos =
+    (añoActual - añoGestion) * 12 +
+    (mesActual - mesIngreso) +
+    (diaActual >= diaIngreso ? 1 : 0);
+  
   const duodecima = Math.max(0, mesesTranscurridos) * 1; // 1 día por mes, nunca negativo
 
   // Calcular mínimo según saldo acumulado
@@ -93,11 +105,6 @@ export function calcularRangoVacaciones(
   }
 
 
-
-  
-  // Máximo permitido debe ser al menos mínimo + duodécima
-  // Esto permite programar el mínimo más la duodécima (ej: 11 + 6 = 17 días)
-  // Y nunca puede ser negativo
   const maximo = Math.max(minimo + duodecima, 0);
 
   return {
