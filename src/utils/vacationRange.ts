@@ -92,6 +92,9 @@ export function calcularRangoVacaciones(
     minimo = saldoAcumulado;
   }
 
+
+
+  
   // Máximo permitido debe ser al menos mínimo + duodécima
   // Esto permite programar el mínimo más la duodécima (ej: 11 + 6 = 17 días)
   // Y nunca puede ser negativo
