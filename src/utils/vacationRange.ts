@@ -72,7 +72,6 @@ export function calcularRangoVacaciones(
   // Empleados con 1 año o más de antigüedad
   // Calcular la duodécima: meses desde el mes de ingreso hasta el mes actual
   // Considerando el cruce de años correctamente
-  const añoIngreso = fechaIngresoDate.getFullYear();
   const mesIngreso = fechaIngresoDate.getMonth() + 1;
   const diaIngreso = fechaIngresoDate.getDate();
   
