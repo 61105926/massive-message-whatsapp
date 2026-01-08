@@ -209,7 +209,7 @@ const formatDate = (dateString: string): string => {
 const loadVacations = async () => {
   try {
     // TODO: Llamar a la API real cuando esté disponible
-    // const response = await fetch(`http://190.171.225.68/api/vacaciones/calendar?month=${currentDate.value.getMonth() + 1}&year=${currentDate.value.getFullYear()}&manager_id=${props.managerId}`)
+    // const response = await fetch(`http://190.171.225.68:8006/api/vacaciones/calendar?month=${currentDate.value.getMonth() + 1}&year=${currentDate.value.getFullYear()}&manager_id=${props.managerId}`)
     // allVacations.value = await response.json()
     
     // Datos de ejemplo para demostración

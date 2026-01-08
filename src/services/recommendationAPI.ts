@@ -19,7 +19,7 @@ export interface RecommendationResponse {
  */
 export async function getReemplazantesRecomendados(empId: string): Promise<RecommendationResponse> {
   try {
-    const apiUrl = `http://190.171.225.68/api/recomendar-reemplazante?empId=${empId}`;
+    const apiUrl = `http://190.171.225.68:8006/api/recomendar-reemplazante?empId=${empId}`;
     
     console.log('🔍 Obteniendo recomendaciones de reemplazantes:', {
       empId,

@@ -880,7 +880,7 @@ const fetchEmployeeData = async (base64Data: string) => {
     }
 
     // 2. Consultar API con el teléfono
-    const apiUrl = `http://190.171.225.68/api/emp?mobile=${phoneNumber}`
+    const apiUrl = `http://190.171.225.68:8006/api/emp?mobile=${phoneNumber}`
     console.log('🔍 Consultando API:', apiUrl)
 
     const controller = new AbortController()
@@ -1444,7 +1444,7 @@ const handleRequestSubmit = async (request: any) => {
 
             // 1️⃣ PRIMERO: Enviar a Laravel para guardar en BD
             console.log(`🌐 [${fechaStr}] Enviando a Laravel para guardar en BD... (intento ${intento + 1}/${maxReintentos})`)
-            const laravelUrl = 'http://190.171.225.68/api/store-vacation'
+            const laravelUrl = 'http://190.171.225.68:8006/api/store-vacation'
             
             const laravelResponse = await fetch(laravelUrl, {
               method: 'POST',
@@ -1508,7 +1508,7 @@ const handleRequestSubmit = async (request: any) => {
 
             // 2️⃣ SEGUNDO: Enviar notificación al bot de WhatsApp (no bloquea si falla)
             try {
-              const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+              const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:8006:3005'
               const botUrl = `${BOT_URL}/api/store-vacation`
               
               console.log(`📱 [${fechaStr}] Enviando notificación de WhatsApp...`)
@@ -1713,7 +1713,7 @@ const handleRequestSubmit = async (request: any) => {
     const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 segundos timeout
 
     // 1️⃣ PRIMERO: Enviar a Laravel para guardar en BD
-    const response = await fetch('http://190.171.225.68/api/store-vacation', {
+    const response = await fetch('http://190.171.225.68:8006/api/store-vacation', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1746,8 +1746,8 @@ const handleRequestSubmit = async (request: any) => {
 
       // 2️⃣ SEGUNDO: Enviar notificación al bot de WhatsApp
       try {
-        // Usa VITE_BACKEND_URL del .env (localhost:3005 en dev, 190.171.225.68:3005 en prod)
-        const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+        // Usa VITE_BACKEND_URL del .env (localhost:3005 en dev, 190.171.225.68:8006:3005 en prod)
+        const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:8006:3005'
 
         await fetch(`${BOT_URL}/api/store-vacation`, {
           method: 'POST',
@@ -1973,7 +1973,7 @@ onMounted(async () => {
 const fetchEmployeeVacationRequests = async (empId: string) => {
   try {
     console.log('📡 Cargando solicitudes de vacaciones del empleado:', empId)
-    const url = `http://190.171.225.68/api/vacacion-data-empleado?emp_id=${empId}`
+    const url = `http://190.171.225.68:8006/api/vacacion-data-empleado?emp_id=${empId}`
     
     const response = await fetch(url)
     

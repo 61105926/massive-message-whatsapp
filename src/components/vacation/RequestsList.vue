@@ -532,7 +532,7 @@ const isLoadingReplacements = ref(false)
 //     }
 //     
 //     // Cargar reemplazantes recomendados desde la API
-//     const response = await fetch(`http://190.171.225.68/api/recomendar-reemplazante?empId=${props.empId}`)
+//     const response = await fetch(`http://190.171.225.68:8006/api/recomendar-reemplazante?empId=${props.empId}`)
 //     
 //     if (response.ok) {
 //       const data = await response.json()
@@ -719,7 +719,7 @@ const confirmViewVacation = async () => {
     
     // Guardar cada reemplazante individualmente usando la API correcta
     const savePromises = replacementsToSave.map(replacement => 
-      fetch('http://190.171.225.68/api/vacaciones/reemplazante/guardar', {
+      fetch('http://190.171.225.68:8006/api/vacaciones/reemplazante/guardar', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -778,7 +778,7 @@ const fetchEmployeeRequests = async () => {
   error.value = null
 
   try {
-    const url = `http://190.171.225.68/api/vacacion-data-empleado?emp_id=${props.empId}`
+    const url = `http://190.171.225.68:8006/api/vacacion-data-empleado?emp_id=${props.empId}`
     console.log('📡 Fetching URL:', url)
     
     const response = await fetch(url)
@@ -1196,7 +1196,7 @@ const downloadBoleta = async (request: VacationRequest | any) => {
     console.log('📄 Emp ID a usar:', empIdToUse)
     
     try {
-      const empResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${empIdToUse}`)
+      const empResponse = await fetch(`http://190.171.225.68:8006/api/empleado/info?emp_id=${empIdToUse}`)
       console.log('📄 Respuesta de empleado/info:', empResponse.status, empResponse.statusText)
       
       if (empResponse.ok) {
@@ -1507,7 +1507,7 @@ const downloadBoleta = async (request: VacationRequest | any) => {
       }
     })
     
-    const apiUrl = `http://190.171.225.68/api/vacacion?${params.toString()}`
+    const apiUrl = `http://190.171.225.68:8006/api/vacacion?${params.toString()}`
     console.log('📄 URL completa (primeros 500 chars):', apiUrl.substring(0, 500))
     console.log('📄 Total de parámetros:', params.toString().split('&').length)
     

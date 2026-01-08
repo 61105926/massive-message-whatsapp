@@ -737,7 +737,7 @@ const loadAvailableReplacements = async (empId: string) => {
         console.log('✅ Reemplazantes encontrados en cache del empleado:', replacementsFromCache.length)
       } else {
         // Si no está en cache, cargar desde API
-        const empResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${empId}`)
+        const empResponse = await fetch(`http://190.171.225.68:8006/api/empleado/info?emp_id=${empId}`)
         if (empResponse.ok) {
           const empData = await empResponse.json()
           
@@ -782,7 +782,7 @@ const loadAvailableReplacements = async (empId: string) => {
     // 2. Si aún no hay reemplazantes, intentar desde la API de recomendaciones como fallback
     if (allReplacements.length === 0) {
       try {
-        const response = await fetch(`http://190.171.225.68/api/recomendar-reemplazante?empId=${empId}`)
+        const response = await fetch(`http://190.171.225.68:8006/api/recomendar-reemplazante?empId=${empId}`)
         
         if (response.ok) {
           const data = await response.json()
@@ -816,7 +816,7 @@ const loadAvailableReplacements = async (empId: string) => {
           departamento = empleadoInfo.cargo || empleadoInfo.departamento
         } else {
           // Si no está en cache, cargar desde API
-          const empResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${empId}`)
+          const empResponse = await fetch(`http://190.171.225.68:8006/api/empleado/info?emp_id=${empId}`)
           if (empResponse.ok) {
             const empData = await empResponse.json()
             
@@ -885,7 +885,7 @@ const loadAvailableReplacements = async (empId: string) => {
       try {
         const requestId = String(selectedRequest.value.id_solicitud).split('_grupo_')[0]
         const empIdToUse = selectedRequest.value.emp_id || empId
-        const savedResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?id_solicitud=${requestId}&emp_id=${empIdToUse}`)
+        const savedResponse = await fetch(`http://190.171.225.68:8006/api/reemplazante-vacation?id_solicitud=${requestId}&emp_id=${empIdToUse}`)
         if (savedResponse.ok) {
           const savedData = await savedResponse.json()
           if (savedData.success && Array.isArray(savedData.data) && savedData.data.length > 0) {
@@ -965,7 +965,7 @@ const fetchEmployeeInfo = async (empId: string) => {
   }
 
   try {
-    const response = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${empId}`)
+    const response = await fetch(`http://190.171.225.68:8006/api/empleado/info?emp_id=${empId}`)
 
     if (!response.ok) {
       throw new Error(`Error ${response.status}`)
@@ -1023,7 +1023,7 @@ const fetchManagerRequests = async () => {
 
   try {
     // 1. Cargar las solicitudes del manager
-    const response = await fetch(`http://190.171.225.68/api/vacacion-data-manager?manager=${props.managerId}`)
+    const response = await fetch(`http://190.171.225.68:8006/api/vacacion-data-manager?manager=${props.managerId}`)
 
     if (!response.ok) {
       throw new Error(`Error ${response.status}: ${response.statusText}`)
@@ -1692,7 +1692,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
               // Si estaba preaprobada, verificar si todas las fechas preaprobadas están ahora aprobadas
               console.log('📋 Solicitud estaba preaprobada. Verificando si todas las fechas están aprobadas para enviar resumen.')
               
-              const checkResponse = await fetch(`http://190.171.225.68/api/vacacion-data-manager?manager=${props.managerId}`)
+              const checkResponse = await fetch(`http://190.171.225.68:8006/api/vacacion-data-manager?manager=${props.managerId}`)
               if (checkResponse.ok) {
                 const checkData = await checkResponse.json()
                 if (checkData.success && Array.isArray(checkData.data)) {
@@ -1820,7 +1820,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                                 }
                                 // Si no está en cache, obtener desde la API
                                 try {
-                                  const empResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${repId}`)
+                                  const empResponse = await fetch(`http://190.171.225.68:8006/api/empleado/info?emp_id=${repId}`)
                                   if (empResponse.ok) {
                                     const empData = await empResponse.json()
                                     let empleadoInfo: any = null
@@ -1872,7 +1872,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                       // TERCERO: Si aún no hay reemplazantes, intentar desde la API
                       if (reemplazantesCompletos.length === 0) {
                         try {
-                          const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${idBaseParaComparar}&emp_id=${requestData.emp_id}`)
+                          const reemplazanteResponse = await fetch(`http://190.171.225.68:8006/api/reemplazante-vacation?idsolicitud=${idBaseParaComparar}&emp_id=${requestData.emp_id}`)
                           if (reemplazanteResponse.ok) {
                             const reemplazanteData = await reemplazanteResponse.json()
                             if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
@@ -1992,7 +1992,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                               }
                             }
                             try {
-                              const empResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${repId}`)
+                              const empResponse = await fetch(`http://190.171.225.68:8006/api/empleado/info?emp_id=${repId}`)
                               if (empResponse.ok) {
                                 const empData = await empResponse.json()
                                 let empleadoInfo: any = null
@@ -2043,7 +2043,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                     // TERCERO: Si aún no hay reemplazantes, intentar desde la API
                     if (reemplazantesCompletos.length === 0) {
                       try {
-                        const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}&emp_id=${requestData.emp_id}`)
+                        const reemplazanteResponse = await fetch(`http://190.171.225.68:8006/api/reemplazante-vacation?idsolicitud=${requestId}&emp_id=${requestData.emp_id}`)
                         if (reemplazanteResponse.ok) {
                           const reemplazanteData = await reemplazanteResponse.json()
                           if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
@@ -2184,7 +2184,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                       // Si no está en cache o no tiene teléfono, intentar obtener desde la API
                       try {
                         console.log(`🔍 Obteniendo datos del reemplazante ${repId} desde API...`)
-                        const empResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${repId}`)
+                        const empResponse = await fetch(`http://190.171.225.68:8006/api/empleado/info?emp_id=${repId}`)
                         if (empResponse.ok) {
                           const empData = await empResponse.json()
                           let empleadoInfo: any = null
@@ -2243,7 +2243,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
               // TERCERO: Si aún no hay reemplazantes, intentar desde la API
               if (reemplazantesCompletos.length === 0) {
                 try {
-                  const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${requestId}&emp_id=${requestData.emp_id}`)
+                  const reemplazanteResponse = await fetch(`http://190.171.225.68:8006/api/reemplazante-vacation?idsolicitud=${requestId}&emp_id=${requestData.emp_id}`)
                   if (reemplazanteResponse.ok) {
                     const reemplazanteData = await reemplazanteResponse.json()
                     if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
@@ -2597,7 +2597,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
       console.log(`📤 Preparando solicitud ${index + 1}/${solicitudesAActualizar.length} para id_solicitud: ${req.id_solicitud}`)
       console.log(`📦 Payload completo:`, JSON.stringify(payload, null, 2))
       
-      return fetch('http://190.171.225.68/api/vacaciones/state', {
+      return fetch('http://190.171.225.68:8006/api/vacaciones/state', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2686,7 +2686,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
         )
       } else if (estado === 'PREAPROBADO') {
         // Verificar si se envió notificación o no
-        const checkResponse = await fetch(`http://190.171.225.68/api/vacacion-data-manager?manager=${props.managerId}`)
+        const checkResponse = await fetch(`http://190.171.225.68:8006/api/vacacion-data-manager?manager=${props.managerId}`)
         let todasPreaprobadas = false
         if (checkResponse.ok) {
           const checkData = await checkResponse.json()

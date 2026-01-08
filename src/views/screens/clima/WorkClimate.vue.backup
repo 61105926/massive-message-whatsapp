@@ -1018,7 +1018,7 @@ const cargarDatos = async () => {
   try {
     console.log('🔄 Iniciando carga desde API...')
     
-    const response = await fetch('http://190.171.225.68/api/climate-reponse', {
+    const response = await fetch('http://190.171.225.68:8006/api/climate-reponse', {
       method: 'GET',
       headers: {
         'Accept': 'application/json',

@@ -1408,7 +1408,7 @@ const preapproveVacationDay = async (empId: string, date: Date) => {
       
       // Llamar a la API para actualizar en la base de datos
       // El backend ahora acepta 'PRE-APROBADO' (con guión)
-      const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
+      const response = await fetch('http://190.171.225.68:8006/api/vacaciones/state', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1444,7 +1444,7 @@ const preapproveVacationFromModal = async (vacation: Vacation) => {
     const id_solicitud = vacation.id.split('_')[0]
     
     // El backend ahora acepta 'PRE-APROBADO' (con guión)
-    const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
+    const response = await fetch('http://190.171.225.68:8006/api/vacaciones/state', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1531,7 +1531,7 @@ const rejectVacationDay = async (empId: string, date: Date) => {
       const id_solicitud = vacation.id.split('_')[0]
       
       // Llamar a la API para actualizar en la base de datos
-      const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
+      const response = await fetch('http://190.171.225.68:8006/api/vacaciones/state', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1685,9 +1685,9 @@ const preapproveVacationYear = async (empId: string) => {
         }
         
         console.log(`📤 Payload:`, payload)
-        console.log(`📤 URL: http://190.171.225.68/api/vacaciones/state`)
+        console.log(`📤 URL: http://190.171.225.68:8006/api/vacaciones/state`)
         
-        const response = await fetch('http://190.171.225.68/api/vacaciones/state', {
+        const response = await fetch('http://190.171.225.68:8006/api/vacaciones/state', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1765,7 +1765,7 @@ const preapproveVacationYear = async (empId: string) => {
         if (successfulRequestIdsSet.size > 0) {
           const primeraSolicitudId = Array.from(successfulRequestIdsSet)[0]
           try {
-            const reemplazanteResponse = await fetch(`http://190.171.225.68/api/reemplazante-vacation?idsolicitud=${primeraSolicitudId}`)
+            const reemplazanteResponse = await fetch(`http://190.171.225.68:8006/api/reemplazante-vacation?idsolicitud=${primeraSolicitudId}`)
             if (reemplazanteResponse.ok) {
               const reemplazanteData = await reemplazanteResponse.json()
               if (reemplazanteData.success && reemplazanteData.data && reemplazanteData.data.length > 0) {
@@ -1781,7 +1781,7 @@ const preapproveVacationYear = async (empId: string) => {
           }
         }
         
-        const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
+        const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:8006:3005'
         const notifPayload = {
           id_solicitud: Array.from(successfulRequestIdsSet)[0], // Usar el primer ID como referencia
           emp_id: empId,
@@ -1955,7 +1955,7 @@ const confirmSuggestion = async () => {
 
     console.log('💡 Enviando sugerencia con todas las fechas:', payload)
 
-    const response = await fetch('http://190.171.225.68/api/store-vacation', {
+    const response = await fetch('http://190.171.225.68:8006/api/store-vacation', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2154,7 +2154,7 @@ const createVacation = async () => {
 
     console.log('📤 Payload para crear vacación:', payload)
 
-    const response = await fetch('http://190.171.225.68/api/store-vacation', {
+    const response = await fetch('http://190.171.225.68:8006/api/store-vacation', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2244,7 +2244,7 @@ const loadData = async () => {
     // Cargar dependientes del manager desde la API de solicitudes
     try {
       console.log('📡 Llamando API de vacaciones del manager con managerId:', props.managerId)
-      const response = await fetch(`http://190.171.225.68/api/vacacion-data-manager?manager=${props.managerId}`)
+      const response = await fetch(`http://190.171.225.68:8006/api/vacacion-data-manager?manager=${props.managerId}`)
       
       if (response.ok) {
         const data = await response.json()
@@ -2293,7 +2293,7 @@ const loadData = async () => {
                   const controller = new AbortController()
                   const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 segundos timeout
                   
-                  const empInfoResponse = await fetch(`http://190.171.225.68/api/empleado/info?emp_id=${solicitud.emp_id}`, {
+                  const empInfoResponse = await fetch(`http://190.171.225.68:8006/api/empleado/info?emp_id=${solicitud.emp_id}`, {
                     signal: controller.signal
                   })
                   

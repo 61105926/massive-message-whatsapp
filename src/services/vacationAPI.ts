@@ -78,7 +78,7 @@ const formatDateForAPI = (dateString: string): string => {
 export async function saveVacationToExternalAPI(payload: SaveVacationPayload): Promise<any> {
   try {
     // Llamar directamente a tu backend principal
-    const backendUrl = 'http://190.171.225.68/api/vacaciones/add-vacation';
+    const backendUrl = 'http://190.171.225.68:8006/api/vacaciones/add-vacation';
     
     console.log('Enviando datos directamente a API externa:', {
       backendUrl,
@@ -202,7 +202,7 @@ export async function saveVacationToExternalAPI(payload: SaveVacationPayload): P
 
   } catch (error: any) {
     console.error('❌ Error al guardar vacación en API externa:', {
-      backendUrl: 'http://190.171.225.68/api/vacaciones/add-vacation',
+      backendUrl: 'http://190.171.225.68:8006/api/vacaciones/add-vacation',
       error: error.message,
       status: error.response?.status,
       statusText: error.response?.statusText,
