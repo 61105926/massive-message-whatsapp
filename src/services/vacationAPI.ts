@@ -111,22 +111,174 @@ export async function saveVacationToExternalAPI(payload: SaveVacationPayload): P
       return total + getDaysForType(tipo);
     }, 0);
 
-    // Preparar datos de días individuales (máximo 4 días)
-    const diasData = fechasOrdenadas.slice(0, 4).map((dia) => {
-      const tipo = dia.tipo_dia || 'COMPLETO';
-      return {
-        numDias: getDaysForType(tipo),
-        fromDate: formatDateForAPI(dia.fecha),
-        toDate: formatDateForAPI(dia.fecha)
-      };
-    });
+    // Agrupar días consecutivos o con máximo 1 día de diferencia del mismo tipo en rangos (máximo 4 rangos)
+    const rangos: Array<{
+      numDias: number;
+      fromDate: string;
+      toDate: string;
+      tipo: string;
+    }> = [];
+
+    if (fechasOrdenadas.length > 0) {
+      let rangoActual: {
+        tipo: string;
+        fechas: string[];
+        numDias: number;
+      } | null = null;
+
+      for (const dia of fechasOrdenadas) {
+        const tipo = dia.tipo_dia || 'COMPLETO';
+        const fecha = dia.fecha;
+        
+        // Verificar si es día consecutivo o con máximo 1 día de diferencia del mismo tipo
+        const puedeAgruparse = rangoActual && rangoActual.tipo === tipo && (() => {
+          const ultimaFecha = rangoActual!.fechas[rangoActual!.fechas.length - 1];
+          // Convertir ambas fechas a Date para comparar
+          const fechaUltima = new Date(ultimaFecha + 'T12:00:00');
+          const fechaActual = new Date(fecha + 'T12:00:00');
+          
+          // Calcular diferencia en días
+          const diffTime = fechaActual.getTime() - fechaUltima.getTime();
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+          
+          // Permitir agrupar si es consecutivo (diffDays = 1) o con máximo 1 día de diferencia (diffDays = 2)
+          return diffDays >= 1 && diffDays <= 2;
+        })();
+
+        if (puedeAgruparse && rangoActual) {
+          // Agregar al rango actual
+          rangoActual.fechas.push(fecha);
+          rangoActual.numDias += getDaysForType(tipo);
+        } else {
+          // Guardar rango anterior si existe
+          if (rangoActual) {
+            rangos.push({
+              numDias: rangoActual.numDias,
+              fromDate: formatDateForAPI(rangoActual.fechas[0]),
+              toDate: formatDateForAPI(rangoActual.fechas[rangoActual.fechas.length - 1]),
+              tipo: rangoActual.tipo
+            });
+          }
+          
+          // Iniciar nuevo rango
+          rangoActual = {
+            tipo,
+            fechas: [fecha],
+            numDias: getDaysForType(tipo)
+          };
+        }
+      }
+
+      // Guardar último rango
+      if (rangoActual) {
+        rangos.push({
+          numDias: rangoActual.numDias,
+          fromDate: formatDateForAPI(rangoActual.fechas[0]),
+          toDate: formatDateForAPI(rangoActual.fechas[rangoActual.fechas.length - 1]),
+          tipo: rangoActual.tipo
+        });
+      }
+    }
+
+    // Si hay más de 4 rangos, agrupar todos los días COMPLETO en un solo rango
+    // Si aún hay más de 4, también agrupar TARDE y MAÑANA
+    if (rangos.length > 4) {
+      const rangosCompletos = rangos.filter(r => r.tipo === 'COMPLETO');
+      const rangosTarde = rangos.filter(r => r.tipo === 'TARDE');
+      const rangosManana = rangos.filter(r => r.tipo === 'MAÑANA');
+      const otrosRangos = rangos.filter(r => r.tipo !== 'COMPLETO' && r.tipo !== 'TARDE' && r.tipo !== 'MAÑANA');
+      
+      const nuevosRangos: typeof rangos = [];
+      
+      // Agrupar MAÑANA si hay más de uno
+      if (rangosManana.length > 0) {
+        if (rangosManana.length === 1) {
+          nuevosRangos.push(rangosManana[0]);
+        } else {
+          const fechasManana = fechasOrdenadas
+            .filter(dia => (dia.tipo_dia || 'COMPLETO') === 'MAÑANA')
+            .map(dia => dia.fecha)
+            .sort();
+          const totalDiasManana = rangosManana.reduce((sum, r) => sum + r.numDias, 0);
+          nuevosRangos.push({
+            numDias: totalDiasManana,
+            fromDate: formatDateForAPI(fechasManana[0]),
+            toDate: formatDateForAPI(fechasManana[fechasManana.length - 1]),
+            tipo: 'MAÑANA'
+          });
+        }
+      }
+      
+      // Agrupar TARDE si hay más de uno
+      if (rangosTarde.length > 0) {
+        if (rangosTarde.length === 1) {
+          nuevosRangos.push(rangosTarde[0]);
+        } else {
+          const fechasTarde = fechasOrdenadas
+            .filter(dia => (dia.tipo_dia || 'COMPLETO') === 'TARDE')
+            .map(dia => dia.fecha)
+            .sort();
+          const totalDiasTarde = rangosTarde.reduce((sum, r) => sum + r.numDias, 0);
+          nuevosRangos.push({
+            numDias: totalDiasTarde,
+            fromDate: formatDateForAPI(fechasTarde[0]),
+            toDate: formatDateForAPI(fechasTarde[fechasTarde.length - 1]),
+            tipo: 'TARDE'
+          });
+        }
+      }
+      
+      // Agrupar COMPLETO si hay más de uno
+      if (rangosCompletos.length > 0) {
+        const fechasCompletas = fechasOrdenadas
+          .filter(dia => (dia.tipo_dia || 'COMPLETO') === 'COMPLETO')
+          .map(dia => dia.fecha)
+          .sort();
+        const totalDiasCompletos = rangosCompletos.reduce((sum, r) => sum + r.numDias, 0);
+        nuevosRangos.push({
+          numDias: totalDiasCompletos,
+          fromDate: formatDateForAPI(fechasCompletas[0]),
+          toDate: formatDateForAPI(fechasCompletas[fechasCompletas.length - 1]),
+          tipo: 'COMPLETO'
+        });
+      }
+      
+      // Agregar otros rangos
+      nuevosRangos.push(...otrosRangos);
+      
+      // Reemplazar rangos
+      rangos.length = 0;
+      rangos.push(...nuevosRangos);
+    }
+
+    // Preparar datos de rangos (máximo 4 rangos)
+    const diasData = rangos.slice(0, 4).map(r => ({
+      numDias: r.numDias,
+      fromDate: r.fromDate,
+      toDate: r.toDate
+    }));
+
+    // Generar detalle de todas las fechas para el comentario
+    const detalleFechas = fechasOrdenadas
+      .map(dia => {
+        const fechaFormateada = formatDateForAPI(dia.fecha);
+        const tipo = dia.tipo_dia || 'COMPLETO';
+        const tipoTexto = tipo === 'MAÑANA' ? 'MAÑANA' : tipo === 'TARDE' ? 'TARDE' : 'COMPLETO';
+        return `${fechaFormateada}: ${tipoTexto}`;
+      })
+      .join(', ');
+
+    // Construir comentario con el detalle de fechas
+    const comentarioCompleto = payload.comentario 
+      ? `${payload.comentario}, ${detalleFechas}`
+      : detalleFechas;
 
     // Construir objeto de datos para la API externa
     const vacationAPIData = {
       FECHA: `${fechaActual} 0:00:00.0`,
       HORA: horaActual || 0,
       EMPID: parseInt(payload.emp_id),
-      COMMENT: payload.comentario || '',
+      COMMENT: comentarioCompleto,
       AUTOR: '0', // default
       FROMDATE: `${fechaInicio} 0:00:00.0`,
       TODATE: `${fechaFin} 0:00:00.0`,
