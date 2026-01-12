@@ -90,6 +90,9 @@ export const boliviaHolidays2026: HolidaysData = {
   ]
 }
 
+
+
+
 /**
  * Obtiene todos los feriados para un año específico
  * @param year Año para el cual obtener los feriados
