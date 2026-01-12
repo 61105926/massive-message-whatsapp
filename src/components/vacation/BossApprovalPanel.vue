@@ -1463,7 +1463,7 @@ const confirmApproveWithReplacements = async () => {
     await updateRequestStatus(
       selectedRequestId.value,
       'APROBADO',
-      approveComment.value.trim() || 'Aprobado por el jefe',
+      approveComment.value.trim() || '',
       selectedReplacements.value
     )
 
@@ -1491,7 +1491,7 @@ const confirmApprove = async () => {
     await updateRequestStatus(
       selectedRequestId.value,
       'APROBADO',
-      approveComment.value.trim() || 'Aprobado por el jefe'
+      approveComment.value.trim() || ''
     )
 
     // Cerrar modal
@@ -2290,7 +2290,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                 emp_id: requestData.emp_id,
                 emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
                 estado: 'APROBADO',
-                comentario: comentario || 'Aprobado por el jefe',
+                comentario: comentario || '',
                 tipo: requestData.tipo || 'PROGRAMADA',
                 dias_solicitados: calcularDiasDeFechas(fechasAprobadas),
                 fechas: fechasAprobadas,
@@ -2585,7 +2585,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
       const payload: any = {
         id_solicitud: parseInt(String(req.id_solicitud)),
         estado: estadoBackend,
-        comentario: comentario || (estado === 'APROBADO' ? 'Aprobado por el jefe' : '')
+        comentario: comentario || (estado === 'APROBADO' ? '' : '')
       }
       
       // ✅ Usar REEMPLAZOS_EMPIDS en lugar de reemplazantes
