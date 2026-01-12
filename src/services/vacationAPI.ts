@@ -182,7 +182,8 @@ export async function saveVacationToExternalAPI(payload: SaveVacationPayload): P
 
     // Si hay más de 4 rangos, agrupar todos los días COMPLETO en un solo rango
     // Si aún hay más de 4, también agrupar TARDE y MAÑANA
-    if (rangos.length > 4) {
+    const seAgruparonRangos = rangos.length > 4;
+    if (seAgruparonRangos) {
       const rangosCompletos = rangos.filter(r => r.tipo === 'COMPLETO');
       const rangosTarde = rangos.filter(r => r.tipo === 'TARDE');
       const rangosManana = rangos.filter(r => r.tipo === 'MAÑANA');
@@ -314,18 +315,18 @@ export async function saveVacationToExternalAPI(payload: SaveVacationPayload): P
         // Fallback
         return Math.floor(new Date(fechasOrdenadas[0].fecha + 'T12:00:00').getTime() / (1000 * 60 * 60 * 24)) + 25569;
       })(),
-      NUMDIAS1: diasData[0]?.numDias || 0,
-      NUMDIAS2: diasData[1]?.numDias || 0,
-      NUMDIAS3: diasData[2]?.numDias || 0,
-      NUMDIAS4: diasData[3]?.numDias || 0,
-      FROMDATE1: diasData[0]?.fromDate ? `${diasData[0].fromDate} 0:00:00.0` : null,
-      TODATE1: diasData[0]?.toDate ? `${diasData[0].toDate} 0:00:00.0` : null,
-      FROMDATE2: diasData[1]?.fromDate ? `${diasData[1].fromDate} 0:00:00.0` : null,
-      TODATE2: diasData[1]?.toDate ? `${diasData[1].toDate} 0:00:00.0` : null,
-      FROMDATE3: diasData[2]?.fromDate ? `${diasData[2].fromDate} 0:00:00.0` : null,
-      TODATE3: diasData[2]?.toDate ? `${diasData[2].toDate} 0:00:00.0` : null,
-      FROMDATE4: diasData[3]?.fromDate ? `${diasData[3].fromDate} 0:00:00.0` : null,
-      TODATE4: diasData[3]?.toDate ? `${diasData[3].toDate} 0:00:00.0` : null
+      NUMDIAS1: seAgruparonRangos ? 0 : (diasData[0]?.numDias || 0),
+      NUMDIAS2: seAgruparonRangos ? 0 : (diasData[1]?.numDias || 0),
+      NUMDIAS3: seAgruparonRangos ? 0 : (diasData[2]?.numDias || 0),
+      NUMDIAS4: seAgruparonRangos ? 0 : (diasData[3]?.numDias || 0),
+      FROMDATE1: seAgruparonRangos ? null : (diasData[0]?.fromDate ? `${diasData[0].fromDate} 0:00:00.0` : null),
+      TODATE1: seAgruparonRangos ? null : (diasData[0]?.toDate ? `${diasData[0].toDate} 0:00:00.0` : null),
+      FROMDATE2: seAgruparonRangos ? null : (diasData[1]?.fromDate ? `${diasData[1].fromDate} 0:00:00.0` : null),
+      TODATE2: seAgruparonRangos ? null : (diasData[1]?.toDate ? `${diasData[1].toDate} 0:00:00.0` : null),
+      FROMDATE3: seAgruparonRangos ? null : (diasData[2]?.fromDate ? `${diasData[2].fromDate} 0:00:00.0` : null),
+      TODATE3: seAgruparonRangos ? null : (diasData[2]?.toDate ? `${diasData[2].toDate} 0:00:00.0` : null),
+      FROMDATE4: seAgruparonRangos ? null : (diasData[3]?.fromDate ? `${diasData[3].fromDate} 0:00:00.0` : null),
+      TODATE4: seAgruparonRangos ? null : (diasData[3]?.toDate ? `${diasData[3].toDate} 0:00:00.0` : null)
     };
     
 
