@@ -1508,7 +1508,7 @@ const handleRequestSubmit = async (request: any) => {
 
             // 2️⃣ SEGUNDO: Enviar notificación al bot de WhatsApp (no bloquea si falla)
             try {
-              const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:8006:3005'
+              const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
               const botUrl = `${BOT_URL}/api/store-vacation`
               
               console.log(`📱 [${fechaStr}] Enviando notificación de WhatsApp...`)
@@ -1747,7 +1747,7 @@ const handleRequestSubmit = async (request: any) => {
       // 2️⃣ SEGUNDO: Enviar notificación al bot de WhatsApp
       try {
         // Usa VITE_BACKEND_URL del .env (localhost:3005 en dev, 190.171.225.68:8006:3005 en prod)
-        const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:8006:3005'
+        const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
 
         await fetch(`${BOT_URL}/api/store-vacation`, {
           method: 'POST',

@@ -1940,7 +1940,7 @@ const preapproveVacationYear = async (empId: string) => {
           }
         }
         
-        const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:8006:3005'
+        const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://190.171.225.68:3005'
         const notifPayload = {
           id_solicitud: Array.from(successfulRequestIdsSet)[0], // Usar el primer ID como referencia
           emp_id: empId,
