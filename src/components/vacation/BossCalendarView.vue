@@ -1304,11 +1304,128 @@ const openVacationModal = (empId: string, date: Date) => {
 
 const approveVacation = async (vacationId: string) => {
   try {
-    // TODO: Llamar a API para aprobar
-    console.log('Aprobar vacación:', vacationId)
-    loadData()
+    const vacation = vacations.value.find(v => v.id === vacationId)
+    
+    if (!vacation) {
+      showNotification('error', 'Error', 'No se encontró la solicitud de vacaciones.')
+      return
+    }
+    
+    // Validar que la solicitud no esté ya aprobada
+    if (vacation.status === 'approved') {
+      showNotification('info', 'Ya aprobada', 'Esta solicitud ya está aprobada.')
+      return
+    }
+    
+    // Pedir confirmación antes de aprobar
+    const employee = teamEmployees.value.find(e => e.emp_id === vacation.emp_id)
+    const employeeName = employee?.name || vacation.employee_name || `Empleado #${vacation.emp_id}`
+    const fechaFormateada = new Date(vacation.start_date).toLocaleDateString('es-ES', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    })
+    
+    const confirmar = confirm(
+      `¿Estás seguro de que deseas APROBAR la solicitud de vacaciones?\n\n` +
+      `Empleado: ${employeeName}\n` +
+      `Fecha: ${fechaFormateada}\n\n` +
+      `Esta acción enviará una notificación al empleado.`
+    )
+    
+    if (!confirmar) {
+      return
+    }
+    
+    console.log('✓ Aprobando vacación:', vacation)
+    
+    // Extraer el id_solicitud del id de la vacación (formato: id_solicitud_fecha)
+    const id_solicitud = vacation.id.split('_')[0]
+    const dateStr = vacation.start_date
+    
+    // Llamar a la API para actualizar en la base de datos
+    const response = await fetch('http://190.171.225.68:8006/api/vacaciones/state', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id_solicitud: parseInt(id_solicitud),
+        estado: 'APROBADO',
+        comentario: `Fecha aprobada: ${dateStr}`
+      })
+    })
+    
+    if (response.ok) {
+      // Cambiar estado a aprobado en el array local
+      vacation.status = 'approved'
+      console.log('✅ Vacación aprobada en la base de datos')
+      
+      // Enviar notificación de correo electrónico
+      try {
+        const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
+        
+        // Formatear la fecha para el payload (DD-MM-YYYY (TURNO))
+        // Como no tenemos el turno en el objeto vacation, asumimos COMPLETO
+        // dateStr está en formato YYYY-MM-DD, convertir a DD-MM-YYYY
+        const [year, month, day] = dateStr.split('-')
+        const fechaFormateada = `${day}-${month}-${year} (COMPLETO)`
+        
+        const notifPayload = {
+          id_solicitud: id_solicitud,
+          emp_id: vacation.emp_id,
+          emp_nombre: employeeName,
+          estado: 'APROBADO',
+          comentario: `Fecha aprobada: ${dateStr}`,
+          tipo: vacation.tipo || 'PROGRAMADA',
+          dias_solicitados: 1,
+          fechas: [fechaFormateada]
+        }
+        
+        console.log('📧 Enviando notificación de aprobación:', notifPayload)
+        
+        const notifResponse = await fetch(`${BOT_URL}/api/vacation-notification`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(notifPayload)
+        })
+        
+        if (notifResponse.ok) {
+          console.log('✅ Notificación de aprobación enviada exitosamente')
+          showNotification('success', 'Aprobada', 'La solicitud ha sido aprobada y se ha enviado la notificación.')
+        } else {
+          const notifErrorText = await notifResponse.text()
+          console.warn('⚠️ Error al enviar notificación de aprobación:', notifResponse.status, notifErrorText)
+          showNotification('warning', 'Aprobada', 'La solicitud ha sido aprobada, pero hubo un problema al enviar la notificación.')
+        }
+      } catch (notifError) {
+        console.warn('⚠️ Error al enviar notificación de aprobación:', notifError)
+        showNotification('warning', 'Aprobada', 'La solicitud ha sido aprobada, pero hubo un problema al enviar la notificación.')
+        // No fallar la operación si la notificación falla
+      }
+      
+      // Disparar evento para actualizar el Panel de Aprobación
+      const event = new CustomEvent('vacation-status-changed', {
+        detail: { 
+          action: 'approved',
+          id_solicitud: id_solicitud,
+          emp_id: vacation.emp_id
+        }
+      })
+      window.dispatchEvent(event)
+      
+      // Cerrar modal si está abierto
+      showSuggestModal.value = false
+    } else {
+      console.error('❌ Error al aprobar en la API')
+      showNotification('error', 'Error', 'Error al aprobar la solicitud. Por favor intenta nuevamente.')
+    }
   } catch (error) {
     console.error('Error al aprobar vacación:', error)
+    showNotification('error', 'Error', 'Error al aprobar la solicitud. Por favor intenta nuevamente.')
   }
 }
 
@@ -1547,6 +1664,48 @@ const rejectVacationDay = async (empId: string, date: Date) => {
         // Cambiar estado a rechazado en el array local
         vacation.status = 'rejected'
         console.log('✅ Vacación rechazada en la base de datos')
+        
+        // Enviar notificación de correo electrónico
+        try {
+          const BOT_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3005'
+          
+          // Formatear la fecha para el payload (DD-MM-YYYY (TURNO))
+          // Como no tenemos el turno en el objeto vacation, asumimos COMPLETO
+          // dateStr está en formato YYYY-MM-DD, convertir a DD-MM-YYYY
+          const [year, month, day] = dateStr.split('-')
+          const fechaFormateada = `${day}-${month}-${year} (COMPLETO)`
+          
+          const notifPayload = {
+            id_solicitud: id_solicitud,
+            emp_id: empId,
+            emp_nombre: employeeName,
+            estado: 'RECHAZADO',
+            comentario: `Fecha rechazada: ${dateStr}`,
+            tipo: vacation.tipo || 'PROGRAMADA',
+            dias_solicitados: 1,
+            fechas: [fechaFormateada]
+          }
+          
+          console.log('📧 Enviando notificación de rechazo:', notifPayload)
+          
+          const notifResponse = await fetch(`${BOT_URL}/api/vacation-notification`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(notifPayload)
+          })
+          
+          if (notifResponse.ok) {
+            console.log('✅ Notificación de rechazo enviada exitosamente')
+          } else {
+            const notifErrorText = await notifResponse.text()
+            console.warn('⚠️ Error al enviar notificación de rechazo:', notifResponse.status, notifErrorText)
+          }
+        } catch (notifError) {
+          console.warn('⚠️ Error al enviar notificación de rechazo:', notifError)
+          // No fallar la operación si la notificación falla
+        }
         
         // Disparar evento para actualizar el Panel de Aprobación
         const event = new CustomEvent('vacation-status-changed', {
