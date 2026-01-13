@@ -91,7 +91,20 @@ export function calcularRangoVacaciones(
     (mesActual - mesIngreso) +
     (diaActual >= diaIngreso ? 1 : 0);
   
-  const duodecima = Math.max(0, mesesTranscurridos) * 1; // 1 día por mes, nunca negativo
+  // Calcular duodécimas según días por gestión:
+  // - 15 días por gestión = 1.25 días por mes (15/12)
+  // - 20 días por gestión = 1.67 días por mes (20/12)
+  // - 30 días por gestión = 2.5 días por mes (30/12)
+  let diasPorMes: number;
+  if (diasPorGestion === 15) {
+    diasPorMes = 15 / 12; // 1.25 días por mes
+  } else if (diasPorGestion === 20) {
+    diasPorMes = 20 / 12; // 1.67 días por mes
+  } else {
+    diasPorMes = 30 / 12; // 2.5 días por mes
+  }
+  
+  const duodecima = Math.max(0, mesesTranscurridos * diasPorMes); // Días proporcionales según gestión, nunca negativo
 
   // Calcular mínimo según saldo acumulado
   // Si saldo >= 60: mínimo = 60 + duodécima
@@ -103,8 +116,8 @@ export function calcularRangoVacaciones(
     minimo = saldoAcumulado;
   }
 
-
-  const maximo = Math.max(minimo + duodecima, 0);
+  // El máximo es el saldo acumulado + duodécimas disponibles
+  const maximo = Math.max(saldoAcumulado + duodecima, minimo);
 
   return {
     minimo,
