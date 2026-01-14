@@ -144,29 +144,10 @@
 
     <!-- Vista Mensual -->
     <div v-if="viewMode === 'month'" class="bg-white border rounded-lg overflow-hidden shadow-lg w-full relative">
-      <!-- Loading Indicator -->
-      <div
-        v-if="isLoading"
-        class="absolute inset-0 bg-white/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center"
-      >
-        <div class="flex flex-col items-center gap-4">
-          <div class="relative">
-            <div class="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-            <div class="absolute inset-0 flex items-center justify-center">
-              <div class="w-8 h-8 bg-blue-600 rounded-full opacity-20"></div>
-            </div>
-          </div>
-          <div class="text-center">
-            <p class="text-lg font-semibold text-gray-700">Cargando calendario...</p>
-            <p class="text-sm text-gray-500 mt-1">Obteniendo datos de empleados y vacaciones</p>
-          </div>
-        </div>
-      </div>
-      
       <!-- Botones de navegación horizontal -->
       <button
         @click="scrollCalendarHorizontal('left')"
-        class="absolute left-2 top-28 z-30 bg-white/90 hover:bg-white border border-gray-300 rounded-full p-2 shadow-md transition-all duration-200 hover:scale-110"
+        class="absolute left-2 top-2 z-30 bg-white/90 hover:bg-white border border-gray-300 rounded-full p-2 shadow-md transition-all duration-200 hover:scale-110"
         :class="{ 'opacity-50 cursor-not-allowed': !canScrollLeft }"
         :disabled="!canScrollLeft"
         title="Desplazar izquierda"
@@ -175,7 +156,7 @@
       </button>
       <button
         @click="scrollCalendarHorizontal('right')"
-        class="absolute right-2 top-28 z-30 bg-white/90 hover:bg-white border border-gray-300 rounded-full p-2 shadow-md transition-all duration-200 hover:scale-110"
+        class="absolute right-2 top-2 z-30 bg-white/90 hover:bg-white border border-gray-300 rounded-full p-2 shadow-md transition-all duration-200 hover:scale-110"
         :class="{ 'opacity-50 cursor-not-allowed': !canScrollRight }"
         :disabled="!canScrollRight"
         title="Desplazar derecha"
@@ -183,20 +164,10 @@
         <ChevronRight class="h-4 w-4 text-gray-700" />
       </button>
       
-      <!-- Indicador de scroll horizontal arriba mejorado -->
-      <div 
-        ref="scrollIndicator" 
-        class="overflow-x-auto bg-gray-100 border-b scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200" 
-        style="height: 24px; display: flex; align-items: center; cursor: ew-resize; scroll-behavior: smooth;"
-        @scroll="handleIndicatorScroll"
-      >
-        <div class="flex-shrink-0" :style="{ width: `${195 + (daysInMonth * 65)}px`, height: '100%', background: 'linear-gradient(to right, #e5e7eb 0%, #d1d5db 50%, #e5e7eb 100%)' }"></div>
-      </div>
-      
       <div 
         ref="calendarScroll" 
         class="overflow-x-auto overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 hover:scrollbar-thumb-gray-500" 
-        style="height: calc(75vh - 24px); max-height: 580px; scroll-behavior: smooth; overscroll-behavior-x: contain;"
+        style="height: calc(75vh); max-height: 600px; scroll-behavior: smooth; overscroll-behavior-x: contain;"
         @scroll="handleCalendarScroll"
       >
         <div class="w-max min-w-full" :style="{ width: `${195 + (daysInMonth * 65)}px` }">
@@ -888,9 +859,6 @@ const currentVacation = ref<Vacation | null>(null)
 const selectedDepartment = ref('')
 const departments = ref<string[]>([])
 const calendarScroll = ref<HTMLElement | null>(null)
-const scrollIndicator = ref<HTMLElement | null>(null)
-const isScrollingIndicator = ref(false)
-const isScrollingCalendar = ref(false)
 const canScrollLeft = ref(false)
 const canScrollRight = ref(true)
 const showCreateModal = ref(false)
@@ -936,7 +904,6 @@ const vacations = ref<Vacation[]>([])
 const publicHolidays = ref<{ date: string; name: string; type: 'national' | 'regional' }[]>([])
 // Almacenar todas las solicitudes originales para contar días programados
 const allRequests = ref<any[]>([])
-const isLoading = ref(true)
 // Estado para mostrar información del feriado al hacer click
 const selectedHolidayInfo = ref<{ date: Date; name: string } | null>(null)
 const showHolidayModal = ref(false)
@@ -1000,20 +967,18 @@ const navigateMonth = (direction: 'prev' | 'next') => {
   fetchHolidays() // Recargar feriados al cambiar de mes
   // NO recargar datos al cambiar de mes - ya están cargados
   
-  // Sincronizar el indicador de scroll después de cambiar de mes
+  // Actualizar botones de scroll después de cambiar de mes
   nextTick(() => {
-    if (calendarScroll.value && scrollIndicator.value) {
-      scrollIndicator.value.scrollLeft = calendarScroll.value.scrollLeft
+    if (calendarScroll.value) {
       updateScrollButtons(calendarScroll.value)
     }
   })
 }
 
-// Watcher para actualizar el indicador cuando cambie el número de días
+// Watcher para actualizar los botones cuando cambie el número de días
 watch(daysInMonth, () => {
   nextTick(() => {
-    if (calendarScroll.value && scrollIndicator.value) {
-      scrollIndicator.value.scrollLeft = calendarScroll.value.scrollLeft
+    if (calendarScroll.value) {
       updateScrollButtons(calendarScroll.value)
     }
   })
@@ -2408,30 +2373,9 @@ const scrollCalendarHorizontal = (direction: 'left' | 'right') => {
 }
 
 const handleCalendarScroll = (event: Event) => {
-  if (isScrollingIndicator.value) return
   const target = event.target as HTMLElement
-  if (scrollIndicator.value && target.scrollLeft !== undefined) {
-    isScrollingCalendar.value = true
-    scrollIndicator.value.scrollLeft = target.scrollLeft
-    setTimeout(() => {
-      isScrollingCalendar.value = false
-    }, 10)
-  }
-  
   // Actualizar estado de botones de navegación
   updateScrollButtons(target)
-}
-
-const handleIndicatorScroll = (event: Event) => {
-  if (isScrollingCalendar.value) return
-  const target = event.target as HTMLElement
-  if (calendarScroll.value && target.scrollLeft !== undefined) {
-    isScrollingIndicator.value = true
-    calendarScroll.value.scrollLeft = target.scrollLeft
-    setTimeout(() => {
-      isScrollingIndicator.value = false
-    }, 10)
-  }
 }
 
 const submitVacationForm = () => {
@@ -2627,7 +2571,6 @@ const fetchHolidays = async () => {
 
 const loadData = async () => {
   try {
-    isLoading.value = true
     // Cargar feriados primero
     await fetchHolidays()
     
@@ -3012,8 +2955,6 @@ const loadData = async () => {
     teamEmployees.value = []
     vacations.value = []
     departments.value = []
-    isLoading.value = false
-    
     // Mostrar mensaje de error al usuario
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
     showNotification(
@@ -3072,7 +3013,6 @@ onMounted(() => {
     // Agregar al array de vacaciones
     vacations.value = [...vacations.value, ...nuevasVacaciones]
     console.log('📅 BossCalendarView - Vacaciones totales:', vacations.value.length)
-    isLoading.value = false
   })
   
   // Escuchar evento de cambio de estado de vacación para recargar datos

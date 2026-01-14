@@ -255,7 +255,8 @@ const emit = defineEmits<{
   dateSelect: [dates: Date[], daySelections: DaySelection[]]
 }>()
 
-const currentDate = ref(props.fixedYear ? new Date(props.fixedYear, 0, 1) : new Date())
+// Iniciar con el mes actual
+const currentDate = ref(props.fixedYear ? new Date(props.fixedYear, 0, 1) : new Date(new Date().getFullYear(), new Date().getMonth(), 1))
 const showDayTypeModal = ref(false)
 const selectedDateForType = ref<Date | null>(null)
 const daySelections = ref<DaySelection[]>([])
