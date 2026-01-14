@@ -210,8 +210,11 @@
                   </div>
                 </div>
                 <div class="flex items-center justify-between gap-1 w-full flex-wrap">
-                  <span class="inline-flex items-center rounded-full px-1 py-0.5 font-bold text-[9px]" :class="(employee.vacationBalance ?? 0) > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">
-                    {{ (employee.vacationBalance ?? 0) > 0 ? (employee.vacationBalance ?? 0) + 'd' : '0d' }}
+                  <span class="inline-flex items-center rounded-full px-1 py-0.5 font-bold text-[9px]" :class="getTotalDaysWithDuodecima(employee.emp_id) > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">
+                    {{ getTotalDaysWithDuodecima(employee.emp_id) > 0 ? getTotalDaysWithDuodecima(employee.emp_id).toFixed(1) + 'd' : '0d' }}
+                  </span>
+                  <span v-if="employee.duodecima !== undefined && employee.duodecima > 0" class="inline-flex items-center rounded-full px-1 py-0.5 font-bold text-[9px] bg-blue-100 text-blue-700" title="Duodécimas disponibles">
+                    +{{ employee.duodecima.toFixed(1) }}d
                   </span>
                   <span v-if="employee.rejectedCount !== undefined && employee.rejectedCount > 0" class="inline-flex items-center rounded-full px-1 py-0.5 font-bold text-[9px] bg-red-100 text-red-700" title="Solicitudes rechazadas">
                     {{ employee.rejectedCount }} {{ employee.rejectedCount === 1 ? 'rechazo' : 'rechazos' }}
@@ -535,7 +538,10 @@
           <div v-if="selectedEmployeeForVacation" class="text-xs text-gray-600 bg-gray-50 p-2 rounded mb-2">
             <div v-if="canSuggestVacation(selectedEmployeeForVacation.emp_id)">
               <span class="font-semibold">Días disponibles:</span>
-              {{ (selectedEmployeeForVacation.vacationBalance || selectedEmployeeForVacation.totalDays || 0) - getProgrammedDaysCount(String(selectedEmployeeForVacation.emp_id)) }} de {{ selectedEmployeeForVacation.vacationBalance || selectedEmployeeForVacation.totalDays || 0 }}
+              {{ getAvailableDaysWithDuodecima(selectedEmployeeForVacation.emp_id) }} de {{ getTotalDaysWithDuodecima(selectedEmployeeForVacation.emp_id) }}
+              <span v-if="selectedEmployeeForVacation.duodecima && selectedEmployeeForVacation.duodecima > 0" class="text-blue-600 ml-1">
+                (incluye {{ selectedEmployeeForVacation.duodecima.toFixed(1) }} duodécimas)
+              </span>
             </div>
             <div v-else class="text-red-600 font-semibold">
               ⚠️ Sin días disponibles ({{ getProgrammedDaysCount(String(selectedEmployeeForVacation.emp_id)) }} días ya programados)
@@ -797,6 +803,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ChevronLeft, ChevronRight, CheckCircle, AlertCircle, X } from 'lucide-vue-next'
 import { getHolidaysForEmployee, getHolidayName } from '@/data/boliviaHolidays'
+import { calcularRangoVacaciones } from '@/utils/vacationRange'
 
 interface Employee {
   emp_id: string
@@ -808,6 +815,8 @@ interface Employee {
   daysRemaining?: number
   totalDays?: number
   rejectedCount?: number
+  duodecima?: number
+  fechaIngreso?: string
 }
 
 interface Vacation {
@@ -1192,6 +1201,101 @@ const getProgrammedDaysCount = (empId: string | number | undefined): number => {
   return totalDays
 }
 
+// Función helper para obtener días totales incluyendo duodécimas
+const getTotalDaysWithDuodecima = (empId: string | number | undefined): number => {
+  if (!empId) {
+    console.warn('⚠️ getTotalDaysWithDuodecima: empId no proporcionado')
+    return 0
+  }
+  
+  const empIdStr = String(empId)
+  const employee = teamEmployees.value.find(emp => String(emp.emp_id) === empIdStr)
+  
+  if (!employee) {
+    console.warn('⚠️ getTotalDaysWithDuodecima: empleado no encontrado:', empIdStr)
+    return 0
+  }
+  
+  // Obtener saldo base: usar vacationBalance si existe, sino totalDays, sino 0
+  const vacationBalance = employee.vacationBalance !== undefined && employee.vacationBalance !== null 
+    ? employee.vacationBalance 
+    : (employee.totalDays !== undefined && employee.totalDays !== null ? employee.totalDays : 0)
+  
+  const saldoBase = vacationBalance
+  const duodecima = employee.duodecima || 0
+  
+  // Si el saldo es negativo, calcular: 15 días base + saldo negativo
+  // Ejemplo: saldo -1.5 → 15 + (-1.5) = 13.5 días
+  if (saldoBase < 0) {
+    const diasDisponibles = 15 + saldoBase // saldoBase ya es negativo, así que se resta
+    console.log('📋 Empleado con saldo negativo detectado, asignando 15 días base + saldo negativo:', {
+      empId: empIdStr,
+      employeeName: employee.name,
+      vacationBalance: employee.vacationBalance,
+      totalDays: employee.totalDays,
+      saldoBase,
+      diasBase: 15,
+      diasDisponibles,
+      duodecima
+    })
+    return Math.max(0, diasDisponibles) // Asegurar que nunca sea negativo
+  }
+  
+  // Si el saldo es 0 (empleado nuevo), darle 15 días por defecto
+  if (saldoBase === 0) {
+    console.log('📋 Empleado nuevo detectado (saldo 0), asignando 15 días:', {
+      empId: empIdStr,
+      employeeName: employee.name,
+      vacationBalance: employee.vacationBalance,
+      totalDays: employee.totalDays,
+      saldoBase,
+      duodecima
+    })
+    return 15
+  }
+  
+  // Si tiene saldo pero es muy bajo (menor a 1), también puede ser empleado nuevo
+  // pero con algún error en los datos, así que darle 15 días
+  if (saldoBase < 1 && saldoBase > 0) {
+    console.log('📋 Empleado con saldo muy bajo, tratando como nuevo (15 días):', {
+      empId: empIdStr,
+      employeeName: employee.name,
+      vacationBalance: employee.vacationBalance,
+      totalDays: employee.totalDays,
+      saldoBase
+    })
+    return 15
+  }
+  
+  const resultado = saldoBase + duodecima
+  console.log('📊 getTotalDaysWithDuodecima calculado:', {
+    empId: empIdStr,
+    employeeName: employee.name,
+    vacationBalance: employee.vacationBalance,
+    totalDays: employee.totalDays,
+    saldoBase,
+    duodecima,
+    resultado
+  })
+  
+  return resultado
+}
+
+// Función helper para obtener días disponibles incluyendo duodécimas
+const getAvailableDaysWithDuodecima = (empId: string | number | undefined): number => {
+  if (!empId) return 0
+  
+  const empIdStr = String(empId)
+  const employee = teamEmployees.value.find(emp => String(emp.emp_id) === empIdStr)
+  
+  if (!employee) return 0
+  
+  const totalDays = getTotalDaysWithDuodecima(empId)
+  const programmedDays = getProgrammedDaysCount(empIdStr)
+  
+  return Math.max(0, totalDays - programmedDays)
+}
+
 // Función helper para verificar si se puede sugerir vacación
 const canSuggestVacation = (empId: string | number | undefined): boolean => {
   if (!empId) {
@@ -1207,25 +1311,42 @@ const canSuggestVacation = (empId: string | number | undefined): boolean => {
     return false
   }
   
-  // Priorizar vacationBalance sobre totalDays porque es más preciso
-  const totalDays = employee.vacationBalance || employee.totalDays || 0
+  // Verificar si el empleado es nuevo (saldo 0, negativo o sin saldo)
+  const saldoBase = employee.vacationBalance !== undefined && employee.vacationBalance !== null
+    ? employee.vacationBalance
+    : (employee.totalDays !== undefined && employee.totalDays !== null ? employee.totalDays : 0)
+  const isEmpleadoNuevo = saldoBase <= 0
   
-  if (totalDays === 0) {
-    console.warn('⚠️ El empleado no tiene días de vacaciones configurados:', employee)
-    return false
-  }
-  
+  // Obtener días totales incluyendo duodécimas
+  const totalDays = getTotalDaysWithDuodecima(empId)
   const programmedDays = getProgrammedDaysCount(empIdStr)
   const daysRemaining = totalDays - programmedDays
   
   console.log('🔍 canSuggestVacation:', {
     empId: empIdStr,
     employeeName: employee.name,
+    saldoBase,
+    isEmpleadoNuevo,
+    duodecima: employee.duodecima || 0,
     totalDays,
     programmedDays,
     daysRemaining,
     canSuggest: daysRemaining > 0
   })
+  
+  // Si el empleado es nuevo, debe tener 15 días disponibles
+  if (isEmpleadoNuevo && totalDays !== 15) {
+    console.warn('⚠️ Empleado nuevo pero totalDays no es 15:', {
+      empId: empIdStr,
+      totalDays,
+      saldoBase
+    })
+  }
+  
+  if (totalDays === 0) {
+    console.warn('⚠️ El empleado no tiene días de vacaciones configurados:', employee)
+    return false
+  }
   
   return daysRemaining > 0
 }
@@ -1247,9 +1368,14 @@ const openVacationModal = (empId: string, date: Date) => {
     return
   }
   
-  // Obtener el total de días del empleado (priorizar totalDays sobre vacationBalance)
-  // Priorizar vacationBalance sobre totalDays porque es más preciso
-  const totalDays = employee.vacationBalance || employee.totalDays || 0
+  // Verificar si el empleado es nuevo (saldo 0, negativo o sin saldo)
+  const saldoBase = employee.vacationBalance !== undefined && employee.vacationBalance !== null
+    ? employee.vacationBalance
+    : (employee.totalDays !== undefined && employee.totalDays !== null ? employee.totalDays : 0)
+  const isEmpleadoNuevo = saldoBase <= 0
+  
+  // Obtener el total de días del empleado incluyendo duodécimas
+  const totalDays = getTotalDaysWithDuodecima(empId)
   
   if (totalDays === 0) {
     console.warn('⚠️ El empleado no tiene días de vacaciones configurados:', employee)
@@ -1263,6 +1389,9 @@ const openVacationModal = (empId: string, date: Date) => {
   console.log('🔍 Validación de días programados en openVacationModal:', {
     empId: empIdStr,
     employeeName: employee.name,
+    saldoBase,
+    isEmpleadoNuevo,
+    duodecima: employee.duodecima || 0,
     totalDays,
     programmedDays,
     daysRemaining,
@@ -1270,10 +1399,15 @@ const openVacationModal = (empId: string, date: Date) => {
   })
   
   if (daysRemaining <= 0) {
+    const duodecima = employee.duodecima || 0
+    const mensajeDuodecima = duodecima > 0 ? ` (incluye ${duodecima.toFixed(1)} duodécimas)` : ''
+    const mensajeEmpleadoNuevo = isEmpleadoNuevo ? '\n\nComo empleado nuevo, tiene derecho a 15 días.' : ''
+    // Asegurar que totalDays nunca sea negativo o cero en el mensaje
+    const totalDaysFormatted = totalDays > 0 ? totalDays.toFixed(1) : (isEmpleadoNuevo ? '15' : '0')
     showNotification(
       'warning',
       'Sin Días Disponibles',
-      `${employee.name} ya programó todos sus ${totalDays} días de vacaciones (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.`
+      `${employee.name} ya programó todos sus ${totalDaysFormatted} días de vacaciones${mensajeDuodecima} (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.${mensajeEmpleadoNuevo}`
     )
     return
   }
@@ -2051,15 +2185,18 @@ const confirmSuggestion = async () => {
     const employee = teamEmployees.value.find(emp => String(emp.emp_id) === empId)
     
     if (employee) {
-      // Priorizar vacationBalance sobre totalDays porque es más preciso
-  const totalDays = employee.vacationBalance || employee.totalDays || 0
+      // Obtener días totales incluyendo duodécimas
+      const totalDays = getTotalDaysWithDuodecima(empId)
       const programmedDays = getProgrammedDaysCount(empId)
       const daysRemaining = totalDays - programmedDays
       const datesToSuggest = selectedAlternateDates.value.length
+      const duodecima = employee.duodecima || 0
       
       console.log('🔍 Validación en confirmSuggestion:', {
         empId,
         employeeName: employee.name,
+        saldoBase: employee.vacationBalance || employee.totalDays || 0,
+        duodecima,
         totalDays,
         programmedDays,
         daysRemaining,
@@ -2067,20 +2204,22 @@ const confirmSuggestion = async () => {
       })
       
       if (daysRemaining <= 0) {
+        const mensajeDuodecima = duodecima > 0 ? ` (incluye ${duodecima.toFixed(1)} duodécimas)` : ''
         showNotification(
           'warning',
           'Sin Días Disponibles',
-          `${employee.name} ya programó todos sus ${totalDays} días de vacaciones (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.`
+          `${employee.name} ya programó todos sus ${totalDays.toFixed(1)} días de vacaciones${mensajeDuodecima} (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.`
         )
         isSubmittingSuggestion.value = false
         return
       }
       
       if (datesToSuggest > daysRemaining) {
+        const mensajeDuodecima = duodecima > 0 ? ` (incluye ${duodecima.toFixed(1)} duodécimas)` : ''
         showNotification(
           'warning',
           'Días Insuficientes',
-          `${employee.name} solo tiene ${daysRemaining} día(s) disponible(s) de ${totalDays} totales (ya tiene ${programmedDays} días programados).\n\nEstás intentando sugerir ${datesToSuggest} día(s). Por favor, reduce la cantidad de días a sugerir.`
+          `${employee.name} solo tiene ${daysRemaining.toFixed(1)} día(s) disponible(s) de ${totalDays.toFixed(1)} totales${mensajeDuodecima} (ya tiene ${programmedDays} días programados).\n\nEstás intentando sugerir ${datesToSuggest} día(s). Por favor, reduce la cantidad de días a sugerir.`
         )
         isSubmittingSuggestion.value = false
         return
@@ -2212,13 +2351,14 @@ const submitVacationForm = () => {
   const empId = String(selectedEmployeeForVacation.value.emp_id)
   if (!canSuggestVacation(empId)) {
     const employee = selectedEmployeeForVacation.value
-    // Priorizar vacationBalance sobre totalDays porque es más preciso
-    const totalDays = employee.vacationBalance || employee.totalDays || 0
+    const totalDays = getTotalDaysWithDuodecima(empId)
     const programmedDays = getProgrammedDaysCount(empId)
+    const duodecima = employee.duodecima || 0
+    const mensajeDuodecima = duodecima > 0 ? ` (incluye ${duodecima.toFixed(1)} duodécimas)` : ''
     showNotification(
       'warning',
       'Sin Días Disponibles',
-      `${employee.name} ya programó todos sus ${totalDays} días de vacaciones (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.`
+      `${employee.name} ya programó todos sus ${totalDays} días de vacaciones${mensajeDuodecima} (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.`
     )
     return
   }
@@ -2245,13 +2385,17 @@ const createVacation = async () => {
   try {
     // Verificar si el empleado ya programó todos sus días
     const empId = String(selectedEmployeeForVacation.value.emp_id)
-    const totalDays = selectedEmployeeForVacation.value.totalDays || selectedEmployeeForVacation.value.vacationBalance || 0
+    const totalDays = getTotalDaysWithDuodecima(empId)
     const programmedDays = getProgrammedDaysCount(empId)
     const daysRemaining = totalDays - programmedDays
+    const employee = selectedEmployeeForVacation.value
+    const duodecima = employee.duodecima || 0
     
     console.log('🔍 Validación en createVacation:', {
       empId,
-      employeeName: selectedEmployeeForVacation.value.name,
+      employeeName: employee.name,
+      saldoBase: employee.vacationBalance || employee.totalDays || 0,
+      duodecima,
       totalDays,
       programmedDays,
       daysRemaining
@@ -2264,10 +2408,11 @@ const createVacation = async () => {
     const daysToSuggest = newVacationTurno.value === 'COMPLETO' ? 1 : 0.5
     
       if (daysRemaining <= 0) {
+        const mensajeDuodecima = duodecima > 0 ? ` (incluye ${duodecima.toFixed(1)} duodécimas)` : ''
         showNotification(
           'warning',
           'Sin Días Disponibles',
-          `${selectedEmployeeForVacation.value.name} ya programó todos sus ${totalDays} días de vacaciones (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.`
+          `${employee.name} ya programó todos sus ${totalDays} días de vacaciones${mensajeDuodecima} (${programmedDays} días programados).\n\nSolo puedes sugerir días adicionales si rechazas alguna de sus solicitudes programadas.`
         )
         showCreateModal.value = false
         isCreatingVacation.value = false
@@ -2275,10 +2420,11 @@ const createVacation = async () => {
       }
       
       if (daysToSuggest > daysRemaining) {
+        const mensajeDuodecima = duodecima > 0 ? ` (incluye ${duodecima.toFixed(1)} duodécimas)` : ''
         showNotification(
           'warning',
           'Días Insuficientes',
-          `${selectedEmployeeForVacation.value.name} solo tiene ${daysRemaining} día(s) disponible(s) de ${totalDays} totales (ya tiene ${programmedDays} días programados).\n\nEstás intentando sugerir ${daysToSuggest} día(s). Por favor, selecciona menos días.`
+          `${employee.name} solo tiene ${daysRemaining.toFixed(1)} día(s) disponible(s) de ${totalDays.toFixed(1)} totales${mensajeDuodecima} (ya tiene ${programmedDays} días programados).\n\nEstás intentando sugerir ${daysToSuggest} día(s). Por favor, selecciona menos días.`
         )
         isCreatingVacation.value = false
         return
@@ -2441,6 +2587,8 @@ const loadData = async () => {
               let available = 0
               let taken = 0
               let total = 0
+              let duodecima = 0
+              let fechaIngreso: string | undefined = undefined
               
               // Intentar cargar información del empleado con retry
               let maxRetries = 2
@@ -2553,7 +2701,49 @@ const loadData = async () => {
                             total
                           })
                         } else {
-                          console.warn('⚠️ No se encontró información de vacaciones para empleado:', solicitud.emp_id)
+                          // Si no hay información de vacaciones, el empleado es nuevo (saldo 0)
+                          available = 0
+                          taken = 0
+                          total = 0
+                          console.log('📋 Empleado nuevo detectado (sin información de vacaciones):', {
+                            emp_id: solicitud.emp_id,
+                            nombre
+                          })
+                        }
+                      }
+                      
+                      // Obtener fecha de ingreso para calcular duodécimas
+                      fechaIngreso = empleadoInfo.fechaIngreso || 
+                                    empleadoInfo.FECHA_INGRESO || 
+                                    empleadoInfo.fecha_ingreso ||
+                                    empleadoInfo.ingreso ||
+                                    empleadoInfo.INGRESO ||
+                                    empleadoInfo.startDate ||
+                                    empleadoInfo.START_DATE ||
+                                    undefined
+                      
+                      // Calcular duodécimas si tenemos fecha de ingreso y saldo
+                      if (fechaIngreso && available >= 0) {
+                        try {
+                          const fechaActual = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+                          const rangoVacaciones = calcularRangoVacaciones({
+                            fechaIngreso: fechaIngreso,
+                            fechaActual: fechaActual,
+                            saldoAcumulado: available
+                          })
+                          duodecima = rangoVacaciones.duodecima
+                          console.log('✅ Duodécimas calculadas:', {
+                            emp_id: solicitud.emp_id,
+                            fechaIngreso,
+                            saldoAcumulado: available,
+                            duodecima,
+                            diasPorGestion: rangoVacaciones.diasPorGestion
+                          })
+                        } catch (error: any) {
+                          console.warn('⚠️ Error al calcular duodécimas:', {
+                            emp_id: solicitud.emp_id,
+                            error: error.message
+                          })
                         }
                       }
                     } else {
@@ -2593,17 +2783,32 @@ const loadData = async () => {
               }
               
               // Agregar empleado al mapa (incluso si no se pudo cargar toda la info)
+              // Si el empleado no tiene información de vacaciones (available = 0 y total = 0),
+              // es un empleado nuevo y debe tener 15 días disponibles
+              const isEmpleadoNuevo = available === 0 && total === 0 && !empleadoInfo?.vacation
+              
               uniqueEmployees.set(solicitud.emp_id, {
                 emp_id: solicitud.emp_id,
                 name: nombre,
                 department: cargo,
                 regional: regional,
-                vacationBalance: available,
-                totalDays: total,
+                vacationBalance: available, // Si es 0, será detectado como empleado nuevo
+                totalDays: total, // Si es 0, será detectado como empleado nuevo
                 usagePercentage: total > 0 ? Math.round((taken / total) * 100) : 0,
                 daysRemaining: available,
-                rejectedCount: 0 // Se actualizará después
+                rejectedCount: 0, // Se actualizará después
+                duodecima: duodecima,
+                fechaIngreso: fechaIngreso
               })
+              
+              if (isEmpleadoNuevo) {
+                console.log('✅ Empleado nuevo agregado al calendario (15 días disponibles):', {
+                  emp_id: solicitud.emp_id,
+                  nombre,
+                  vacationBalance: available,
+                  totalDays: total
+                })
+              }
             }
           }
           
