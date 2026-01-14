@@ -671,56 +671,56 @@
     </div>
 
     <!-- Fixed Bottom Navigation -->
-    <div class="fixed bottom-0 left-0 right-0 bg-background border-t safe-area-inset md:left-64">
-      <div :class="`grid ${currentUser.role === 'boss' ? 'grid-cols-4' : 'grid-cols-3'} gap-1 p-2`">
+    <div class="fixed bottom-0 left-0 right-0 bg-background border-t safe-area-inset z-50 lg:left-64">
+      <div :class="`grid ${currentUser.role === 'boss' ? 'grid-cols-4' : 'grid-cols-3'} gap-1 p-2 max-w-full`">
         <button
           @click="activeView = 'calendar'"
           :class="[
-            'h-12 flex flex-col gap-1 items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+            'h-12 sm:h-14 flex flex-col gap-1 items-center justify-center rounded-md text-xs sm:text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 min-w-0',
             activeView === 'calendar'
               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
               : 'hover:bg-accent hover:text-accent-foreground'
           ]"
         >
-          <CalendarDays class="h-4 w-4" />
-          <span class="text-xs">Calendario</span>
+          <CalendarDays class="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+          <span class="text-xs truncate w-full text-center px-1">Calendario</span>
         </button>
         <button
           @click="activeView = 'requests'"
           :class="[
-            'h-12 flex flex-col gap-1 items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+            'h-12 sm:h-14 flex flex-col gap-1 items-center justify-center rounded-md text-xs sm:text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 min-w-0',
             activeView === 'requests'
               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
               : 'hover:bg-accent hover:text-accent-foreground'
           ]"
         >
-          <Clock class="h-4 w-4" />
-          <span class="text-xs">Solicitudes</span>
+          <Clock class="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+          <span class="text-xs truncate w-full text-center px-1">Solicitudes</span>
         </button>
         <button
           v-if="currentUser.role === 'boss'"
           @click="activeView = 'boss'"
           :class="[
-            'h-12 flex flex-col gap-1 items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+            'h-12 sm:h-14 flex flex-col gap-1 items-center justify-center rounded-md text-xs sm:text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 min-w-0',
             activeView === 'boss'
               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
               : 'hover:bg-accent hover:text-accent-foreground'
           ]"
         >
-          <CheckCircle class="h-4 w-4" />
-          <span class="text-xs">Aprobar</span>
+          <CheckCircle class="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+          <span class="text-xs truncate w-full text-center px-1">Aprobar</span>
         </button>
         <button
           @click="activeView = 'profile'"
           :class="[
-            'h-12 flex flex-col gap-1 items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+            'h-12 sm:h-14 flex flex-col gap-1 items-center justify-center rounded-md text-xs sm:text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 min-w-0',
             activeView === 'profile'
               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
               : 'hover:bg-accent hover:text-accent-foreground'
           ]"
         >
-          <User class="h-4 w-4" />
-          <span class="text-xs">Perfil</span>
+          <User class="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+          <span class="text-xs truncate w-full text-center px-1">Perfil</span>
         </button>
       </div>
     </div>

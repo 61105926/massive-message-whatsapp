@@ -143,24 +143,43 @@
     </div>
 
     <!-- Vista Mensual -->
-    <div v-if="viewMode === 'month'" class="bg-white border rounded-lg overflow-hidden shadow-lg w-full">
-      <!-- Indicador de scroll horizontal arriba -->
+    <div v-if="viewMode === 'month'" class="bg-white border rounded-lg overflow-hidden shadow-lg w-full relative">
+      <!-- Loading Indicator -->
+      <div
+        v-if="isLoading"
+        class="absolute inset-0 bg-white/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center"
+      >
+        <div class="flex flex-col items-center gap-4">
+          <div class="relative">
+            <div class="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div class="w-8 h-8 bg-blue-600 rounded-full opacity-20"></div>
+            </div>
+          </div>
+          <div class="text-center">
+            <p class="text-lg font-semibold text-gray-700">Cargando calendario...</p>
+            <p class="text-sm text-gray-500 mt-1">Obteniendo datos de empleados y vacaciones</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Indicador de scroll horizontal arriba mejorado -->
       <div 
         ref="scrollIndicator" 
-        class="overflow-x-auto bg-gray-100 border-b" 
-        style="height: 20px; display: flex; align-items: center; cursor: ew-resize;"
+        class="overflow-x-auto bg-gray-100 border-b scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200" 
+        style="height: 24px; display: flex; align-items: center; cursor: ew-resize; scroll-behavior: smooth;"
         @scroll="handleIndicatorScroll"
       >
-        <div class="flex-shrink-0" :style="{ width: `${daysInMonth * 65}px`, height: '100%', background: 'linear-gradient(to right, #e5e7eb 0%, #d1d5db 50%, #e5e7eb 100%)' }"></div>
+        <div class="flex-shrink-0" :style="{ width: `${195 + (daysInMonth * 65)}px`, height: '100%', background: 'linear-gradient(to right, #e5e7eb 0%, #d1d5db 50%, #e5e7eb 100%)' }"></div>
       </div>
       
       <div 
         ref="calendarScroll" 
-        class="overflow-auto" 
-        style="height: calc(75vh - 20px); max-height: 580px;" 
+        class="overflow-x-auto overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 hover:scrollbar-thumb-gray-500" 
+        style="height: calc(75vh - 24px); max-height: 580px; scroll-behavior: smooth; overscroll-behavior-x: contain;"
         @scroll="handleCalendarScroll"
       >
-        <div class="w-max min-w-full">
+        <div class="w-max min-w-full" :style="{ width: `${195 + (daysInMonth * 65)}px` }">
           <!-- Headers - Sticky -->
           <div class="grid border-b sticky top-0 z-20" :style="{ gridTemplateColumns: `195px repeat(${daysInMonth}, 65px)` }">
             <div class="border-r bg-gradient-to-b from-gray-900 to-gray-800 text-white text-center flex items-center justify-center h-[70px] sticky left-0 z-30">
@@ -800,7 +819,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { ChevronLeft, ChevronRight, CheckCircle, AlertCircle, X } from 'lucide-vue-next'
 import { getHolidaysForEmployee, getHolidayName } from '@/data/boliviaHolidays'
 import { calcularRangoVacaciones } from '@/utils/vacationRange'
@@ -839,7 +858,8 @@ const props = defineProps<{
 console.log('🏢 BossCalendarView - Props recibidas:', props)
 console.log('🏢 BossCalendarView - managerId:', props.managerId)
 
-const currentDate = ref(new Date(2026, 0, 1)) // Iniciar en enero 2026
+// Iniciar con el mes actual
+const currentDate = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
 const selectedEmployee = ref<Employee | null>(null)
 const viewMode = ref<'month' | 'day'>('month')
 const selectedDate = ref(new Date().toISOString().split('T')[0])
@@ -894,6 +914,7 @@ const vacations = ref<Vacation[]>([])
 const publicHolidays = ref<{ date: string; name: string; type: 'national' | 'regional' }[]>([])
 // Almacenar todas las solicitudes originales para contar días programados
 const allRequests = ref<any[]>([])
+const isLoading = ref(true)
 // Estado para mostrar información del feriado al hacer click
 const selectedHolidayInfo = ref<{ date: Date; name: string } | null>(null)
 const showHolidayModal = ref(false)
@@ -956,7 +977,25 @@ const navigateMonth = (direction: 'prev' | 'next') => {
   }
   fetchHolidays() // Recargar feriados al cambiar de mes
   // NO recargar datos al cambiar de mes - ya están cargados
+  
+  // Sincronizar el indicador de scroll después de cambiar de mes
+  nextTick(() => {
+    if (calendarScroll.value && scrollIndicator.value) {
+      scrollIndicator.value.scrollLeft = calendarScroll.value.scrollLeft
+      updateScrollButtons(calendarScroll.value)
+    }
+  })
 }
+
+// Watcher para actualizar el indicador cuando cambie el número de días
+watch(daysInMonth, () => {
+  nextTick(() => {
+    if (calendarScroll.value && scrollIndicator.value) {
+      scrollIndicator.value.scrollLeft = calendarScroll.value.scrollLeft
+      updateScrollButtons(calendarScroll.value)
+    }
+  })
+})
 
 const isWeekend = (date: Date): boolean => {
   const day = date.getDay()
@@ -2534,6 +2573,7 @@ const fetchHolidays = async () => {
 
 const loadData = async () => {
   try {
+    isLoading.value = true
     // Cargar feriados primero
     await fetchHolidays()
     
@@ -2918,6 +2958,7 @@ const loadData = async () => {
     teamEmployees.value = []
     vacations.value = []
     departments.value = []
+    isLoading.value = false
     
     // Mostrar mensaje de error al usuario
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
@@ -2977,6 +3018,7 @@ onMounted(() => {
     // Agregar al array de vacaciones
     vacations.value = [...vacations.value, ...nuevasVacaciones]
     console.log('📅 BossCalendarView - Vacaciones totales:', vacations.value.length)
+    isLoading.value = false
   })
   
   // Escuchar evento de cambio de estado de vacación para recargar datos
@@ -2988,3 +3030,74 @@ onMounted(() => {
 })
 </script>
 
+<style scoped>
+/* Scrollbar personalizado para mejor UX */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af #e5e7eb;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+.scrollbar-thumb-gray-400::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+}
+
+.scrollbar-thumb-gray-500::-webkit-scrollbar-thumb {
+  background: #6b7280;
+}
+
+.scrollbar-track-gray-200::-webkit-scrollbar-track {
+  background: #e5e7eb;
+}
+
+/* Asegurar que el scroll de la página funcione durante la carga */
+.w-full {
+  overflow-y: visible;
+}
+
+/* Mejorar el scroll horizontal del calendario */
+.overflow-auto {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Indicador de scroll más visible */
+.scroll-indicator {
+  position: relative;
+}
+
+.scroll-indicator::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(to right, transparent, #3b82f6, transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.scroll-indicator:hover::after {
+  opacity: 1;
+}
+</style>
