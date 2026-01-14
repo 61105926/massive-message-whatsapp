@@ -163,6 +163,26 @@
         </div>
       </div>
       
+      <!-- Botones de navegación horizontal -->
+      <button
+        @click="scrollCalendarHorizontal('left')"
+        class="absolute left-2 top-28 z-30 bg-white/90 hover:bg-white border border-gray-300 rounded-full p-2 shadow-md transition-all duration-200 hover:scale-110"
+        :class="{ 'opacity-50 cursor-not-allowed': !canScrollLeft }"
+        :disabled="!canScrollLeft"
+        title="Desplazar izquierda"
+      >
+        <ChevronLeft class="h-4 w-4 text-gray-700" />
+      </button>
+      <button
+        @click="scrollCalendarHorizontal('right')"
+        class="absolute right-2 top-28 z-30 bg-white/90 hover:bg-white border border-gray-300 rounded-full p-2 shadow-md transition-all duration-200 hover:scale-110"
+        :class="{ 'opacity-50 cursor-not-allowed': !canScrollRight }"
+        :disabled="!canScrollRight"
+        title="Desplazar derecha"
+      >
+        <ChevronRight class="h-4 w-4 text-gray-700" />
+      </button>
+      
       <!-- Indicador de scroll horizontal arriba mejorado -->
       <div 
         ref="scrollIndicator" 
@@ -871,6 +891,8 @@ const calendarScroll = ref<HTMLElement | null>(null)
 const scrollIndicator = ref<HTMLElement | null>(null)
 const isScrollingIndicator = ref(false)
 const isScrollingCalendar = ref(false)
+const canScrollLeft = ref(false)
+const canScrollRight = ref(true)
 const showCreateModal = ref(false)
 const selectedEmployeeForVacation = ref<Employee | null>(null)
 const selectedDateForVacation = ref<Date | null>(null)
@@ -2356,6 +2378,35 @@ const filterEmployees = () => {
   console.log('Filtrar empleados por departamento:', selectedDepartment.value)
 }
 
+const updateScrollButtons = (element: HTMLElement) => {
+  if (!element) return
+  const { scrollLeft, scrollWidth, clientWidth } = element
+  canScrollLeft.value = scrollLeft > 0
+  canScrollRight.value = scrollLeft < scrollWidth - clientWidth - 1
+}
+
+const scrollCalendarHorizontal = (direction: 'left' | 'right') => {
+  if (!calendarScroll.value) return
+  
+  const scrollAmount = 300 // Píxeles a desplazar
+  const currentScroll = calendarScroll.value.scrollLeft
+  const newScroll = direction === 'left' 
+    ? Math.max(0, currentScroll - scrollAmount)
+    : currentScroll + scrollAmount
+  
+  calendarScroll.value.scrollTo({
+    left: newScroll,
+    behavior: 'smooth'
+  })
+  
+  // Actualizar botones después de un breve delay
+  setTimeout(() => {
+    if (calendarScroll.value) {
+      updateScrollButtons(calendarScroll.value)
+    }
+  }, 300)
+}
+
 const handleCalendarScroll = (event: Event) => {
   if (isScrollingIndicator.value) return
   const target = event.target as HTMLElement
@@ -2366,6 +2417,9 @@ const handleCalendarScroll = (event: Event) => {
       isScrollingCalendar.value = false
     }, 10)
   }
+  
+  // Actualizar estado de botones de navegación
+  updateScrollButtons(target)
 }
 
 const handleIndicatorScroll = (event: Event) => {
