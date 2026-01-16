@@ -2186,6 +2186,17 @@ const isAlternateDateSelected = (date: Date): boolean => {
 }
 
 const formatDateOnly = (dateStr: string): string => {
+  // Parsear la fecha manualmente para evitar problemas de zona horaria
+  // Si viene en formato YYYY-MM-DD, parsearlo directamente
+  const parts = dateStr.split('-')
+  if (parts.length === 3) {
+    const year = parseInt(parts[0], 10)
+    const month = parseInt(parts[1], 10) - 1 // Los meses en JS son 0-indexados
+    const day = parseInt(parts[2], 10)
+    const date = new Date(year, month, day)
+    return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`
+  }
+  // Fallback para otros formatos
   const date = new Date(dateStr)
   return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`
 }
@@ -2333,6 +2344,18 @@ const setupContextMenuListener = () => {
 
 const formatDayMonth = (dateString?: string) => {
   if (!dateString) return ''
+  // Parsear la fecha manualmente para evitar problemas de zona horaria
+  // Si viene en formato YYYY-MM-DD, parsearlo directamente
+  const parts = dateString.split('-')
+  if (parts.length === 3) {
+    const year = parseInt(parts[0], 10)
+    const month = parseInt(parts[1], 10) - 1 // Los meses en JS son 0-indexados
+    const day = parseInt(parts[2], 10)
+    const d = new Date(year, month, day)
+    const monthNamesEs = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+    return `${d.getDate()} de ${monthNamesEs[d.getMonth()]}`
+  }
+  // Fallback para otros formatos
   const d = new Date(dateString)
   const monthNamesEs = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
   return `${d.getDate()} de ${monthNamesEs[d.getMonth()]}`
@@ -2532,6 +2555,17 @@ const createVacation = async () => {
 }
 
 const formatDate = (dateString: string): string => {
+  // Parsear la fecha manualmente para evitar problemas de zona horaria
+  // Si viene en formato YYYY-MM-DD, parsearlo directamente
+  const parts = dateString.split('-')
+  if (parts.length === 3) {
+    const year = parseInt(parts[0], 10)
+    const month = parseInt(parts[1], 10) - 1 // Los meses en JS son 0-indexados
+    const day = parseInt(parts[2], 10)
+    const date = new Date(year, month, day)
+    return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`
+  }
+  // Fallback para otros formatos
   const date = new Date(dateString)
   return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`
 }
