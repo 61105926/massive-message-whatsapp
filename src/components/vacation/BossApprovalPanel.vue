@@ -75,12 +75,6 @@
               </select>
             </div>
             
-            <!-- Información de filtro de fecha -->
-            <div class="flex items-end">
-              <div class="px-3 py-2 text-xs bg-blue-50 border border-blue-200 rounded-md text-blue-700">
-                <span class="font-medium">Mostrando:</span> Mes actual y siguiente ({{ currentMonthRange }})
-              </div>
-            </div>
           </div>
         </div>
       </CardHeader>
@@ -589,7 +583,27 @@
             <label class="text-sm font-medium mb-2 block">
               Reemplazantes * (puedes seleccionar varios)
             </label>
-            <div class="rounded-md border border-input bg-background p-3 max-h-64 overflow-y-auto space-y-2">
+            
+            <!-- Opción: No tiene reemplazo -->
+            <div class="mb-3 p-3 bg-gray-50 rounded-md border border-gray-200">
+              <div class="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="no-replacement-option"
+                  v-model="hasNoReplacement"
+                  @change="handleNoReplacementChange"
+                  class="rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <label
+                  for="no-replacement-option"
+                  class="flex-1 text-sm cursor-pointer font-medium text-gray-700"
+                >
+                  No tiene reemplazo
+                </label>
+              </div>
+            </div>
+            
+            <div class="rounded-md border border-input bg-background p-3 max-h-64 overflow-y-auto space-y-2" :class="{ 'opacity-50 pointer-events-none': hasNoReplacement }">
               <div
                 v-for="(person, index) in availableReplacements"
                 :key="`replacement-${person.id || index}-${person.name}`"
@@ -600,6 +614,7 @@
                   :id="`replacement-boss-${person.id || index}-${selectedRequestId || 'default'}`"
                   :value="String(person.id || index)"
                   v-model="selectedReplacements"
+                  :disabled="hasNoReplacement"
                   class="rounded border-gray-300 text-primary focus:ring-primary"
                 />
                 <label
@@ -609,15 +624,18 @@
                   {{ person.name }} - {{ person.department }}
                 </label>
               </div>
-              <div v-if="availableReplacements.length === 0" class="text-sm text-red-600 text-center py-2">
-                ⚠️ No hay reemplazantes disponibles. No se puede aprobar sin reemplazantes.
+              <div v-if="availableReplacements.length === 0 && !hasNoReplacement" class="text-sm text-red-600 text-center py-2">
+                ⚠️ No hay reemplazantes disponibles. Puedes marcar "No tiene reemplazo" para continuar.
               </div>
             </div>
-            <p v-if="availableReplacements.length > 0" class="text-xs text-muted-foreground mt-2">
-              {{ selectedReplacements.length > 0 ? `${selectedReplacements.length} reemplazante(s) seleccionado(s)` : 'Selección obligatoria' }}
+            <p v-if="!hasNoReplacement && selectedReplacements.length === 0" class="text-xs text-red-600 mt-2 font-medium">
+              ⚠️ Debes seleccionar al menos un reemplazante o marcar "No tiene reemplazo" para poder aprobar
             </p>
-            <p v-if="selectedReplacements.length === 0 && availableReplacements.length > 0" class="text-xs text-red-600 mt-1">
-              ⚠️ Debes seleccionar al menos un reemplazante para aprobar
+            <p v-if="!hasNoReplacement && selectedReplacements.length > 0" class="text-xs text-muted-foreground mt-2">
+              {{ selectedReplacements.length }} reemplazante(s) seleccionado(s)
+            </p>
+            <p v-if="hasNoReplacement" class="text-xs text-blue-600 mt-2 font-medium">
+              ✓ Se aprobará sin reemplazantes
             </p>
           </div>
 
@@ -625,13 +643,13 @@
           <div class="flex gap-3">
             <button
               @click="confirmApproveWithReplacements"
-              :disabled="isProcessing || selectedReplacements.length === 0 || availableReplacements.length === 0"
+              :disabled="isProcessing || (!hasNoReplacement && selectedReplacements.length === 0)"
               class="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               Aprobar
             </button>
             <button
-              @click="showReplacementModal = false"
+              @click="handleCancelReplacementModal"
               class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-medium"
             >
               Cancelar
@@ -709,6 +727,7 @@ const rejectComment = ref('')
 const approveComment = ref('')
 const availableReplacements = ref<any[]>([])
 const selectedReplacements = ref<string[]>([])
+const hasNoReplacement = ref(false)
 const isPreapproving = ref(false)
 
 // Filtros
@@ -1261,82 +1280,6 @@ const uniqueEmployees = computed(() => {
   return Array.from(employeesMap.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
 })
 
-// Obtener la fecha más próxima de todas las solicitudes
-const getEarliestDate = (): Date | null => {
-  let earliestDate: Date | null = null
-  
-  // Buscar en todas las solicitudes (programadas y no programadas)
-  const allRequests = [
-    ...requests.value.filter(req => 
-      req.tipo !== 'PROGRAMADA' &&
-      (req.estado === 'PROCESO' || 
-       req.estado === 'PENDIENTE' || 
-       req.estado === 'PREAPROBADO' || 
-       req.estado === 'PRE-APROBADO')
-    ),
-    ...processedProgrammedRequests.value
-  ]
-  
-  for (const req of allRequests) {
-    const firstDate = getFirstDate(req)
-    if (firstDate) {
-      try {
-        const date = new Date(firstDate)
-        if (!earliestDate || date < earliestDate) {
-          earliestDate = date
-        }
-      } catch {
-        // Ignorar fechas inválidas
-      }
-    }
-  }
-  
-  return earliestDate
-}
-
-// Obtener rango de meses basado en la fecha más próxima
-const currentMonthRange = computed(() => {
-  const earliestDate = getEarliestDate()
-  
-  if (!earliestDate) {
-    const now = new Date()
-    const currentMonth = now.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-    const nextMonthStr = nextMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
-    return `${currentMonth} - ${nextMonthStr}`
-  }
-  
-  const firstMonth = earliestDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
-  const secondMonth = new Date(earliestDate.getFullYear(), earliestDate.getMonth() + 1, 1)
-  const secondMonthStr = secondMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
-  
-  return `${firstMonth} - ${secondMonthStr}`
-})
-
-// Función para verificar si una fecha está dentro del rango de 2 meses desde la fecha más próxima
-const isDateInRange = (dateString: string): boolean => {
-  try {
-    const date = new Date(dateString)
-    const earliestDate = getEarliestDate()
-    
-    if (!earliestDate) {
-      // Si no hay fecha más próxima, usar el mes actual
-      const now = new Date()
-      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-      const twoMonthsEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0)
-      return date >= currentMonthStart && date <= twoMonthsEnd
-    }
-    
-    // Usar la fecha más próxima como base
-    const rangeStart = new Date(earliestDate.getFullYear(), earliestDate.getMonth(), 1)
-    const rangeEnd = new Date(earliestDate.getFullYear(), earliestDate.getMonth() + 2, 0) // Último día del mes siguiente
-    
-    return date >= rangeStart && date <= rangeEnd
-  } catch {
-    return false
-  }
-}
-
 // Función para obtener la primera fecha de una solicitud
 const getFirstDate = (request: any): string | null => {
   if ((request as any).fechas_agrupadas && (request as any).fechas_agrupadas.length > 0) {
@@ -1364,13 +1307,6 @@ const pendingRequests = computed(() => {
   
   // Combinar ambas listas
   let allRequests = [...noProgramadas, ...programadas]
-  
-  // Aplicar filtro de fecha: solo mostrar solicitudes del mes actual y siguiente (máximo 2 meses)
-  allRequests = allRequests.filter(req => {
-    const firstDate = getFirstDate(req)
-    if (!firstDate) return false
-    return isDateInRange(firstDate)
-  })
   
   // Aplicar filtro de empleado
   if (selectedEmployeeFilter.value) {
@@ -1447,6 +1383,7 @@ const handleApprove = async (requestId: string) => {
   if (request.tipo === 'PROGRAMADA') {
     showReplacementModal.value = true
     selectedReplacements.value = [] // ✅ Limpiar selección antes de abrir modal
+    hasNoReplacement.value = false // ✅ Limpiar opción "no tiene reemplazo"
     availableReplacements.value = [] // ✅ Limpiar lista de reemplazantes antes de cargar
     // Cargar los reemplazantes disponibles desde la API
     await loadAvailableReplacements(request.emp_id)
@@ -1455,23 +1392,42 @@ const handleApprove = async (requestId: string) => {
   }
 }
 
+// Manejar cambio en "No tiene reemplazo"
+const handleNoReplacementChange = () => {
+  if (hasNoReplacement.value) {
+    // Si se marca "no tiene reemplazo", limpiar selección de reemplazantes
+    selectedReplacements.value = []
+  }
+}
+
+// Manejar cancelación del modal de reemplazantes
+const handleCancelReplacementModal = () => {
+  showReplacementModal.value = false
+  selectedReplacements.value = []
+  hasNoReplacement.value = false
+}
+
 // Confirmar aprobación con reemplazantes
 const confirmApproveWithReplacements = async () => {
   if (!selectedRequestId.value) return
 
   try {
+    // Si "no tiene reemplazo" está marcado, pasar array vacío
+    const replacementsToSend = hasNoReplacement.value ? [] : selectedReplacements.value
+    
     await updateRequestStatus(
       selectedRequestId.value,
       'APROBADO',
       approveComment.value.trim() || '',
-      selectedReplacements.value
+      replacementsToSend
     )
 
-    // Cerrar modal
+    // Cerrar modal y limpiar
     showReplacementModal.value = false
     selectedRequestId.value = null
     selectedRequest.value = null
     selectedReplacements.value = []
+    hasNoReplacement.value = false
   } catch (error) {
     console.error('Error en confirmApproveWithReplacements:', error)
   }

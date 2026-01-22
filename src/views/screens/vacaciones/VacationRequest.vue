@@ -177,9 +177,14 @@
     <div class="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
       <div class="px-4 py-3">
         <div class="flex items-center justify-between">
-          <div>
+          <div class="flex-1">
             <h1 class="text-xl font-bold text-balance">Mis Vacaciones</h1>
-            <p class="text-sm text-muted-foreground">{{ currentUser.company }}</p>
+            <div class="flex items-center gap-3">
+              <p class="text-sm text-muted-foreground">{{ currentUser.company }}</p>
+              <span v-if="appVersion" class="text-[10px] text-muted-foreground/60 font-mono">
+                v{{ appVersion.substring(0, 8) }}
+              </span>
+            </div>
           </div>
           <div class="flex items-center gap-2 relative">
             <span v-if="isLoadingData" class="inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors border-transparent bg-secondary text-secondary-foreground">
@@ -746,6 +751,9 @@ import { calcularRangoVacaciones, type VacationRangeOutput } from '@/utils/vacat
 
 // Router
 const route = useRoute()
+
+// Versión de la aplicación
+const appVersion = ref<string | null>(null)
 
 // Reactive data
 const selectedDates = ref<Date[]>([])
@@ -1885,8 +1893,31 @@ const loadVacationConfig = async () => {
   }
 }
 
+// Cargar versión de la aplicación
+const loadAppVersion = async () => {
+  try {
+    const response = await fetch(`/version.json?t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    })
+    
+    if (response.ok) {
+      const data = await response.json()
+      appVersion.value = data.version
+    }
+  } catch (error) {
+    console.warn('No se pudo cargar la versión:', error)
+  }
+}
+
 // Lifecycle
 onMounted(async () => {
+  // Cargar versión
+  loadAppVersion()
+  
   // Cargar configuración desde backend SIEMPRE (sin bypass)
   await loadVacationConfig()
   

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import {
     Home,
     FileText,
@@ -31,6 +32,32 @@ import {
 
 const props = withDefaults(defineProps<SidebarProps>(), {
     variant: 'inset',
+})
+
+// Cargar versión para mostrar en el footer
+const version = ref<string | null>(null)
+
+const loadVersion = async () => {
+  try {
+    const response = await fetch(`/version.json?t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    })
+    
+    if (response.ok) {
+      const data = await response.json()
+      version.value = data.version
+    }
+  } catch (error) {
+    console.warn('No se pudo cargar la versión:', error)
+  }
+}
+
+onMounted(() => {
+  loadVersion()
 })
 
     const data = {
@@ -111,6 +138,12 @@ const props = withDefaults(defineProps<SidebarProps>(), {
         </SidebarContent>
         <SidebarFooter>
             <NavUser :user="data.user" />
+            <div v-if="version" class="px-2 py-1.5 text-xs text-muted-foreground border-t mt-2">
+                <div class="flex items-center justify-center gap-1.5">
+                    <span class="text-[10px] opacity-70">v</span>
+                    <span class="font-mono text-[10px]">{{ version.substring(0, 8) }}</span>
+                </div>
+            </div>
         </SidebarFooter>
     </Sidebar>
 </template>

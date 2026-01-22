@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import {
   BadgeCheck,
   Bell,
@@ -6,6 +7,7 @@ import {
   CreditCard,
   LogOut,
   Sparkles,
+  Info,
 } from 'lucide-vue-next'
 
 import {
@@ -38,6 +40,50 @@ defineProps<{
 }>()
 
 const { isMobile } = useSidebar()
+
+// Cargar versión
+const version = ref<string | null>(null)
+const buildTime = ref<string | null>(null)
+
+const loadVersion = async () => {
+  try {
+    const response = await fetch(`/version.json?t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    })
+    
+    if (response.ok) {
+      const data = await response.json()
+      version.value = data.version
+      buildTime.value = data.buildTime
+    }
+  } catch (error) {
+    console.warn('No se pudo cargar la versión:', error)
+  }
+}
+
+onMounted(() => {
+  loadVersion()
+})
+
+const formatBuildTime = (timeStr: string | null) => {
+  if (!timeStr) return ''
+  try {
+    const date = new Date(timeStr)
+    return date.toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  } catch {
+    return timeStr
+  }
+}
 </script>
 
 <template>
@@ -109,6 +155,17 @@ const { isMobile } = useSidebar()
             <LogOut />
             Cerrar sesión
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <div v-if="version" class="px-2 py-1.5 text-xs text-muted-foreground border-t">
+            <div class="flex items-center gap-1.5 mb-1">
+              <Info class="size-3" />
+              <span class="font-medium">Versión:</span>
+              <span class="font-mono">{{ version.substring(0, 8) }}</span>
+            </div>
+            <div v-if="buildTime" class="text-[10px] text-muted-foreground/80">
+              Build: {{ formatBuildTime(buildTime) }}
+            </div>
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
     </SidebarMenuItem>
