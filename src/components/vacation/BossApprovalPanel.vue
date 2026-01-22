@@ -1280,18 +1280,6 @@ const uniqueEmployees = computed(() => {
   return Array.from(employeesMap.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
 })
 
-// Función para obtener la primera fecha de una solicitud
-const getFirstDate = (request: any): string | null => {
-  if ((request as any).fechas_agrupadas && (request as any).fechas_agrupadas.length > 0) {
-    return (request as any).fechas_agrupadas[0]
-  }
-  if (request.fechas && request.fechas.length > 0) {
-    const sortedFechas = getSortedFechas(request.fechas)
-    return sortedFechas[0].fecha
-  }
-  return null
-}
-
 const pendingRequests = computed(() => {
   // Separar vacaciones programadas y no programadas
   const noProgramadas = requests.value.filter(req => 
