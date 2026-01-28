@@ -701,6 +701,9 @@ interface EmployeeCache {
     replacements?: any[]
     departamento?: string
     dept?: string
+    vacation?: {
+      years?: string
+    }
   }
 }
 
@@ -772,11 +775,12 @@ const loadAvailableReplacements = async (empId: string) => {
           }
           
           if (empleadoInfo) {
-            // Guardar en cache con los replacements
+            // Guardar en cache con los replacements y vacation info
             employeeCache.value[empId] = {
               nombre: empleadoInfo.fullName || `Empleado #${empId}`,
               cargo: empleadoInfo.cargo || 'N/A',
-              replacements: empleadoInfo.replacements || []
+              replacements: empleadoInfo.replacements || [],
+              vacation: empleadoInfo.vacation || {} // Guardar información de vacaciones (incluye years)
             }
             
             // Si el empleado tiene reemplazantes en la respuesta, agregarlos
@@ -1009,7 +1013,8 @@ const fetchEmployeeInfo = async (empId: string) => {
       const employeeInfo = {
         nombre: employeeData.fullName || `Empleado #${empId}`,
         cargo: employeeData.cargo || 'N/A',
-        replacements: employeeData.replacements || [] // Guardar también los reemplazantes
+        replacements: employeeData.replacements || [], // Guardar también los reemplazantes
+        vacation: employeeData.vacation || {} // Guardar información de vacaciones (incluye years)
       }
 
       // Guardar en cache
@@ -2588,6 +2593,10 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
           if (estado === 'APROBADO' || estado === 'RECHAZADO') {
             console.log('📤 Guardando vacación en API externa...')
             
+            // Obtener años de antigüedad del empleado
+            const employeeInfo = await fetchEmployeeInfo(requestData.emp_id)
+            const antiguedad = (employeeInfo as any).vacation?.years || employeeCache.value[requestData.emp_id]?.vacation?.years || '1'
+            
             const vacationPayload: SaveVacationPayload = {
               emp_id: requestData.emp_id,
               emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
@@ -2601,7 +2610,8 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
                 tipo_dia: f.turno || 'COMPLETO'
               })),
               branch: 1, // TODO: Obtener branch real
-              dept: 10    // TODO: Obtener departamento real
+              dept: 10,    // TODO: Obtener departamento real
+              antiguedad: antiguedad // Años de antigüedad del empleado
             }
 
             const apiResult = await saveVacationToExternalAPI(vacationPayload)

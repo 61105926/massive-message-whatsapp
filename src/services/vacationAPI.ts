@@ -49,6 +49,7 @@ export interface SaveVacationPayload {
   fechas: VacationDetail[];
   branch?: number;
   dept?: number;
+  antiguedad?: string; // Años de antigüedad del empleado (ej: "2")
 }
 
 /**
@@ -286,8 +287,9 @@ export async function saveVacationToExternalAPI(payload: SaveVacationPayload): P
       NUMDIAS: totalDays,
       TIPO: 'V',
       AUTORIZA: payload.manager_id || 0, // ID del manager que aprobó
-      // Calcular ANIO parseando directamente desde el string para evitar problemas de zona horaria
-      ANIO: (() => {
+      // Usar los años de antigüedad del empleado (vacation.years) en lugar del año de la fecha
+      ANIO: payload.antiguedad || (() => {
+        // Fallback: calcular desde la fecha si no se proporciona antigüedad
         const fechaStr = fechasOrdenadas[0].fecha;
         if (fechaStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
           const [year] = fechaStr.split('-');
