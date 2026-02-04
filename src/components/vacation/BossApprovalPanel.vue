@@ -704,6 +704,7 @@ interface EmployeeCache {
     vacation?: {
       years?: string
     }
+    fechaIngreso?: string | null
   }
 }
 
