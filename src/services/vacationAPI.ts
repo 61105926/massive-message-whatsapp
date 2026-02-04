@@ -50,6 +50,7 @@ export interface SaveVacationPayload {
   branch?: number;
   dept?: number;
   antiguedad?: string; // Años de antigüedad del empleado (ej: "2")
+  fechaIngreso?: string; // Fecha de ingreso del empleado (ej: "2023-07-04 00:00:00.0000000")
 }
 
 /**
@@ -303,8 +304,47 @@ export async function saveVacationToExternalAPI(payload: SaveVacationPayload): P
       NAMECREA: payload.emp_nombre,
       NAMEAUTORIZ: payload.manager_nombre,
       ESTADO: payload.estado === 'APROBADO' ? 'A' : 'R', // <-- forzamos A o R
-      // Calcular STARTDATE usando la fecha directamente sin conversión de zona horaria
+      // Calcular STARTDATE usando fechaIngreso del empleado en formato YYYYMMDD
       STARTDATE: (() => {
+        // Si tenemos fechaIngreso, formatearla a YYYYMMDD
+        if (payload.fechaIngreso) {
+          try {
+            // Limpiar la fecha: remover espacios extra y tomar solo la parte de la fecha
+            let fechaLimpia = String(payload.fechaIngreso).trim();
+            
+            // Si tiene formato con hora (ej: "2023-07-04 00:00:00.0000000"), tomar solo la parte de la fecha
+            if (fechaLimpia.includes(' ')) {
+              fechaLimpia = fechaLimpia.split(' ')[0];
+            }
+            
+            // Si tiene formato con T (ISO), tomar solo la parte de la fecha
+            if (fechaLimpia.includes('T')) {
+              fechaLimpia = fechaLimpia.split('T')[0];
+            }
+            
+            // Validar formato YYYY-MM-DD y convertir a YYYYMMDD
+            const fechaRegex = /^\d{4}-\d{2}-\d{2}$/;
+            if (fechaRegex.test(fechaLimpia)) {
+              // Convertir "2023-07-04" a "20230704"
+              const fechaFormateada = fechaLimpia.replace(/-/g, '');
+              // Convertir a número para STARTDATE
+              return parseInt(fechaFormateada, 10);
+            }
+            
+            // Si no coincide con el formato esperado, intentar parsear con Date
+            const fechaParsed = new Date(fechaLimpia);
+            if (!isNaN(fechaParsed.getTime())) {
+              const year = fechaParsed.getFullYear();
+              const month = String(fechaParsed.getMonth() + 1).padStart(2, '0');
+              const day = String(fechaParsed.getDate()).padStart(2, '0');
+              return parseInt(`${year}${month}${day}`, 10);
+            }
+          } catch (error) {
+            console.warn('⚠️ Error al formatear fechaIngreso para STARTDATE:', error);
+          }
+        }
+        
+        // Fallback: usar el cálculo anterior con la fecha de inicio de vacaciones
         const fechaStr = fechasOrdenadas[0].fecha;
         if (fechaStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
           const [year, month, day] = fechaStr.split('-').map(Number);

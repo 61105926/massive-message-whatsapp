@@ -780,7 +780,8 @@ const loadAvailableReplacements = async (empId: string) => {
               nombre: empleadoInfo.fullName || `Empleado #${empId}`,
               cargo: empleadoInfo.cargo || 'N/A',
               replacements: empleadoInfo.replacements || [],
-              vacation: empleadoInfo.vacation || {} // Guardar información de vacaciones (incluye years)
+              vacation: empleadoInfo.vacation || {}, // Guardar información de vacaciones (incluye years)
+              fechaIngreso: empleadoInfo.fechaIngreso || empleadoInfo.FechaIngreso || empleadoInfo.fecha_ingreso || null // Guardar fecha de ingreso
             }
             
             // Si el empleado tiene reemplazantes en la respuesta, agregarlos
@@ -1014,7 +1015,8 @@ const fetchEmployeeInfo = async (empId: string) => {
         nombre: employeeData.fullName || `Empleado #${empId}`,
         cargo: employeeData.cargo || 'N/A',
         replacements: employeeData.replacements || [], // Guardar también los reemplazantes
-        vacation: employeeData.vacation || {} // Guardar información de vacaciones (incluye years)
+        vacation: employeeData.vacation || {}, // Guardar información de vacaciones (incluye years)
+        fechaIngreso: employeeData.fechaIngreso || employeeData.FechaIngreso || employeeData.fecha_ingreso || null // Guardar fecha de ingreso
       }
 
       // Guardar en cache
@@ -2593,9 +2595,14 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
           if (estado === 'APROBADO' || estado === 'RECHAZADO') {
             console.log('📤 Guardando vacación en API externa...')
             
-            // Obtener años de antigüedad del empleado
+            // Obtener años de antigüedad y fecha de ingreso del empleado
             const employeeInfo = await fetchEmployeeInfo(requestData.emp_id)
             const antiguedad = (employeeInfo as any).vacation?.years || employeeCache.value[requestData.emp_id]?.vacation?.years || '1'
+            // Obtener fechaIngreso desde employeeInfo o desde el cache
+            const fechaIngreso = (employeeInfo as any).fechaIngreso || 
+                                employeeCache.value[requestData.emp_id]?.fechaIngreso || 
+                                requestData.emp_fecha_ingreso || 
+                                null
             
             const vacationPayload: SaveVacationPayload = {
               emp_id: requestData.emp_id,
@@ -2611,7 +2618,8 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
               })),
               branch: 1, // TODO: Obtener branch real
               dept: 10,    // TODO: Obtener departamento real
-              antiguedad: antiguedad // Años de antigüedad del empleado
+              antiguedad: antiguedad, // Años de antigüedad del empleado
+              fechaIngreso: fechaIngreso // Fecha de ingreso del empleado
             }
 
             const apiResult = await saveVacationToExternalAPI(vacationPayload)
