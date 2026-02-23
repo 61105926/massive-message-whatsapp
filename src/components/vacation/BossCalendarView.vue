@@ -1145,7 +1145,8 @@ const getDayVacations = (): Vacation[] => {
 const getProgrammedDaysCount = (empId: string | number | undefined): number => {
   if (!empId) return 0
   
-  // Contar todas las solicitudes PROGRAMADA que no estén rechazadas
+  // Contar solo las solicitudes PROGRAMADA que AÚN estén en cola (pendiente / proceso / preaprobado).
+  // No contar APROBADO ni RECHAZADO, para evitar bloquear sugerencias por solicitudes ya resueltas.
   let totalDays = 0
   
   const empIdStr = String(empId)
@@ -1153,6 +1154,13 @@ const getProgrammedDaysCount = (empId: string | number | undefined): number => {
   console.log('📋 Total de solicitudes en allRequests:', allRequests.value.length)
   
   // Buscar en las solicitudes originales (allRequests) que tienen todas las fechas
+  const estadosQueCuentan = new Set([
+    'PENDIENTE',
+    'PROCESO',
+    'PREAPROBADO',
+    'PRE-APROBADO'
+  ])
+
   const programmedRequests = allRequests.value.filter(req => {
     const reqEmpId = String(req.emp_id || '')
     const reqTipo = String(req.tipo || '').toUpperCase()
@@ -1160,8 +1168,7 @@ const getProgrammedDaysCount = (empId: string | number | undefined): number => {
     
     return reqEmpId === empIdStr && 
            reqTipo === 'PROGRAMADA' &&
-           reqEstado !== 'RECHAZADO' &&
-           reqEstado !== 'REJECTED'
+           estadosQueCuentan.has(reqEstado)
   })
   
   console.log('📊 Solicitudes PROGRAMADA encontradas para', empIdStr, ':', programmedRequests.length)
