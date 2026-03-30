@@ -737,6 +737,65 @@ const isPreapproving = ref(false)
 // Filtros
 const selectedEmployeeFilter = ref<string>('')
 
+/** Respuestas soportadas de GET /api/empleado/info:
+ *  - Array [ { fullName, replacements: [...] } ]
+ *  - { status: 'success', data: [ empleado ] }
+ *  - { success: true, data: [ candidatos con emp_id, nombre, cargo, ... ] }  ← lista plana de reemplazos
+ */
+const parseEmpleadoInfoResponse = (
+  empData: any
+): { empleadoRow: any | null; replacementRows: any[] } => {
+  if (!empData) {
+    return { empleadoRow: null, replacementRows: [] }
+  }
+
+  if (Array.isArray(empData) && empData.length > 0) {
+    const row = empData[0]
+    const nested = row?.replacements
+    if (Array.isArray(nested) && nested.length > 0) {
+      return { empleadoRow: row, replacementRows: nested }
+    }
+    return { empleadoRow: row, replacementRows: [] }
+  }
+
+  const ok = empData.status === 'success' || empData.success === true
+  if (!ok || !Array.isArray(empData.data) || empData.data.length === 0) {
+    return { empleadoRow: null, replacementRows: [] }
+  }
+
+  const first = empData.data[0]
+  const looksLikeFlatReplacementList =
+    first &&
+    typeof first === 'object' &&
+    (first.emp_id != null || first.EMP_ID != null) &&
+    !first.fullName &&
+    !Array.isArray(first.replacements) &&
+    (first.nombre != null ||
+      first.NOMBRE != null ||
+      first.name != null ||
+      first.tipo != null ||
+      first.TIPO != null)
+
+  if (looksLikeFlatReplacementList) {
+    return { empleadoRow: null, replacementRows: empData.data }
+  }
+
+  const empleadoRow = first
+  const nested = empleadoRow?.replacements
+  if (Array.isArray(nested) && nested.length > 0) {
+    return { empleadoRow, replacementRows: nested }
+  }
+  return { empleadoRow, replacementRows: [] }
+}
+
+const mapReplacementRow = (rep: any) => ({
+  id: String(rep.id || rep.EMP_ID || rep.emp_id || ''),
+  name: rep.name || rep.NOMBRE || rep.nombre || 'N/A',
+  department: rep.cargo || rep.CARGO || rep.department || 'N/A',
+  phone: rep.phone || rep.TELEFONO || '',
+  isRecommended: true
+})
+
 // Cargar reemplazantes disponibles desde la API
 const loadAvailableReplacements = async (empId: string) => {
   try {
@@ -745,63 +804,68 @@ const loadAvailableReplacements = async (empId: string) => {
     
     const allReplacements: any[] = []
     
-    // 1. PRIMERO: Cargar desde /api/empleado/info que tiene los replacements en el campo replacements
+    // 1. PRIMERO: /api/empleado/info (siempre desde red para no quedar con cache viejo de 2 ítems)
     try {
-      // Intentar desde el cache primero
-      if (employeeCache.value[empId] && employeeCache.value[empId].replacements && Array.isArray(employeeCache.value[empId].replacements) && employeeCache.value[empId].replacements.length > 0) {
-        const replacementsFromCache = employeeCache.value[empId].replacements.map((rep: any) => ({
-          id: rep.id || rep.EMP_ID || rep.emp_id,
-          name: rep.name || rep.NOMBRE || rep.nombre,
-          department: rep.cargo || rep.CARGO || 'N/A',
-          phone: rep.phone || rep.TELEFONO || '',
-          isRecommended: true
-        }))
-        allReplacements.push(...replacementsFromCache)
-        console.log('✅ Reemplazantes encontrados en cache del empleado:', replacementsFromCache.length)
-      } else {
-        // Si no está en cache, cargar desde API
-        const empResponse = await fetch(`http://190.171.225.68:8006/api/empleado/info?emp_id=${empId}`)
-        if (empResponse.ok) {
-          const empData = await empResponse.json()
-          
-          // La API ahora devuelve directamente un array o un objeto con status
-          let empleadoInfo: any = null
-          
-          if (Array.isArray(empData) && empData.length > 0) {
-            // Nuevo formato: array directo
-            empleadoInfo = empData[0]
-          } else if (empData.status === 'success' && Array.isArray(empData.data) && empData.data.length > 0) {
-            // Formato antiguo: objeto con status y data
-            empleadoInfo = empData.data[0]
+      const empResponse = await fetch(`http://190.171.225.68:8006/api/empleado/info?emp_id=${empId}`)
+      if (empResponse.ok) {
+        const empData = await empResponse.json()
+        const { empleadoRow, replacementRows } = parseEmpleadoInfoResponse(empData)
+
+        if (empleadoRow) {
+          employeeCache.value[empId] = {
+            nombre: empleadoRow.fullName || `Empleado #${empId}`,
+            cargo: empleadoRow.cargo || 'N/A',
+            replacements: empleadoRow.replacements || replacementRows || [],
+            vacation: empleadoRow.vacation || {},
+            fechaIngreso:
+              empleadoRow.fechaIngreso ||
+              empleadoRow.FechaIngreso ||
+              empleadoRow.fecha_ingreso ||
+              null
           }
-          
-          if (empleadoInfo) {
-            // Guardar en cache con los replacements y vacation info
-            employeeCache.value[empId] = {
-              nombre: empleadoInfo.fullName || `Empleado #${empId}`,
-              cargo: empleadoInfo.cargo || 'N/A',
-              replacements: empleadoInfo.replacements || [],
-              vacation: empleadoInfo.vacation || {}, // Guardar información de vacaciones (incluye years)
-              fechaIngreso: empleadoInfo.fechaIngreso || empleadoInfo.FechaIngreso || empleadoInfo.fecha_ingreso || null // Guardar fecha de ingreso
-            }
-            
-            // Si el empleado tiene reemplazantes en la respuesta, agregarlos
-            if (empleadoInfo.replacements && Array.isArray(empleadoInfo.replacements) && empleadoInfo.replacements.length > 0) {
-              const replacementsFromEmployee = empleadoInfo.replacements.map((rep: any) => ({
-                id: rep.id || rep.EMP_ID || rep.emp_id,
-                name: rep.name || rep.NOMBRE || rep.nombre,
-                department: rep.cargo || rep.CARGO || 'N/A',
-                phone: rep.phone || rep.TELEFONO || '',
-                isRecommended: true
-              }))
-              allReplacements.push(...replacementsFromEmployee)
-              console.log('✅ Reemplazantes encontrados en /api/empleado/info:', replacementsFromEmployee.length)
-            }
+        } else if (replacementRows.length > 0) {
+          employeeCache.value[empId] = {
+            ...employeeCache.value[empId],
+            nombre: employeeCache.value[empId]?.nombre || `Empleado #${empId}`,
+            cargo: employeeCache.value[empId]?.cargo || 'N/A',
+            replacements: replacementRows
           }
+        }
+
+        if (replacementRows.length > 0) {
+          allReplacements.push(...replacementRows.map(mapReplacementRow))
+          console.log('✅ Reemplazantes desde /api/empleado/info:', replacementRows.length)
         }
       }
     } catch (error) {
       console.warn('⚠️ Error al cargar reemplazantes desde /api/empleado/info:', error)
+    }
+
+    // 1b. Lista completa por solicitud (prioritaria; empleado/info puede traer replacements: [])
+    if (selectedRequest.value) {
+      try {
+        const requestId = String(selectedRequest.value.id_solicitud).split('_grupo_')[0]
+        const empIdToUse = selectedRequest.value.emp_id || empId
+        const vacResponse = await fetch(
+          `http://190.171.225.68:8006/api/reemplazante-vacation?id_solicitud=${requestId}&emp_id=${empIdToUse}`
+        )
+        if (vacResponse.ok) {
+          const vacData = await vacResponse.json()
+          if (vacData.success && Array.isArray(vacData.data) && vacData.data.length > 0) {
+            const fromVacation = vacData.data.map((rep: any) => ({
+              id: rep.EMP_ID || rep.emp_id,
+              name: rep.NOMBRE || rep.nombre,
+              department: rep.CARGO || rep.cargo || 'N/A',
+              phone: rep.telefono || rep.TELEFONO || '',
+              isRecommended: true
+            }))
+            allReplacements.push(...fromVacation)
+            console.log('✅ Reemplazantes desde reemplazante-vacation (solicitud):', fromVacation.length)
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Error al cargar reemplazante-vacation:', e)
+      }
     }
     
     // 2. Si aún no hay reemplazantes, intentar desde la API de recomendaciones como fallback
@@ -905,31 +969,6 @@ const loadAvailableReplacements = async (empId: string) => {
       }
     }
     
-    // 4. Si aún no hay reemplazantes, intentar cargar desde reemplazantes guardados de la solicitud
-    if (allReplacements.length === 0 && selectedRequest.value) {
-      try {
-        const requestId = String(selectedRequest.value.id_solicitud).split('_grupo_')[0]
-        const empIdToUse = selectedRequest.value.emp_id || empId
-        const savedResponse = await fetch(`http://190.171.225.68:8006/api/reemplazante-vacation?id_solicitud=${requestId}&emp_id=${empIdToUse}`)
-        if (savedResponse.ok) {
-          const savedData = await savedResponse.json()
-          if (savedData.success && Array.isArray(savedData.data) && savedData.data.length > 0) {
-            const saved = savedData.data.map((rep: any) => ({
-              id: rep.EMP_ID || rep.emp_id,
-              name: rep.NOMBRE || rep.nombre,
-              department: rep.CARGO || rep.cargo || 'N/A',
-              phone: rep.TELEFONO || '',
-              isRecommended: false
-            }))
-            allReplacements.push(...saved)
-            console.log('✅ Reemplazantes guardados cargados:', saved.length)
-          }
-        }
-      } catch (savedError) {
-        console.warn('⚠️ Error al cargar reemplazantes guardados:', savedError)
-      }
-    }
-    
     // Eliminar duplicados por ID para evitar problemas con checkboxes
     const uniqueReplacements = new Map<string, any>()
     allReplacements.forEach((rep: any) => {
@@ -998,34 +1037,45 @@ const fetchEmployeeInfo = async (empId: string) => {
 
     const result = await response.json()
 
-    // La API ahora devuelve directamente un array o un objeto con status
-    let employeeData: any = null
-    
-    if (Array.isArray(result) && result.length > 0) {
-      // Nuevo formato: array directo
-      employeeData = result[0]
-    } else if (result.status === 'success' && Array.isArray(result.data) && result.data.length > 0) {
-      // Formato antiguo: objeto con status y data
-      employeeData = result.data[0]
-    } else {
-      throw new Error('No se encontró información del empleado')
-    }
+    const { empleadoRow, replacementRows } = parseEmpleadoInfoResponse(result)
 
-    if (employeeData) {
+    if (empleadoRow) {
+      const replacementsList =
+        replacementRows.length > 0
+          ? replacementRows
+          : Array.isArray(empleadoRow.replacements)
+            ? empleadoRow.replacements
+            : []
+
       const employeeInfo = {
-        nombre: employeeData.fullName || `Empleado #${empId}`,
-        cargo: employeeData.cargo || 'N/A',
-        replacements: employeeData.replacements || [], // Guardar también los reemplazantes
-        vacation: employeeData.vacation || {}, // Guardar información de vacaciones (incluye years)
-        fechaIngreso: employeeData.fechaIngreso || employeeData.FechaIngreso || employeeData.fecha_ingreso || null // Guardar fecha de ingreso
+        nombre: empleadoRow.fullName || `Empleado #${empId}`,
+        cargo: empleadoRow.cargo || 'N/A',
+        replacements: replacementsList,
+        vacation: empleadoRow.vacation || {},
+        fechaIngreso:
+          empleadoRow.fechaIngreso ||
+          empleadoRow.FechaIngreso ||
+          empleadoRow.fecha_ingreso ||
+          null
       }
 
-      // Guardar en cache
       employeeCache.value[empId] = employeeInfo
       return employeeInfo
-    } else {
-      throw new Error('No se encontró información del empleado')
     }
+
+    if (replacementRows.length > 0) {
+      const employeeInfo = {
+        nombre: `Empleado #${empId}`,
+        cargo: 'N/A',
+        replacements: replacementRows,
+        vacation: {},
+        fechaIngreso: null as string | null
+      }
+      employeeCache.value[empId] = employeeInfo
+      return employeeInfo
+    }
+
+    throw new Error('No se encontró información del empleado')
   } catch (err) {
     console.error(`❌ Error al cargar info del empleado ${empId}:`, err)
     const fallbackInfo = {
