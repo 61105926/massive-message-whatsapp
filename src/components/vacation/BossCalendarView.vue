@@ -887,6 +887,8 @@ const contextMenu = ref({
 // Modal de sugerencias
 const showSuggestionModal = ref(false)
 const isSubmittingSuggestion = ref(false) // Estado para prevenir múltiples envíos
+// Bloqueo por empId+fecha para evitar duplicados mientras carga
+const pendingCreationSlots = ref<Set<string>>(new Set())
 const isCreatingVacation = ref(false) // Estado para prevenir múltiples creaciones
 const suggestionData = ref({
   emp_id: '',
@@ -1450,6 +1452,13 @@ const openVacationModal = (empId: string, date: Date) => {
     date >= new Date(v.start_date) && 
     date <= new Date(v.end_date)
   )
+
+  const dateStr = date.toISOString().split('T')[0]
+  const slotKey = `${empId}_${dateStr}`
+  if (pendingCreationSlots.value.has(slotKey)) {
+    showNotification('info', 'En proceso', 'Ya se está creando una sugerencia para ese día. Espera un momento.')
+    return
+  }
   
   if (vacation) {
     // Si hay vacación, mostrar modal de acciones
@@ -1461,7 +1470,6 @@ const openVacationModal = (empId: string, date: Date) => {
     selectedDateForVacation.value = date
     
     // Prellenar fechas
-    const dateStr = date.toISOString().split('T')[0]
     newVacationStartDate.value = dateStr
     newVacationEndDate.value = dateStr
     
@@ -2450,8 +2458,19 @@ const createVacation = async () => {
   isCreatingVacation.value = true
   
   try {
-    // Verificar si el empleado ya programó todos sus días
     const empId = String(selectedEmployeeForVacation.value.emp_id)
+    const startDate = newVacationStartDate.value || ''
+    const slotKey = `${empId}_${startDate}`
+
+    // Bloqueo por slot (evita doble click/reintento mientras no pinta el cuadrito)
+    if (pendingCreationSlots.value.has(slotKey)) {
+      console.warn('⚠️ Ya hay una creación en curso para este día:', slotKey)
+      showNotification('info', 'Ya existe una sugerencia', 'Ya se está creando una sugerencia para ese día.')
+      return
+    }
+    pendingCreationSlots.value.add(slotKey)
+
+    // Verificar si el empleado ya programó todos sus días
     const totalDays = getTotalDaysWithDuodecima(empId)
     const programmedDays = getProgrammedDaysCount(empId)
     const daysRemaining = totalDays - programmedDays
@@ -2469,7 +2488,6 @@ const createVacation = async () => {
     })
     
     // Calcular días que se están sugiriendo (considerando medio día = 0.5)
-    const startDate = newVacationStartDate.value || ''
     const endDate = newVacationEndDate.value || startDate
     // Si es medio día, contar como 0.5, si es completo contar como 1
     const daysToSuggest = newVacationTurno.value === 'COMPLETO' ? 1 : 0.5
@@ -2505,6 +2523,22 @@ const createVacation = async () => {
       daysRemaining,
       daysToSuggest
     })
+
+    // Pintado optimista: mostrar el cuadrito inmediatamente
+    const alreadyExists = vacations.value.some(v => v.emp_id === empId && v.start_date === startDate && v.end_date === endDate)
+    if (!alreadyExists) {
+      vacations.value.push({
+        id: `temp_${empId}_${startDate}_${Date.now()}`,
+        emp_id: empId,
+        employee_name: employee.name || `Empleado #${empId}`,
+        department: employee.department || employee.departamento || 'N/A',
+        start_date: startDate,
+        end_date: endDate,
+        status: 'pending',
+        tipo: 'PROGRAMADA',
+        es_programada: true
+      })
+    }
     
     // Calcular días según el turno
     const diasCalculados = newVacationTurno.value === 'COMPLETO' ? 1 : 0.5
@@ -2558,6 +2592,16 @@ const createVacation = async () => {
   } finally {
     // Siempre desactivar el estado de loading, incluso si hay error
     isCreatingVacation.value = false
+    // Liberar el bloqueo del slot si ya no está en modal
+    try {
+      const empId = selectedEmployeeForVacation.value ? String(selectedEmployeeForVacation.value.emp_id) : ''
+      const startDate = newVacationStartDate.value || ''
+      if (empId && startDate) {
+        pendingCreationSlots.value.delete(`${empId}_${startDate}`)
+      }
+    } catch (_) {
+      // no-op
+    }
   }
 }
 
