@@ -2531,7 +2531,7 @@ const createVacation = async () => {
         id: `temp_${empId}_${startDate}_${Date.now()}`,
         emp_id: empId,
         employee_name: employee.name || `Empleado #${empId}`,
-        department: employee.department || employee.departamento || 'N/A',
+        department: employee.department || 'N/A',
         start_date: startDate,
         end_date: endDate,
         status: 'pending',
