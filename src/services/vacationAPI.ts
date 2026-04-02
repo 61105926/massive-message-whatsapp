@@ -396,6 +396,13 @@ export async function saveVacationToExternalAPI(payload: SaveVacationPayload): P
     };
 
   } catch (error: any) {
+    // Detectar duplicado (409)
+    if (error.response?.status === 409 || error.response?.data?.duplicate) {
+      const dupError = new Error(error.response.data?.message || 'Ya existe una vacación para este empleado en una o más fechas solicitadas') as any
+      dupError.duplicate = true
+      throw dupError
+    }
+
     console.error('❌ Error al guardar vacación en API externa:', {
       backendUrl: 'http://190.171.225.68:8006/api/vacaciones/add-vacation',
       error: error.message,

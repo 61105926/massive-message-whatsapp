@@ -2574,31 +2574,78 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
       }
     }
 
-    // SEGUNDO: AHORA SÍ ACTUALIZAR EN LA BASE DE DATOS
+    // SEGUNDO: GUARDAR EN API EXTERNA (HANA) ANTES DE CAMBIAR ESTADO
+    // Solo si el estado es APROBADO o RECHAZADO — si falla, no se actualiza el estado
+    if (requestData && (estado === 'APROBADO' || estado === 'RECHAZADO')) {
+      console.log('📤 Guardando vacación en API externa (HANA) ANTES de actualizar estado...')
+
+      const employeeInfo = await fetchEmployeeInfo(requestData.emp_id)
+      const antiguedad = (employeeInfo as any).vacation?.years || employeeCache.value[requestData.emp_id]?.vacation?.years || '1'
+      const fechaIngreso = (employeeInfo as any).fechaIngreso ||
+                          employeeCache.value[requestData.emp_id]?.fechaIngreso ||
+                          requestData.emp_fecha_ingreso ||
+                          null
+
+      const vacationPayload: SaveVacationPayload = {
+        emp_id: requestData.emp_id,
+        emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
+        manager_id: String(props.managerId || ''),
+        manager_nombre: 'Manager',
+        tipo: requestData.tipo,
+        estado: estado as 'APROBADO' | 'RECHAZADO',
+        comentario: comentario,
+        fechas: requestData.fechas.map((f: any) => ({
+          fecha: f.fecha,
+          tipo_dia: f.turno || 'COMPLETO'
+        })),
+        branch: 1,
+        dept: 10,
+        antiguedad: antiguedad,
+        fechaIngreso: fechaIngreso
+      }
+
+      // Si falla, lanza el error y NO continúa al cambio de estado
+      let apiResult: any
+      try {
+        apiResult = await saveVacationToExternalAPI(vacationPayload)
+        console.log('✅ Vacación guardada exitosamente en API externa (HANA):', apiResult)
+      } catch (apiError: any) {
+        if (apiError.duplicate) {
+          showNotification('error', 'Vacación duplicada', apiError.message)
+        } else {
+          showNotification('error', 'Error en sistema externo', apiError.message)
+        }
+        return // No continuar al cambio de estado
+      }
+    } else if (estado === 'PREAPROBADO') {
+      console.log('⏸️ Estado PREAPROBADO: No se guarda en API externa todavía')
+    }
+
+    // TERCERO: AHORA SÍ ACTUALIZAR EN LA BASE DE DATOS (confirmado que HANA aceptó)
     console.log('💾💾💾 ACTUALIZANDO EN BASE DE DATOS 💾💾💾')
-    
+
     // El backend espera 'PRE-APROBADO' (con guión) en lugar de 'PREAPROBADO'
     const estadoBackend = estado === 'PREAPROBADO' ? 'PRE-APROBADO' : estado
-    
+
     // Actualizar todas las solicitudes SIMULTÁNEAMENTE en paralelo
     console.log(`📤 Enviando ${solicitudesAActualizar.length} solicitudes simultáneamente...`)
-    
+
     const promises = solicitudesAActualizar.map((req, index) => {
       const payload: any = {
         id_solicitud: parseInt(String(req.id_solicitud)),
         estado: estadoBackend,
         comentario: comentario || (estado === 'APROBADO' ? '' : '')
       }
-      
+
       // ✅ Usar REEMPLAZOS_EMPIDS en lugar de reemplazantes
       if (reemplazantes && reemplazantes.length > 0) {
         payload.REEMPLAZOS_EMPIDS = reemplazantes
         console.log(`📤 Agregando REEMPLAZOS_EMPIDS para solicitud ${index + 1}:`, reemplazantes)
       }
-      
+
       console.log(`📤 Preparando solicitud ${index + 1}/${solicitudesAActualizar.length} para id_solicitud: ${req.id_solicitud}`)
       console.log(`📦 Payload completo:`, JSON.stringify(payload, null, 2))
-      
+
       return fetch('http://190.171.225.68:8006/api/vacaciones/state', {
         method: 'POST',
         headers: {
@@ -2607,14 +2654,14 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
         body: JSON.stringify(payload)
       })
     })
-    
+
     // Esperar a que todas las solicitudes se completen
     const responses = await Promise.all(promises)
-    
+
     // Verificar que todas las respuestas sean exitosas
     const response = responses[0] // Usar la primera para el flujo de notificaciones
     const todasExitosas = responses.every(r => r.ok)
-    
+
     if (!todasExitosas) {
       const errores = responses.filter(r => !r.ok)
       const errorData = await errores[0].json().catch(() => null)
@@ -2628,7 +2675,7 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
 
       // Actualizar localmente todas las solicitudes que se actualizaron
       const idsActualizados = new Set(solicitudesAActualizar.map(req => String(req.id_solicitud)))
-      requests.value = requests.value.map(req => {
+      requests.value = requests.value.map((req: any) => {
         if (idsActualizados.has(String(req.id_solicitud))) {
           return {
             ...req,
@@ -2637,55 +2684,6 @@ const updateRequestStatus = async (requestId: string, estado: 'APROBADO' | 'RECH
         }
         return req
       })
-
-      // 🚀 GUARDAR EN API EXTERNA
-      // Después de actualizar el estado, guardar en la API externa
-      if (requestData) {
-        try {
-          // Solo guardar en API externa si el estado es APROBADO o RECHAZADO (no PREAPROBADO)
-          if (estado === 'APROBADO' || estado === 'RECHAZADO') {
-            console.log('📤 Guardando vacación en API externa...')
-            
-            // Obtener años de antigüedad y fecha de ingreso del empleado
-            const employeeInfo = await fetchEmployeeInfo(requestData.emp_id)
-            const antiguedad = (employeeInfo as any).vacation?.years || employeeCache.value[requestData.emp_id]?.vacation?.years || '1'
-            // Obtener fechaIngreso desde employeeInfo o desde el cache
-            const fechaIngreso = (employeeInfo as any).fechaIngreso || 
-                                employeeCache.value[requestData.emp_id]?.fechaIngreso || 
-                                requestData.emp_fecha_ingreso || 
-                                null
-            
-            const vacationPayload: SaveVacationPayload = {
-              emp_id: requestData.emp_id,
-              emp_nombre: requestData.empleado?.nombre || `Empleado ${requestData.emp_id}`,
-              manager_id: String(props.managerId || ''), // ID del manager que está aprobando
-              manager_nombre: 'Manager', // TODO: Obtener nombre real del manager
-              tipo: requestData.tipo,
-              estado: estado as 'APROBADO' | 'RECHAZADO',
-              comentario: comentario,
-              fechas: requestData.fechas.map((f: any) => ({
-                fecha: f.fecha,
-                tipo_dia: f.turno || 'COMPLETO'
-              })),
-              branch: 1, // TODO: Obtener branch real
-              dept: 10,    // TODO: Obtener departamento real
-              antiguedad: antiguedad, // Años de antigüedad del empleado
-              fechaIngreso: fechaIngreso // Fecha de ingreso del empleado
-            }
-
-            const apiResult = await saveVacationToExternalAPI(vacationPayload)
-            console.log('✅ Vacación guardada exitosamente en API externa:', apiResult)
-          } else {
-            console.log('⏸️ Estado PREAPROBADO: No se guarda en API externa todavía')
-          }
-          
-        } catch (apiError: any) {
-          console.error('❌ Error al guardar en API externa:', apiError)
-          // No fallar la operación principal si falla la API externa
-          showNotification('info', 'Advertencia', 
-            'La solicitud fue procesada pero hubo un problema al guardar en el sistema externo. Contacta al administrador.')
-        }
-      }
 
       // Las notificaciones ya se completaron arriba, solo mostrar mensaje de éxito
       console.log('✅ Todas las notificaciones completadas, mostrando mensaje de éxito')
