@@ -564,6 +564,23 @@
             <p class="text-sm text-gray-600 mt-1">Selecciona los reemplazantes para esta solicitud</p>
           </div>
 
+          <!-- Acciones -->
+          <div class="flex gap-3">
+            <button
+              @click="confirmApproveWithReplacements"
+              :disabled="isProcessing || (!hasNoReplacement && selectedReplacements.length === 0)"
+              class="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            >
+              Aprobar
+            </button>
+            <button
+              @click="handleCancelReplacementModal"
+              class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-medium"
+            >
+              Cancelar
+            </button>
+          </div>
+
           <!-- Resumen de la solicitud -->
           <div v-if="selectedRequest" class="p-4 bg-blue-50 rounded-lg border border-blue-200">
             <div class="space-y-2 text-sm">
@@ -583,7 +600,7 @@
             <label class="text-sm font-medium mb-2 block">
               Reemplazantes * (puedes seleccionar varios)
             </label>
-            
+
             <!-- Opción: No tiene reemplazo -->
             <div class="mb-3 p-3 bg-gray-50 rounded-md border border-gray-200">
               <div class="flex items-center space-x-2">
@@ -602,7 +619,7 @@
                 </label>
               </div>
             </div>
-            
+
             <div class="rounded-md border border-input bg-background p-3 max-h-64 overflow-y-auto space-y-2" :class="{ 'opacity-50 pointer-events-none': hasNoReplacement }">
               <div
                 v-for="(person, index) in availableReplacements"
@@ -637,23 +654,6 @@
             <p v-if="hasNoReplacement" class="text-xs text-blue-600 mt-2 font-medium">
               ✓ Se aprobará sin reemplazantes
             </p>
-          </div>
-
-          <!-- Acciones -->
-          <div class="flex gap-3">
-            <button
-              @click="confirmApproveWithReplacements"
-              :disabled="isProcessing || (!hasNoReplacement && selectedReplacements.length === 0)"
-              class="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              Aprobar
-            </button>
-            <button
-              @click="handleCancelReplacementModal"
-              class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-medium"
-            >
-              Cancelar
-            </button>
           </div>
         </div>
       </div>
